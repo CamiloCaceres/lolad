@@ -189,6 +189,9 @@ func TestCrashBackoffAndFailure(t *testing.T) {
 		if f.l.opts[len(f.l.opts)-1].Fresh {
 			t.Fatal("crash resumed fresh")
 		}
+		if !strings.Contains(f.l.opts[len(f.l.opts)-1].FirstPrompt, "lolad msg inbox") {
+			t.Fatal("resumed TUI needs a turn to report hook idle and pick up queued mail")
+		}
 	}
 	starts := f.sessions.starts
 	f.c.advance(time.Hour)

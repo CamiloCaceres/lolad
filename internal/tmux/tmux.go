@@ -153,12 +153,16 @@ func (s *Sessions) Capture(name string, lines int, esc bool) (string, error) {
 
 type terminal struct {
 	*os.File
-	cmd  *exec.Cmd
-	once sync.Once
-	err  error
+	cmd      *exec.Cmd
+	once     sync.Once
+	err      error
+	readOnly bool
 }
 
 func (t *terminal) Resize(cols, rows uint16) error {
+	if t.readOnly {
+		return nil
+	}
 	return pty.Setsize(t.File, &pty.Winsize{Cols: cols, Rows: rows})
 }
 func (t *terminal) Close() error {
@@ -174,7 +178,7 @@ func (t *terminal) Close() error {
 func (s *Sessions) Attach(ctx context.Context, name string, readOnly bool) (core.Terminal, error) {
 	args := []string{"attach"}
 	if readOnly {
-		args = append(args, "-r")
+		args = append(args, "-r", "-f", "ignore-size")
 	}
 	args = append(args, "-t", "="+name)
 	cmd := s.command(ctx, args...)
@@ -183,5 +187,5 @@ func (s *Sessions) Attach(ctx context.Context, name string, readOnly bool) (core
 	if e != nil {
 		return nil, e
 	}
-	return &terminal{File: f, cmd: cmd}, nil
+	return &terminal{File: f, cmd: cmd, readOnly: readOnly}, nil
 }

@@ -82,6 +82,13 @@ func TestAttachAndKeys(t *testing.T) {
 	if e := term.Resize(100, 30); e != nil {
 		t.Fatal(e)
 	}
+	until(t, func() bool {
+		flags, _ := s.run("list-clients", "-F", "#{client_flags}")
+		return strings.Contains(flags, "ignore-size")
+	})
+	if size, e := s.run("display-message", "-p", "-t", "=live:0.0", "#{window_width}x#{window_height}"); e != nil || strings.TrimSpace(size) != "80x24" {
+		t.Fatalf("read-only viewer resized the session: %q %v", size, e)
+	}
 	if e := term.Close(); e != nil {
 		t.Fatal(e)
 	}

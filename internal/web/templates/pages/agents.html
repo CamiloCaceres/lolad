@@ -1,0 +1,10 @@
+{{define "content"}}<div class="page">
+  <header class="page-head">
+    <div>
+      <h1 class="page-title">Agents</h1>
+      <p class="page-sub">Everyone on staff, what they're doing, and the controls to kick them.</p>
+    </div>
+    <div class="page-actions"><a class="btn" href="/new">{{template "icon" "plus"}}<span>New agent</span></a></div>
+  </header>
+  {{template "fleet" .Data}}
+</div>{{end}}

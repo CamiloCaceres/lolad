@@ -145,7 +145,9 @@ func (a *Adapter) Prepare(agent core.Agent, o core.LaunchOpts) (core.LaunchSpec,
 		args = append(args, "--setting-sources", "project,local", "--settings", path)
 	case core.HarnessCodewhale:
 		if agent.Runtime.Permissions == core.PermBypass || agent.Runtime.Permissions == "" {
-			args = append(args, "--approval-policy", "never")
+			args = append(args, "--sandbox-mode", "danger-full-access")
+			env["CODEWHALE_YOLO"] = "true"
+			env["CODEWHALE_ALLOW_SHELL"] = "1"
 		}
 		home := filepath.Join(agent.Dir, ".codewhale-home")
 		if st, e := os.Stat(home); e != nil || !st.IsDir() {
@@ -164,7 +166,30 @@ func (a *Adapter) Prepare(agent core.Agent, o core.LaunchOpts) (core.LaunchSpec,
 		if e != nil && !os.IsNotExist(e) {
 			return spec, e
 		}
-		text := string(data) + "\n# lolad managed hook overlay\n"
+		text := string(data)
+		if agent.Runtime.Permissions == core.PermBypass || agent.Runtime.Permissions == "" {
+			// Codewhale 0.10.1 uses never as DENY, and its CLI rejects the
+			// full-access alias. The supported YOLO compatibility environment
+			// selects Bypass only when no explicit root approval policy locks
+			// it. Remove that root policy in the private per-run overlay only.
+			lines := strings.Split(text, "\n")
+			root := true
+			kept := []string{}
+			for _, line := range lines {
+				trimmed := strings.TrimSpace(line)
+				if strings.HasPrefix(trimmed, "[") {
+					root = false
+				}
+				key, _, assignment := strings.Cut(trimmed, "=")
+				key = strings.Trim(strings.TrimSpace(key), "\"'")
+				if root && assignment && (key == "approval_policy" || key == "approvalPolicy") {
+					continue
+				}
+				kept = append(kept, line)
+			}
+			text = strings.Join(kept, "\n")
+		}
+		text += "\n# lolad managed hook overlay\n"
 		for _, event := range []string{"session_start", "session_end", "message_submit", "tool_call_before", "tool_call_after", "turn_end", "session_idle", "waiting_for_user", "session_busy"} {
 			cmd := "LOLAD_AGENT=" + quote(agent.Name) + " " + quote(o.LoladBin) + " hook " + event
 			text += "\n[[hooks.hooks]]\nevent = " + strconv.Quote(event) + "\ncommand = " + strconv.Quote(cmd) + "\ntimeout_secs = 3\ncontinue_on_error = true\n"

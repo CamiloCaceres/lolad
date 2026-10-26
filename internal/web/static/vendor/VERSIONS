@@ -1,0 +1,7 @@
+Vendored once with curl from cdn.jsdelivr.net; served from the binary via go:embed.
+No CDN at runtime. To upgrade, re-download the same paths at a new pinned version.
+(sourceMappingURL comments stripped so browsers don't request missing .map files.)
+
+htmx.org          2.0.11  dist/htmx.min.js
+@xterm/xterm      6.0.0   lib/xterm.js, css/xterm.css
+@xterm/addon-fit  0.11.0  lib/addon-fit.js

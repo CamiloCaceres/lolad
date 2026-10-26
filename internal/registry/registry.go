@@ -20,6 +20,7 @@ import (
 
 type Config struct {
 	Listen          string   `yaml:"listen"`
+	TmuxSocket      string   `yaml:"tmux_socket"`
 	AgentsDirs      []string `yaml:"agents_dirs"`
 	Agents          []string `yaml:"agents"`
 	LolabotTemplate string   `yaml:"lolabot_template"`
@@ -34,7 +35,7 @@ func DefaultConfig() Config {
 	if state == "" {
 		state = filepath.Join(home, ".local/share/lolad")
 	}
-	return Config{Listen: "127.0.0.1:4100", AgentsDirs: []string{"/Users/you/agents"}, LolabotTemplate: "/Users/you/lolabot", NewAgentsDir: "/Users/you/agents", StateDir: state}
+	return Config{TmuxSocket: "lolad", Listen: "127.0.0.1:4100", AgentsDirs: []string{"/Users/you/agents"}, LolabotTemplate: "/Users/you/lolabot", NewAgentsDir: "/Users/you/agents", StateDir: state}
 }
 func ConfigPath() string {
 	if p := os.Getenv("LOLAD_CONFIG"); p != "" {

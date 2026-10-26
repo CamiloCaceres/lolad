@@ -1,0 +1,161 @@
+{{define "conv-list"}}<div id="conv-list" class="conv-list"{{if .OOB}} hx-swap-oob="true"{{end}} hx-get="/fragments/conversations{{with .Active}}?active={{.}}{{end}}" hx-trigger="lolad:mail from:body delay:300ms, lolad:agent from:body delay:900ms" hx-swap="outerHTML">
+  {{if .Convs}}
+  <ul class="convs" role="list">
+  {{range .Convs}}
+    <li><a class="conv{{if .Active}} is-active{{end}}{{if .Unread}} is-unread{{end}}{{if .Pending}} is-pending{{end}}" href="/inbox/{{.Peer}}"{{if .Active}} aria-current="true"{{end}}>
+      {{template "avatar" (dict "Display" .Display "State" .State "Size" "")}}
+      <span class="conv-main">
+        <span class="conv-top">
+          <span class="conv-name">{{.Display}}</span>
+          <time class="conv-time" datetime="{{stamp .LastAt}}" title="{{long .LastAt}}" data-when>{{when .LastAt}}</time>
+        </span>
+        <span class="conv-bottom">
+          <span class="conv-preview">{{if .Pending}}<span class="tag is-you">Asks</span> {{(index .Asks (add (len .Asks) -1)).Subject}}{{else}}{{if .Mine}}<span class="conv-you">You:</span> {{end}}{{excerpt .Last.Body 110}}{{end}}</span>
+          {{if .Unread}}<span class="count{{if .Pending}} is-you{{end}}"><span class="sr-only">Unread: </span>{{.Unread}}</span>{{end}}
+        </span>
+      </span>
+    </a></li>
+  {{end}}
+  </ul>
+  {{else}}
+  <div class="empty empty-list">
+    <p class="empty-title">No conversations yet</p>
+    <p>Agents write to you with <code>lolad msg tell-user</code>. Start one with <strong>New message</strong>.</p>
+  </div>
+  {{end}}
+</div>{{end}}
+
+{{define "new-message"}}
+<button class="btn btn-icon btn-ghost" type="button" popovertarget="new-message" aria-label="New message" title="New message">{{template "icon" "edit"}}</button>
+<div id="new-message" class="sheet" popover>
+  <div class="sheet-head"><h2>New message</h2><button class="btn btn-icon btn-ghost" type="button" popovertarget="new-message" popovertargetaction="hide" aria-label="Close">{{template "icon" "x"}}</button></div>
+  <p class="sheet-note">Mail goes to the agent's inbox; it answers here.</p>
+  <ul class="pick" role="list">
+    {{range .}}<li><a href="/inbox/{{.Name}}">{{template "avatar" (dict "Display" .Display "State" .State "Size" "sm")}}<span class="pick-name">{{.Display}}</span><span class="pick-role">{{.Role}}</span>{{template "state" .}}</a></li>{{end}}
+  </ul>
+</div>{{end}}
+
+{{define "thread"}}<section class="thread" aria-label="Conversation with {{.Display}}">
+  {{template "thread-head" .}}
+  <div class="thread-scroll" id="thread-scroll">
+    <ol class="msgs" id="msgs" hx-get="/inbox/{{.Peer}}/messages" hx-trigger="lolad:mail-visible from:body delay:250ms" data-peer="{{.Peer}}">
+      {{template "msgs" .}}
+    </ol>
+  </div>
+  {{template "composer" .}}
+</section>{{end}}
+
+{{define "thread-head"}}<header class="thread-head" id="thread-head" hx-get="/inbox/{{.Peer}}/head" hx-trigger="lolad:a-{{.Peer}} from:body delay:300ms" hx-swap="outerHTML">
+  <a class="btn btn-icon btn-ghost back" href="/" aria-label="All conversations">{{template "icon" "back"}}</a>
+  {{template "avatar" (dict "Display" .Display "State" (stateOf .Agent) "Size" "md")}}
+  <div class="thread-who">
+    <h2 class="thread-name">{{.Display}}</h2>
+    <p class="thread-sub">{{with .Agent}}{{template "state" .}}<span class="thread-detail">{{if .Detail}}{{.Detail}}{{else}}{{.Role}}{{end}}</span>{{else}}System messages{{end}}</p>
+  </div>
+  {{with .Agent}}<a class="btn btn-ghost thread-agent" href="/agents/{{.Name}}">Agent<span class="hide-sm"> details</span>{{template "icon" "next"}}</a>{{end}}
+</header>{{end}}
+
+{{define "msgs"}}{{$t := .}}
+{{if not .Msgs}}<li class="msgs-empty">
+  <p class="empty-title">No messages with {{.Display}} yet</p>
+  <p>Anything you write lands in {{.Display}}'s inbox and is surfaced in its session. Replies, updates and questions show up here.</p>
+</li>{{end}}
+{{range .Msgs}}
+  {{if .Day}}<li class="sep" role="separator"><span>{{.Day}}</span></li>{{end}}
+  {{if .New}}<li class="sep is-new" role="separator" id="new"><span>New</span></li>{{end}}
+  {{if eq .Kind "system"}}
+  <li class="msg is-system" id="m-{{short .ID}}">
+    <p>{{template "icon" "pulse"}}<span><strong>{{.Subject}}</strong> · {{excerpt .Body 220}}</span><time datetime="{{stamp .CreatedAt}}" title="{{long .CreatedAt}}">{{clock .CreatedAt}}</time></p>
+  </li>
+  {{else if and (eq .Kind "update") (not .Mine)}}
+  <li class="msg is-update" id="m-{{short .ID}}">
+    <div class="note">
+      <p class="note-head">{{template "icon" "pulse"}}<span class="note-subj">{{.Subject}}</span><time datetime="{{stamp .CreatedAt}}" title="{{long .CreatedAt}}">{{clock .CreatedAt}}</time></p>
+      <div class="note-body rich">{{rich .Body}}</div>
+    </div>
+  </li>
+  {{else}}
+  <li class="msg {{if .Mine}}is-mine{{else}}is-theirs{{end}} k-{{.Kind}}{{if .Cont}} is-cont{{end}}{{if and (eq .Kind "ask") (not .Answered)}} is-open{{end}}" id="m-{{short .ID}}">
+    {{if not .Cont}}<p class="msg-meta">{{if not .Mine}}<span class="msg-from">{{$t.Display}}</span>{{end}}<time datetime="{{stamp .CreatedAt}}" title="{{long .CreatedAt}}">{{clock .CreatedAt}}</time></p>{{end}}
+    <div class="bubble">
+      {{if eq .Kind "deliver"}}<p class="bubble-kind">{{template "icon" "file"}}Delivered</p>{{end}}
+      {{if eq .Kind "ask"}}<p class="bubble-kind">{{template "icon" "ask"}}{{if .Answered}}Question{{else}}Waiting on you{{end}}</p>{{end}}
+      {{if .ShowSubj}}<p class="bubble-subj">{{.Subject}}</p>{{end}}
+      {{if eq .Kind "decision"}}<p class="decision">{{template "icon" "check"}}<span>{{.Chat.Decision}}</span></p>
+      {{else}}<div class="rich">{{rich .Body}}</div>{{end}}
+    </div>
+    {{if eq .Kind "ask"}}{{$m := .}}
+    <form class="options" method="post" action="/inbox/{{$t.Peer}}/decide" hx-post="/inbox/{{$t.Peer}}/decide" hx-target="#msgs" hx-disabled-elt="find button">
+      <input type="hidden" name="id" value="{{.ID}}">
+      {{range .Chat.Options}}<button class="option{{if eq . $m.Answer}} is-chosen{{end}}" type="submit" name="option" value="{{.}}"{{if $m.Answer}} disabled{{end}}>{{if eq . $m.Answer}}{{template "icon" "check"}}{{end}}{{.}}</button>{{end}}
+    </form>
+    {{if and .Answered (not .Answer)}}<p class="options-note">You replied in your own words; you can still pick one.</p>{{end}}
+    {{end}}
+    {{with .Receipt}}<p class="receipt">{{.}}</p>{{end}}
+  </li>
+  {{end}}
+{{end}}{{end}}
+
+{{define "composer"}}<div class="composer-wrap">
+  <div id="composer-error" class="composer-error">{{with .Error}}{{template "composer-error" .}}{{end}}</div>
+  {{if .CanSend}}{{if .Policy.Allow}}
+  <form class="composer" method="post" action="/inbox/{{.Peer}}" hx-post="/inbox/{{.Peer}}" hx-target="#msgs" hx-disabled-elt="find button" data-composer>
+    {{template "reply-to" .}}
+    <label class="sr-only" for="composer-body">Message {{.Display}}</label>
+    <textarea id="composer-body" name="body" rows="1" placeholder="Message {{.Display}}" autocomplete="off" enterkeyhint="send"></textarea>
+    <button class="send" type="submit" aria-label="Send">{{template "icon" "send"}}</button>
+  </form>
+  <p class="composer-hint"><kbd>Enter</kbd> sends · <kbd>Shift</kbd> <kbd>Enter</kbd> for a new line</p>
+  {{else}}
+  <p class="composer-off">{{template "icon" "shield"}}<span>The org policy doesn't let you message {{.Display}} ({{.Policy.Reason}}). <a href="/org">Open Org</a></span></p>
+  {{end}}{{else}}
+  <p class="composer-off">{{template "icon" "shield"}}<span>Messages from lolad itself can't be answered.</span></p>
+  {{end}}
+</div>{{end}}
+
+{{define "reply-to"}}<input type="hidden" id="reply-to" name="reply_to" value="{{.ReplyTo}}">{{end}}
+
+{{define "composer-error"}}<p class="flash is-error" role="alert">{{template "icon" "x"}}<span>{{.}}</span></p>{{end}}
+
+{{define "thread-refresh"}}{{template "msgs" .V.Thread}}
+<input type="hidden" id="reply-to" name="reply_to" value="{{.V.Thread.ReplyTo}}" hx-swap-oob="true">
+<div id="composer-error" class="composer-error" hx-swap-oob="true"></div>
+{{template "conv-list" .V}}
+{{template "nav-badges" .Badges}}{{end}}
+
+{{define "home"}}<section class="home" aria-label="Overview">
+  <div class="home-inner">
+  {{if .Asks}}
+    <h2 class="home-h">{{if eq (len .Asks) 1}}One question is{{else}}{{len .Asks}} questions are{{end}} waiting on you</h2>
+    <ul class="asks" role="list">
+    {{range .Asks}}{{$c := .Conv}}
+      <li class="ask-card">
+        <a class="ask-who" href="/inbox/{{$c.Peer}}">{{template "avatar" (dict "Display" $c.Display "State" $c.State "Size" "sm")}}<span>{{$c.Display}}</span><time datetime="{{stamp .Ask.CreatedAt}}" title="{{long .Ask.CreatedAt}}" data-when>{{when .Ask.CreatedAt}}</time></a>
+        <p class="ask-subj">{{.Ask.Subject}}</p>
+        <div class="ask-body rich">{{rich .Ask.Body}}</div>
+        <form class="options" method="post" action="/inbox/{{$c.Peer}}/decide">
+          <input type="hidden" name="id" value="{{.Ask.ID}}">
+          {{range .Ask.Chat.Options}}<button class="option" type="submit" name="option" value="{{.}}">{{.}}</button>{{end}}
+          <a class="option is-quiet" href="/inbox/{{$c.Peer}}">Reply…</a>
+        </form>
+      </li>
+    {{end}}
+    </ul>
+  {{end}}
+  {{if .Unread}}
+    <h2 class="home-h">Unread</h2>
+    <ul class="unread" role="list">
+    {{range .Unread}}
+      <li><a href="/inbox/{{.Peer}}">{{template "avatar" (dict "Display" .Display "State" .State "Size" "sm")}}<span class="unread-who">{{.Display}}</span><span class="unread-text">{{excerpt .Last.Body 120}}</span><span class="count">{{.Unread}}</span></a></li>
+    {{end}}
+    </ul>
+  {{end}}
+  {{if and (not .Asks) (not .Unread)}}
+    <div class="empty empty-home">
+      {{template "icon" "check"}}
+      <p class="empty-title">You're caught up</p>
+      <p>Nothing is waiting on you. Pick a conversation, or start one with <strong>New message</strong>.</p>
+    </div>
+  {{end}}
+  </div>
+</section>{{end}}

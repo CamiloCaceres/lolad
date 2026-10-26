@@ -152,3 +152,31 @@ HTTP replies/fail-open behavior, captured TUI readiness, and a raw-mode fake
 TUI in real tmux for confirmed, staged-with-retry, always-staged and failed
 delivery, ten-second dedupe, permission refusal and hook-state freshness.
 Every test socket is killed in cleanup.
+
+## Integration E2E corrections (2026-10-25)
+
+Real DeepSeek turns exposed that Codewhale 0.10.1 `--approval-policy never`
+means deny approval-gated tools, including `bash`; adding a filesystem sandbox
+flag alone does not fix that. Its CLI rejects `--approval-policy full-access`,
+even though the underlying policy parser supports the alias. The tested daemon
+recipe is `CODEWHALE_YOLO=true`, `CODEWHALE_ALLOW_SHELL=1`, and
+`--sandbox-mode danger-full-access`, omitting the CLI approval flag. Since an
+explicit root `approval_policy` prevents the compatibility environment setting
+from selecting Full Access, bypass launches remove that root key only from the
+private per-run overlay; the source config is preserved byte-for-byte. Actual
+panes showed Full Access and executed `lolad msg read` and `tell-user`, with
+signed replies visible through the conversation API. This supersedes the
+unverified `never` recipe above. See `docs/e2e.md` for command/result evidence.
+
+Per-agent `CODEWHALE_HOME` does not see credentials stored in the user's global
+Codewhale secret store. Supply the provider environment variable (for DeepSeek,
+`DEEPSEEK_API_KEY`) through `runtime.env_file`, referencing a private file without
+copying it into instructions or configuration overlays.
+
+Both TUIs can resume directly into an empty composer without firing a fresh
+idle hook. The supervisor now supplies a brief inbox-check turn while retaining
+`--continue`, so a real Stop hook re-establishes idle delivery after a crash.
+
+Read-only tmux attachments use `attach -r -f ignore-size` and ignore Resize,
+so a dashboard viewer cannot shrink the supervised terminal. Write attachments
+retain PTY resizing.

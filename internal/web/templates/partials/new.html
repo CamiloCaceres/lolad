@@ -1,0 +1,80 @@
+{{define "new-body"}}{{$v := .}}<div id="new-body">
+  <div class="segmented" role="radiogroup" aria-label="How to add the agent">
+    <input type="radio" name="mode" id="mode-create" value="create"{{if not .AError}} checked{{end}}>
+    <label for="mode-create">Create new</label>
+    <input type="radio" name="mode" id="mode-adopt" value="adopt"{{if .AError}} checked{{end}}>
+    <label for="mode-adopt">Adopt existing directory</label>
+  </div>
+
+  <form class="form new-form mode-create" method="post" action="/new" hx-post="/new" hx-target="#new-body" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]">
+    {{with .Error}}<p class="flash is-error" role="alert">{{template "icon" "x"}}<span>{{.}}</span></p>{{end}}
+    <fieldset class="section">
+      <legend>Identity</legend>
+      <div class="row2">
+        <label class="field"><span class="label">Name</span><input name="name" value="{{.Req.Name}}" required placeholder="Ultron" autocomplete="off"><span class="help">The display name, from <code>agent.name</code>.</span></label>
+        <label class="field"><span class="label">Slug <span class="opt">optional</span></span><input name="slug" value="{{.Req.Slug}}" placeholder="from the name" pattern="[a-z0-9][a-z0-9-]{0,62}" title="lowercase letters, digits and dashes" autocomplete="off" class="mono"><span class="help">tmux session, AMP name, URL. Lowercase.</span></label>
+      </div>
+      <label class="field"><span class="label">Role</span><input name="role" value="{{.Req.Role}}" placeholder="Personal Assistant"></label>
+    </fieldset>
+
+    <fieldset class="section">
+      <legend>Harness</legend>
+      <div class="choice">
+        <label class="choice-card"><input type="radio" name="harness" value="claude"{{if ne .Req.Harness "codewhale"}} checked{{end}}><span class="choice-body"><span class="choice-title">Claude Code</span><span class="choice-note">mods and plugins from the agent's <code>.claude/settings.json</code></span></span></label>
+        <label class="choice-card"><input type="radio" name="harness" value="codewhale"{{if eq .Req.Harness "codewhale"}} checked{{end}}><span class="choice-body"><span class="choice-title">Codewhale</span><span class="choice-note">plugins and <code>.codewhale-home</code>; mail arrives by notice</span></span></label>
+      </div>
+      <div class="row2">
+        <label class="field"><span class="label">Model <span class="opt">optional</span></span><input name="model" value="{{.Req.Model}}" placeholder="harness default" class="mono" autocomplete="off"></label>
+        <label class="field"><span class="label">Permissions</span><select name="permissions"><option value="bypass"{{if ne .Req.Permissions "default"}} selected{{end}}>bypass (unattended)</option><option value="default"{{if eq .Req.Permissions "default"}} selected{{end}}>default (asks before acting)</option></select><span class="help">An approval prompt nobody answers stalls the agent.</span></label>
+      </div>
+    </fieldset>
+
+    <fieldset class="section">
+      <legend>Purpose</legend>
+      <label class="field"><span class="label">Mission <span class="opt">optional</span></span><textarea name="mission" rows="3" placeholder="What this agent is for. Sent as its first mail from you.">{{.Req.Mission}}</textarea></label>
+      <label class="field"><span class="label">On wake <span class="opt">optional</span></span><textarea name="on_wake" rows="2" placeholder="First prompt of every fresh conversation. Default: read brain/ and memory/, then the inbox.">{{.Req.OnWake}}</textarea></label>
+    </fieldset>
+
+    <fieldset class="section">
+      <legend>Placement</legend>
+      <div class="row2">
+        <label class="field"><span class="label">Team</span><select name="team"><option value="">independent (no team)</option>{{range .Teams}}<option value="{{.ID}}"{{if eq .ID $v.Req.Team}} selected{{end}}>{{indent (index $v.Depth .ID)}}{{.Name}}</option>{{end}}</select></label>
+        <label class="check check-pad"><input type="checkbox" name="head"{{if .Req.Head}} checked{{end}}><span>Make it the team's head</span></label>
+      </div>
+      <details class="more">
+        <summary>Location and operator</summary>
+        <div class="row2">
+          <label class="field"><span class="label">Directory <span class="opt">optional</span></span><input name="dir" value="{{.Req.Dir}}" placeholder="new_agents_dir/&lt;slug&gt;" class="mono" autocomplete="off"></label>
+          <label class="field"><span class="label">Operator name <span class="opt">optional</span></span><input name="user" value="{{.Req.User}}" placeholder="{{.Me.Display}}"></label>
+        </div>
+      </details>
+    </fieldset>
+
+    <div class="form-actions form-actions-end">
+      <label class="check"><input type="checkbox" name="start"{{if .Req.Start}} checked{{end}}><span>Start it right away</span></label>
+      <button class="btn btn-primary" type="submit">{{template "icon" "plus"}}<span>Create agent</span></button>
+    </div>
+  </form>
+
+  <form class="form new-form mode-adopt" method="post" action="/adopt" hx-post="/adopt" hx-target="#new-body" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]">
+    {{with .AError}}<p class="flash is-error" role="alert">{{template "icon" "x"}}<span>{{.}}</span></p>{{end}}
+    <p class="lede">For a lolabot instance that already exists (for example <code>jugui</code> or <code>dsh-lola</code>). lolad adds the <code>runtime:</code> block to its lolabot.yaml and leaves the rest of the file as it is.</p>
+    <fieldset class="section">
+      <legend>Directory</legend>
+      <label class="field"><span class="label">Path</span><input name="dir" value="{{.Adopt.Dir}}" required placeholder="/Users/you/agents/jugui" class="mono" autocomplete="off"></label>
+      <label class="field"><span class="label">Slug <span class="opt">optional</span></span><input name="slug" value="{{.Adopt.Slug}}" placeholder="the directory name" class="mono" autocomplete="off"></label>
+    </fieldset>
+    <fieldset class="section">
+      <legend>Harness</legend>
+      <div class="choice">
+        <label class="choice-card"><input type="radio" name="harness" value="claude"{{if ne .Adopt.Runtime.Harness "codewhale"}} checked{{end}}><span class="choice-body"><span class="choice-title">Claude Code</span></span></label>
+        <label class="choice-card"><input type="radio" name="harness" value="codewhale"{{if eq .Adopt.Runtime.Harness "codewhale"}} checked{{end}}><span class="choice-body"><span class="choice-title">Codewhale</span></span></label>
+      </div>
+      <div class="row2">
+        <label class="field"><span class="label">Model <span class="opt">optional</span></span><input name="model" value="{{.Adopt.Runtime.Model}}" placeholder="harness default" class="mono"></label>
+        <label class="field"><span class="label">Permissions</span><select name="permissions"><option value="bypass">bypass (unattended)</option><option value="default"{{if eq .Adopt.Runtime.Permissions "default"}} selected{{end}}>default (asks before acting)</option></select></label>
+      </div>
+    </fieldset>
+    <div class="form-actions form-actions-end"><button class="btn btn-primary" type="submit">Adopt directory</button></div>
+  </form>
+</div>{{end}}

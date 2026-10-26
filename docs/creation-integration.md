@@ -108,3 +108,23 @@ after its membership update. The source template is
 Created files: `README.md`, `docs/agent-messaging.md`, `docs/embed.go`,
 `docs/creation-integration.md`, `internal/create/create.go`,
 `internal/create/files.go`, and `internal/create/create_test.go`.
+
+## Runtime integration findings
+
+Per-agent `CODEWHALE_HOME` isolates Codewhale from the global secret store. Set
+`runtime.env_file` to a private file containing `DEEPSEEK_API_KEY` (or the
+selected provider's environment credential); the provider/model config alone
+does not authenticate. Keep that file outside generated instructions and source
+control. The harness loads it directly into the child environment.
+
+For `runtime.permissions: bypass`, Codewhale 0.10.1 needs
+`CODEWHALE_YOLO=true`, `CODEWHALE_ALLOW_SHELL=1`, and
+`--sandbox-mode danger-full-access`. Its `--approval-policy never` is a deny
+posture, and its CLI rejects the `full-access` alias even though the underlying
+policy parser recognizes it. An explicit root `approval_policy` also prevents
+the compatibility environment setting from selecting Full Access. The adapter
+therefore omits the approval flag and removes the root approval key only in the
+private per-run overlay, preserving the source config. This was verified with
+real `lolad msg read` and `tell-user` execution in the TUI. See
+[the upstream 0.10.1 policy parser](https://github.com/codewhale-hq/CodeWhale/blob/v0.10.1/crates/execpolicy/src/approval_mode.rs)
+and [startup policy precedence](https://github.com/codewhale-hq/CodeWhale/blob/v0.10.1/crates/tui/src/tui/app/init.rs).

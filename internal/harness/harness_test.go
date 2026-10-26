@@ -27,6 +27,9 @@ func TestPrepare(t *testing.T) {
 			if !strings.Contains(joined, "model[1m]") || !strings.HasSuffix(joined, "|--|wake") || strings.Contains(joined, "--continue") {
 				t.Fatal(joined)
 			}
+			if kind == core.HarnessCodewhale && (!strings.Contains(joined, "--sandbox-mode|danger-full-access") || strings.Contains(joined, "--approval-policy")) {
+				t.Fatal("bypass must permit the shell tool:", joined)
+			}
 			env := strings.Join(s.Env, "\n")
 			for _, v := range []string{"SHARED=runtime", "FROM_FILE=yes", "ROOT=" + dir} {
 				if !strings.Contains(env, v) {
@@ -78,7 +81,7 @@ func TestCodewhaleAgentConfigUntouched(t *testing.T) {
 	home := filepath.Join(dir, ".codewhale-home")
 	os.MkdirAll(filepath.Join(home, "prompts"), 0700)
 	os.WriteFile(filepath.Join(home, "prompts/constitution.md"), []byte("identity"), 0600)
-	original := "provider = \"deepseek\"\n[skills]\nscan_codewhale_only = true\n"
+	original := "provider = \"deepseek\"\napproval_policy = \"never\"\n[skills]\nscan_codewhale_only = true\n"
 	os.WriteFile(filepath.Join(home, "config.toml"), []byte(original), 0600)
 	s, e := New(core.HarnessCodewhale, "/bin/cw").Prepare(core.Agent{Name: "a", Dir: dir}, core.LaunchOpts{Fresh: true, StateDir: t.TempDir(), LoladBin: "/bin/lolad"})
 	if e != nil {
@@ -91,6 +94,20 @@ func TestCodewhaleAgentConfigUntouched(t *testing.T) {
 	env := strings.Join(s.Env, "\n")
 	if !strings.Contains(env, "CODEWHALE_HOME="+home) || !strings.Contains(env, "CODEWHALE_ALLOW_BASE_PROMPT_OVERRIDE=1") {
 		t.Fatal(env)
+	}
+	if !strings.Contains(env, "CODEWHALE_YOLO=true") || !strings.Contains(env, "CODEWHALE_ALLOW_SHELL=1") {
+		t.Fatal("bypass environment missing")
+	}
+	for i, arg := range s.Argv {
+		if arg == "--config" {
+			overlay, err := os.ReadFile(s.Argv[i+1])
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(string(overlay), "approval_policy =") {
+				t.Fatal("root deny policy overrides bypass")
+			}
+		}
 	}
 }
 

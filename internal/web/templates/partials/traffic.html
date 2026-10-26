@@ -1,0 +1,39 @@
+{{define "traffic-rows"}}{{$v := .}}<div id="traffic"{{if .Before.IsZero}} hx-get="/traffic?part=rows&amp;peer={{.Peer}}" hx-trigger="lolad:mail from:body delay:700ms" hx-swap="outerHTML" data-live{{end}}>
+  {{if .Mail}}
+  <div class="tlist" role="list">
+    <div class="trow thead" aria-hidden="true"><span>When</span><span>Route</span><span>Message</span><span>Type</span><span>Status</span></div>
+    {{range .Mail}}
+    <details class="tmsg" role="listitem">
+      <summary class="trow">
+        <time class="t-when" datetime="{{stamp .CreatedAt}}" title="{{long .CreatedAt}}">{{evtime .CreatedAt}}</time>
+        <span class="t-route"><span class="t-p{{if eq .FromName $v.Me}} is-user{{end}}">{{.FromName}}</span>{{template "icon" "arrow"}}<span class="t-p{{if eq .ToName $v.Me}} is-user{{end}}">{{.ToName}}</span></span>
+        <span class="t-msg"><span class="t-subj">{{.Subject}}</span> <span class="t-prev">{{excerpt .Body 160}}</span></span>
+        <span class="t-type"><span class="tag">{{.Type}}</span>{{$t := .Type}}{{with (chat .).Kind}}{{if ne . $t}} <span class="tag">{{.}}</span>{{end}}{{end}}</span>
+        <span class="t-status"><span class="mstatus ms-{{.Status}}">{{.Status}}</span></span>
+      </summary>
+      <div class="t-detail">
+        <div class="rich t-body">{{rich .Body}}</div>
+        <dl class="t-meta">
+          <div><dt>From</dt><dd class="mono">{{.From}}</dd></div>
+          <div><dt>To</dt><dd class="mono">{{.To}}</dd></div>
+          <div><dt>Id</dt><dd class="mono">{{.ID}}</dd></div>
+          {{if ne .ThreadID .ID}}<div><dt>Thread</dt><dd class="mono">{{.ThreadID}}</dd></div>{{end}}
+          {{with .InReplyTo}}<div><dt>In reply to</dt><dd class="mono">{{.}}</dd></div>{{end}}
+          <div><dt>Priority</dt><dd>{{.Priority}}</dd></div>
+          <div><dt>Signature</dt><dd>{{if .Verified}}verified{{else if .Signed}}signed, not verified{{else}}unsigned{{end}}</dd></div>
+          {{if not .NotifiedAt.IsZero}}<div><dt>Notified</dt><dd>{{long .NotifiedAt}}{{if .Attempts}} · {{plural .Attempts "attempt" "attempts"}}{{end}}</dd></div>{{end}}
+          {{if not .ReadAt.IsZero}}<div><dt>Read</dt><dd>{{long .ReadAt}}</dd></div>{{end}}
+          {{with .Context}}<div class="is-wide"><dt>Context</dt><dd><code class="ctx">{{json .}}</code></dd></div>{{end}}
+        </dl>
+      </div>
+    </details>
+    {{end}}
+  </div>
+  <nav class="pager" aria-label="Pages">
+    {{if not .Before.IsZero}}<a class="btn btn-sm" href="/traffic{{with .Peer}}?peer={{.}}{{end}}">{{template "icon" "up"}}<span>Newest</span></a>{{end}}
+    {{if not .Next.IsZero}}<a class="btn btn-sm" href="/traffic?{{with .Peer}}peer={{.}}&amp;{{end}}before={{stampNano .Next}}"><span>Older</span>{{template "icon" "down"}}</a>{{end}}
+  </nav>
+  {{else}}
+  <div class="empty"><p class="empty-title">No mail{{with .Peer}} to or from {{.}}{{end}} yet</p><p>Every message between agents, you and lolad lands here as it is sent.</p></div>
+  {{end}}
+</div>{{end}}

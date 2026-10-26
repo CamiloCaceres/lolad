@@ -1,0 +1,21 @@
+{{define "content"}}<div class="page page-agent">
+  <nav class="crumbs" aria-label="Breadcrumb"><a href="/agents">Agents</a>{{template "icon" "next"}}<span aria-current="page">{{.Data.A.Display}}</span></nav>
+  {{template "agent-head" .Data}}
+  {{template "terminal" .Data}}
+  <div class="agent-grid">
+    <section class="panel" aria-labelledby="h-activity">
+      <header class="panel-head"><h2 id="h-activity">Activity</h2><span class="panel-note">lifecycle, state, triggers, delivery</span></header>
+      {{template "agent-events" .Data}}
+    </section>
+    <div class="agent-side">
+      <section class="panel" aria-labelledby="h-mail">
+        <header class="panel-head"><h2 id="h-mail">Mail</h2></header>
+        {{template "agent-mail" .Data}}
+      </section>
+      <section class="panel" aria-labelledby="h-config">
+        <header class="panel-head"><h2 id="h-config">Configuration</h2><span class="panel-note">lolabot.yaml runtime</span></header>
+        {{template "agent-facts" .Data}}
+      </section>
+    </div>
+  </div>
+</div>{{end}}

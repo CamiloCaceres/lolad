@@ -1,0 +1,9 @@
+{{define "content"}}<div class="page page-wide">
+  <header class="page-head">
+    <div>
+      <h1 class="page-title">Org</h1>
+      <p class="page-sub">Teams set who reports to whom; rules and defaults set who may message whom. Saving writes org.yaml and reloads the policy.</p>
+    </div>
+  </header>
+  {{template "org-body" .Data}}
+</div>{{end}}

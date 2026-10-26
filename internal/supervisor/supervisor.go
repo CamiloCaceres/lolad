@@ -346,6 +346,12 @@ func (s *Supervisor) launch(r *record) error {
 	}
 	opts := s.opts.Launch
 	opts.Fresh = r.Fresh || !r.EverStarted
+	if !opts.Fresh && opts.FirstPrompt == "" {
+		// Both TUIs can resume at a blank composer without firing an idle
+		// hook. Start one short turn so queued mail and hook-only delivery
+		// become live again without discarding the conversation.
+		opts.FirstPrompt = "Continue this conversation under lolad supervision. Check lolad msg inbox and read any waiting mail; if none, wait quietly for new mail."
+	}
 	if opts.Fresh {
 		opts.FirstPrompt = r.Status.Runtime.OnWake
 		if q := s.queues[r.Status.Name]; len(q) > 0 {
