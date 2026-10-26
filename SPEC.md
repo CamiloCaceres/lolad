@@ -195,8 +195,9 @@ owns *how*.
 ### Supervisor (`internal/supervisor`) implements `core.HookSink`
 - Registry (`internal/registry`): load config.yaml, scan `agents_dirs` + `agents`,
   parse lolabot.yaml (`agent.name`, `agent.role`, `runtime`), validate, derive
-  slug (dir basename, lowercased, sanitised; `runtime.slug` not supported — use
-  the dir name). `Reload` diffs. Writing the runtime block into an existing
+  slug: `runtime.slug` if set, else `agent.name` sanitised ("Ultron" → `ultron`),
+  else the dir basename; `^[a-z0-9][a-z0-9-]{0,62}$`. A duplicate slug is
+  rejected with an error event, never silently renamed. `Reload` diffs. Writing the runtime block into an existing
   lolabot.yaml must preserve the rest of the file byte-for-byte (append or
   replace only the `runtime:` block).
 - Per agent: desired state persisted in `sup_agents` (default up when
