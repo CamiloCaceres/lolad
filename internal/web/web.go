@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"slices"
 	"strings"
 	"sync"
 
@@ -269,6 +270,21 @@ func (s *server) asset(p string) string {
 	h := s.hashes[p]
 	s.mu.Unlock()
 	return "/static/" + p + "?v=" + h
+}
+
+// pageStyles lists static/pages/*.css. Each screen keeps its own styles there
+// so app.css holds only the shared tokens, shell and components.
+func (s *server) pageStyles() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []string
+	for p := range s.hashes {
+		if strings.HasPrefix(p, "pages/") && strings.HasSuffix(p, ".css") {
+			out = append(out, p)
+		}
+	}
+	slices.Sort(out)
+	return out
 }
 
 func (s *server) notFound(w http.ResponseWriter, r *http.Request) {

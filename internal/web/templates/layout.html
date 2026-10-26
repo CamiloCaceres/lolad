@@ -10,7 +10,8 @@
 <title>{{if .Badges.Unread}}({{.Badges.Unread}}) {{end}}{{.Title}} · lolad</title>
 <link rel="icon" href="{{asset "favicon.svg"}}" type="image/svg+xml">
 <link rel="stylesheet" href="{{asset "app.css"}}">
-<script src="{{asset "vendor/htmx.min.js"}}" defer></script>
+{{range pageStyles}}<link rel="stylesheet" href="{{asset .}}">
+{{end}}<script src="{{asset "vendor/htmx.min.js"}}" defer></script>
 <script src="{{asset "app.js"}}" defer></script>
 <script src="{{asset "term.js"}}" defer></script>
 </head>
