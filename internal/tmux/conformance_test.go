@@ -42,6 +42,7 @@ func conformanceSessions(t *testing.T) *Sessions {
 	t.Cleanup(func() { _ = exec.Command(s.Binary, "-L", s.Socket, "kill-server").Run() })
 	return s
 }
+
 // exitStatusIs accepts tmux's "dead, status unknown" (-1) on Linux only: tmux
 // 3.4 on GitHub's Ubuntu runners intermittently marks a pane dead without ever
 // filling #{pane_dead_status}. lolad already treats that as a crash with an
