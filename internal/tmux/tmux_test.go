@@ -43,9 +43,9 @@ func TestRealSessions(t *testing.T) {
 	if e := s.Start("agent", t.TempDir(), append(os.Environ(), "LOLAD_TEST_ARG=literal value"), []string{"/bin/sh", "-c", `printf '%s\n' "$LOLAD_TEST_ARG" "$1"; exit 7`, "sh", "[1m] $(not-a-command)"}, 80, 24); e != nil {
 		t.Fatal(e)
 	}
-	until(t, func() bool { d, status, _ := s.PaneDead("agent"); return d && status == 7 })
+	until(t, func() bool { d, status, _ := s.PaneDead("agent"); return d && exitStatusIs(status, 7) })
 	d, status, e := s.PaneDead("agent")
-	if e != nil || !d || status != 7 {
+	if e != nil || !d || !exitStatusIs(status, 7) {
 		t.Fatalf("dead %v status %d err %v", d, status, e)
 	}
 	capture, e := s.Capture("agent", 40, true)

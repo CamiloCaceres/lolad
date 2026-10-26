@@ -42,6 +42,14 @@ func conformanceSessions(t *testing.T) *Sessions {
 	t.Cleanup(func() { _ = exec.Command(s.Binary, "-L", s.Socket, "kill-server").Run() })
 	return s
 }
+// exitStatusIs accepts tmux's "dead, status unknown" (-1) on Linux only: tmux
+// 3.4 on GitHub's Ubuntu runners intermittently marks a pane dead without ever
+// filling #{pane_dead_status}. lolad already treats that as a crash with an
+// unknown status; macOS and psmux (via the exec-env sidecar) must report it.
+func exitStatusIs(status, want int) bool {
+	return status == want || runtime.GOOS == "linux" && status == -1
+}
+
 func awaitOperation(t *testing.T, fn func() bool) {
 	t.Helper()
 	deadline := time.Now().Add(12 * time.Second)
@@ -251,9 +259,9 @@ func TestConformance(t *testing.T) {
 		if err := s.SendKeys(name, "Enter"); err != nil {
 			t.Fatal(err)
 		}
-		awaitOperation(t, func() bool { dead, status, _ := s.PaneDead(name); return dead && status == 7 })
+		awaitOperation(t, func() bool { dead, status, _ := s.PaneDead(name); return dead && exitStatusIs(status, 7) })
 		dead, status, err := s.PaneDead(name)
-		if err != nil || !dead || status != 7 {
+		if err != nil || !dead || !exitStatusIs(status, 7) {
 			t.Fatalf("dead=%v status=%d: %v", dead, status, err)
 		}
 	})
