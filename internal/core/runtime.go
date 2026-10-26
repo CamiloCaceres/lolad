@@ -21,7 +21,7 @@ type Sessions interface {
 	PanePID(name string) (int, error)
 	PaneDead(name string) (bool, int, error) // remain-on-exit is on: dead pane + exit status
 	Kill(name string) error
-	SendLiteral(name, text string) error   // send-keys -l
+	SendLiteral(name, text string) error        // send-keys -l
 	SendKeys(name string, keys ...string) error // named keys: Enter Escape BSpace C-c ...
 	Capture(name string, lines int, withEscapes bool) (string, error)
 	Attach(ctx context.Context, name string, readOnly bool) (Terminal, error)

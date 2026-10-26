@@ -32,6 +32,7 @@ const (
 // Runtime is the `runtime:` block of an agent's lolabot.yaml. It is the only
 // thing lolad adds to lolabot; the agent stays self-describing.
 type Runtime struct {
+	Slug          string            `yaml:"slug,omitempty" json:"slug,omitempty"` // optional; default = agent.name sanitised, else dir basename
 	Harness       Harness           `yaml:"harness" json:"harness"`
 	Model         string            `yaml:"model,omitempty" json:"model,omitempty"`
 	Permissions   Permissions       `yaml:"permissions,omitempty" json:"permissions,omitempty"`         // default bypass
@@ -136,31 +137,32 @@ const (
 // addresses; FromName/ToName are local names (agent slugs, the user's name, or
 // "lolad" for the system identity).
 type Mail struct {
-	ID        string         `json:"id"` // msg_<unix>_<hex>
-	ThreadID  string         `json:"thread_id"`
-	InReplyTo string         `json:"in_reply_to,omitempty"`
-	From      string         `json:"from"`
-	To        string         `json:"to"`
-	FromName  string         `json:"from_name"`
-	ToName    string         `json:"to_name"`
-	Subject   string         `json:"subject"`
-	Priority  string         `json:"priority"` // urgent|high|normal|low
-	Type      string         `json:"type"`     // payload.type: request|response|notification|alert|task|status|handoff|ack|update|system
-	Body      string         `json:"body"`     // payload.message
-	Context   map[string]any `json:"context,omitempty"`
-	Signed    bool           `json:"signed"`
-	Verified  bool           `json:"verified"`
-	CreatedAt time.Time      `json:"created_at"`
-	Status    MailStatus     `json:"status"`
-	NotifiedAt time.Time     `json:"notified_at,omitempty"`
-	ReadAt    time.Time      `json:"read_at,omitempty"`
-	Attempts  int            `json:"attempts"` // notification attempts
+	ID         string         `json:"id"` // msg_<unix>_<hex>
+	ThreadID   string         `json:"thread_id"`
+	InReplyTo  string         `json:"in_reply_to,omitempty"`
+	From       string         `json:"from"`
+	To         string         `json:"to"`
+	FromName   string         `json:"from_name"`
+	ToName     string         `json:"to_name"`
+	Subject    string         `json:"subject"`
+	Priority   string         `json:"priority"` // urgent|high|normal|low
+	Type       string         `json:"type"`     // payload.type: request|response|notification|alert|task|status|handoff|ack|update|system
+	Body       string         `json:"body"`     // payload.message
+	Context    map[string]any `json:"context,omitempty"`
+	Signed     bool           `json:"signed"`
+	Verified   bool           `json:"verified"`
+	CreatedAt  time.Time      `json:"created_at"`
+	Status     MailStatus     `json:"status"`
+	NotifiedAt time.Time      `json:"notified_at,omitempty"`
+	ReadAt     time.Time      `json:"read_at,omitempty"`
+	Attempts   int            `json:"attempts"` // notification attempts
 }
 
 // UserChat is the structured part of mail between the user and an agent,
 // carried at payload.context.userchat (Maestro Lite's convention).
-//   agent → user kinds: say | update | deliver | ask (Options = buttons)
-//   user → agent kinds: say | reply | decision (Decision = chosen option)
+//
+//	agent → user kinds: say | update | deliver | ask (Options = buttons)
+//	user → agent kinds: say | reply | decision (Decision = chosen option)
 type UserChat struct {
 	Kind     string   `json:"kind"`
 	Options  []string `json:"options,omitempty"`
@@ -189,12 +191,12 @@ type MailFilter struct {
 
 // Conversation is the user's thread with one participant.
 type Conversation struct {
-	Peer     string    `json:"peer"` // local name
-	Display  string    `json:"display"`
-	Last     Mail      `json:"last"`
-	Unread   int       `json:"unread"`   // from peer to user, unread
-	Pending  bool      `json:"pending"`  // last message is an unanswered ask
-	LastAt   time.Time `json:"last_at"`
+	Peer    string    `json:"peer"` // local name
+	Display string    `json:"display"`
+	Last    Mail      `json:"last"`
+	Unread  int       `json:"unread"`  // from peer to user, unread
+	Pending bool      `json:"pending"` // last message is an unanswered ask
+	LastAt  time.Time `json:"last_at"`
 }
 
 // Identity is an AMP participant registered with lolad.
@@ -266,8 +268,8 @@ type Org struct {
 
 // User is the human operator's identity.
 type User struct {
-	Name    string `yaml:"name" json:"name"`       // local name, e.g. "milo"
-	Display string `yaml:"display" json:"display"` // "Camilo Caceres"
+	Name    string `yaml:"name" json:"name"`                     // local name, e.g. "milo"
+	Display string `yaml:"display" json:"display"`               // "Camilo Caceres"
 	Ntfy    string `yaml:"ntfy,omitempty" json:"ntfy,omitempty"` // optional ntfy topic URL for phone pushes
 }
 
@@ -306,7 +308,7 @@ type CreateRequest struct {
 // AdoptRequest registers an existing lolabot dir (adds the runtime block).
 type AdoptRequest struct {
 	Dir     string  `json:"dir"`
-	Slug    string  `json:"slug"` // optional; default dir basename
+	Slug    string  `json:"slug"` // optional; default agent.name from lolabot.yaml sanitised, else dir basename
 	Runtime Runtime `json:"runtime"`
 }
 
@@ -323,10 +325,10 @@ type Service interface {
 	// fleet
 	List(ctx context.Context) ([]AgentStatus, error)
 	Get(ctx context.Context, name string) (AgentStatus, error)
-	Start(ctx context.Context, name string) error               // desired=up
-	Stop(ctx context.Context, name string) error                // desired=down; graceful, then kill
-	Restart(ctx context.Context, name string, fresh bool) error // fresh=true: new conversation + on_wake
-	Interrupt(ctx context.Context, name string) error           // Escape into the session
+	Start(ctx context.Context, name string) error                        // desired=up
+	Stop(ctx context.Context, name string) error                         // desired=down; graceful, then kill
+	Restart(ctx context.Context, name string, fresh bool) error          // fresh=true: new conversation + on_wake
+	Interrupt(ctx context.Context, name string) error                    // Escape into the session
 	Events(ctx context.Context, name string, limit int) ([]Event, error) // name "" = all
 	Subscribe(ctx context.Context) <-chan Event                          // live; closed when ctx ends
 	Create(ctx context.Context, req CreateRequest) (AgentStatus, error)
