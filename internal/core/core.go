@@ -180,6 +180,12 @@ type Mail struct {
 	NotifiedAt time.Time      `json:"notified_at,omitzero"`
 	ReadAt     time.Time      `json:"read_at,omitzero"`
 	Attempts   int            `json:"attempts"` // notification attempts
+	// Federation (v4). Remote is the peer provider when either side is on
+	// another lolad. Delivery/DeliveryError are set on our copy of outbound
+	// remote mail (DeliveryQueued … DeliveryFailed).
+	Remote        string `json:"remote,omitempty"`
+	Delivery      string `json:"delivery,omitempty"`
+	DeliveryError string `json:"delivery_error,omitempty"`
 }
 
 // UserChat is the structured part of mail between the user and an agent,
@@ -407,6 +413,10 @@ type Service interface {
 	Email(ctx context.Context, name string) (EmailSettings, error)
 	SaveEmail(ctx context.Context, name string, s EmailSettings) (EmailSettings, error)
 	TestEmail(ctx context.Context, name, address string) (EmailTest, error)
+
+	// federation (see federation.go): connections to other lolads, sharing,
+	// first-message approvals, remote contacts.
+	Federator
 }
 
 var (

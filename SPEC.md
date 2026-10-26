@@ -400,3 +400,168 @@ configured discovery roots and explicit agent paths. It is read-only and exposed
 at `GET /api/create/options`. The New screen previews setup, validates known
 collisions inline, shows indeterminate setup progress and retained-input recovery,
 and lands in the agent conversation with optional Email/Org setup links.
+
+## Federation (v4)
+
+Milo and his brother Jugui each run a lolad (Mac; Windows 11). Both machines
+are on Milo's tailnet. They pair once; then Jugui (the human, on his own
+dashboard) and his agents can message Milo's agents that Milo shared with him,
+and the other way round. Direct provider-to-provider AMP federation
+(AMP `spec/06-federation.md`, allowlist trust): no shared server, no relay.
+Types are in `internal/core/federation.go`; `core.Service` embeds
+`core.Federator`.
+
+**Trust model.** The tailnet is not authentication (it also contains other
+people's shared-in devices). A peer is a pinned Ed25519 *provider key*
+exchanged at pairing. Every federation request is signed with it. Each remote
+*sender* key is pinned on first sight under that peer. Nothing a peer sends is
+an instruction to lolad: it is mail, delivered to a mailbox, marked external.
+
+### Names and storage
+- Provider name stays `<tenant>.lolad.local`. Pairing refuses a peer with our
+  own provider name ("rename the tenant on one side").
+- A remote participant's name inside lolad is its full address
+  (`ana@jugui.lolad.local`); `core.IsRemoteName`. It is what `Mail.FromName` /
+  `ToName`, `Conversation.Peer`, `Outgoing.To` and policy checks carry. Mail
+  keeps the **same message id on both sides** (the sender's `msg_…`), so
+  `in_reply_to` threads across lolads; a receiver rejects an id that already
+  exists with different participants.
+- Provider key: `<state>/federation/provider.key` (PEM, 0600) + `provider.pub`.
+- Configuration (survives deleting the DB): `<config dir>/connections.yaml`
+  (0600, atomic writes): `peers: [{provider, display, url, public_key, login,
+  created_at, paused, user_reachable, shares: [{local, remote: []}]}]`,
+  `grants: [{peer, remote, remote_display, local, state, origin, created_at,
+  decided_at, first_subject}]`.
+- DB (`fed_*` tables, owned by `internal/fed`): `fed_invites` (secret sha256,
+  expires, used_at), `fed_outbox` (mail id, peer, attempts, next_at,
+  last_error), `fed_sender_keys` (peer, address, public key, first_seen),
+  `fed_rate` if needed. `amp_messages` gains nullable `remote`, `delivery`,
+  `delivery_error` columns (migrate with `ALTER TABLE … ADD COLUMN` when
+  missing) and the `held` status.
+- `config.yaml` gains `federation: {enabled: true, display: "", url: ""}`.
+  `display` defaults to `org.user.display`'s first word; `url` defaults to
+  `remote.public_url`. `url` may be plain `http://` only for a loopback host
+  (two-daemon tests). Without a URL, federation can accept invites only if the
+  peer is reachable, and cannot create invites (FederationInfo.Problem says why).
+
+### Wire protocol (mounted at `/v1/federation/` on **both** listeners, outside device auth)
+Every request is signed by the caller's provider key:
+`X-AMP-Provider: <provider>`, `X-AMP-Timestamp: <unix seconds>`,
+`X-AMP-Signature: base64(ed25519(<timestamp> + "." + <raw body>))` (empty body
+for GET). Reject when the timestamp is off by more than 300 s, the provider is
+unknown (except `pair`), the signature fails, or — when the peer has a pinned
+`login` and the request carries `Tailscale-User-Login` — the login differs.
+Bodies ≤ 1 MB. Errors `{error, message}` with AMP codes.
+- `POST pair` — `{secret, provider, display, url, public_key, version}`,
+  signed by the *new* key (proof of possession); the secret must be a live
+  unused invite (single use, 72 h, stored hashed, constant-time compare, 10
+  failed attempts per hour per source → 429). Response `{provider, display,
+  url, public_key}`. Same provider + same key again → idempotent 200.
+- `POST deliver` — AMP federation body `{envelope, payload,
+  sender_public_key}`. Checks in order: peer connected and not paused (paused →
+  503 `provider_paused`, their outbox retries); `envelope.from` domain equals
+  the peer's provider (else 403 `provider_not_trusted`); envelope signature
+  verifies with `sender_public_key`, and that key equals the pinned key for that
+  address (pin on first sight; mismatch → 403 `invalid_signature` + event);
+  recipient resolves to a local participant reachable from this peer (see
+  Inbound) else 404 `recipient_not_found` (don't reveal unshared agents);
+  attachments → 422; rate limits 100/min per peer, 20/min per peer+recipient →
+  429 with `Retry-After`; duplicate id with the same participants → same answer
+  as the first time (idempotent retry). Response 202
+  `{status: "delivered"|"held", id}`.
+- `POST receipt` — `{id, status: "delivered"|"blocked", at}`, sent when a held
+  message is released or its sender blocked. Updates our copy's `Delivery`.
+- `GET directory` — participants reachable by the caller:
+  `[{address, name, display, role, kind}]` (shared agents, plus the user when
+  `user_reachable`).
+- `POST unpair` — the peer removed us: mark the connection removed (keep it
+  listed as "removed by them" until the user deletes it; nothing flows).
+
+**Invite code** (what the user copies to the other person):
+`lolad-invite:` + base64url(JSON `{v:1, provider, display, url, public_key,
+secret}`). The acceptor pins the inviter's key from the code, so neither side
+trusts on first use.
+
+### Inbound (a peer delivers to one of ours)
+Reachable locals for a peer: agents in its `shares`, plus the user if
+`user_reachable`. For a deliver from remote `R` to local `L`:
+1. grant(peer, R, L) `allowed` → deliver. `blocked` → 403 `forbidden`.
+2. R is listed in L's share `remote` → create grant `allowed` origin `shared`, deliver.
+3. `in_reply_to` is a message L sent to R → deliver (the grant exists from rule 5 anyway).
+4. Otherwise create/keep grant `pending` (FirstSubject, Held++), store the mail
+   with status `held`, emit event `federation` + the approval hook (ntfy push,
+   SSE), respond `held`. At most 50 pending grants per peer (then 429).
+`DecideGrant(allow)` releases held mail (status `unread`, OnMail fires → normal
+delivery to the agent) and sends `receipt delivered` per message;
+`DecideGrant(block)` deletes the held mail and sends `receipt blocked`.
+Remote mail is marked: `Mail.Remote = <peer provider>`; the session notice and
+`lolad msg read` say it is external and from which lolad.
+
+### Outbound (one of ours writes to a remote address)
+`Send`/`/v1/route` with a foreign domain → `CheckOutbound(from, to, in_reply_to)`:
+- peer must be connected and not paused, else deny with a reason;
+- the user may write to anyone on a connected peer (their side decides);
+  doing so creates grant(peer, to, user) `allowed` origin `initiated`;
+- an agent may write only when grant(peer, to, agent) is `allowed` or it is
+  replying (`in_reply_to` a message from `to` to it);
+- `lolad` (system) never writes remotely.
+Allowed mail is stored (sender's copy, `Remote`, `Delivery=queued`) and put in
+`fed_outbox`; `Send` returns immediately. The outbox worker POSTs `deliver`
+at once, then backs off 10 s, 30 s, 2 m, 10 m, 30 m, 1 h … for up to 7 days;
+429/503/network errors retry, other 4xx fail permanently with the server's
+message. Updates `Delivery` and fires OnMail-like change events so the UI
+updates. A paused or removed connection keeps the outbox untouched (removed →
+fail all).
+
+### Surfaces
+- `Service` (via `core.Federator`): Info, Connections, CreateInvite,
+  AcceptInvite, UpdateConnection, RemoveConnection, Grants, DecideGrant,
+  RemoteContacts. `Check(from, to)` answers for remote names too.
+- `/v1/info` reports `federation: true` when enabled. `/v1/agents` (the
+  directory for `lolad msg who`) appends the caller's remote contacts with
+  `remote: true` and the peer display.
+- API: `GET /api/federation`, `GET|POST /api/connections` (POST = accept
+  invite, code in body), `POST /api/connections/invite`, `PATCH|DELETE
+  /api/connections/{provider}`, `GET /api/grants`, `POST
+  /api/grants/decide {peer, remote, local, allow}`, `GET
+  /api/remote-contacts?local=`.
+- CLI: `lolad connect invite`, `lolad connect accept` (code from stdin or a
+  prompt, never argv), `lolad connections`, `lolad connect share <provider>
+  <agent> [--with <address>…]`, `lolad connect unshare <provider> <agent>`,
+  `lolad connect pause|resume|rm <provider>`, `lolad approvals`, `lolad
+  approve|block <peer> <remote> <local>`.
+- Dashboard: Connections page (pair, invite, shares per agent, pause/remove,
+  queue + last error, reachability); approval cards at the top of the Inbox
+  (Allow / Block with the first subject and who it is for); remote contacts and
+  conversations in the Inbox, labelled with the peer; the agent page shows who
+  it is shared with; Traffic shows delivery state; Org shows connected lolads
+  as external boxes with their shared edges.
+
+## Windows (v4)
+
+Jugui runs lolad natively on Windows 11: no WSL, no Docker. The tmux layer
+stays: on Windows lolad drives **psmux** (github.com/psmux/psmux, a native
+tmux-compatible multiplexer on ConPTY, installed with `winget install psmux`;
+it ships a `tmux` binary). Same `core.Sessions`, same supervisor, same live
+terminal.
+- `config.yaml` gains `tmux_bin` (default: `tmux` from PATH; on Windows
+  prefer `psmux`, then `tmux`).
+- A **conformance suite** (`internal/tmux/conformance_test.go`, run against
+  `LOLAD_TMUX_BIN` or the default) exercises every tmux operation lolad relies
+  on with a small fake agent program: private `-L` server, start detached with
+  dir/size/env, `remain-on-exit` + dead pane + exit status, pane pid, list,
+  exact-name targeting (`=name`), `send-keys -l` with unicode/quotes/
+  semicolons, named keys Enter/Escape/BSpace/C-c, `capture-pane -p -e -J -S`,
+  resize, kill, server survives client exit. `lolad doctor` runs a short
+  version and names the failing operation.
+- Gaps get portable workarounds used on both platforms where possible: set
+  server options with `set-option` after the server starts instead of `-f`;
+  resize after creating; on Windows the dashboard terminal is a capture-poll
+  stream (≈150 ms, keys forwarded with send-keys) instead of a PTY attach
+  (`creack/pty` is Unix-only).
+- `exec-env` on Windows cannot `exec`: it starts the child with the env from
+  the file, inherits stdio (the ConPTY), forwards exit status. Secrets still
+  never travel in argv (no `new-session -e` for env values on any platform).
+- `GOOS=windows go build ./...` and `go vet` pass; Unix-only code sits behind
+  build tags. CI (`.github/workflows/ci.yml`): Linux/macOS with tmux, Windows
+  with psmux, running `go test ./...` and the conformance suite.
