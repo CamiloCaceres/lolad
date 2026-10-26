@@ -19,7 +19,9 @@ type streamEvent struct {
 
 func classify(ev core.Event) string {
 	switch ev.Kind {
-	case "mail", "notified":
+	case "federation":
+		return "federation"
+	case "mail", "notified", "delivery":
 		return "mail"
 	}
 	return "agent"

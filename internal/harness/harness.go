@@ -67,6 +67,7 @@ func (a *Adapter) prepare(agent core.Agent, o core.LaunchOpts, sessionID string)
 		}
 		env[k] = v
 	}
+	normalizeLaunchEnv(env)
 	if a.Path != "" {
 		env["PATH"] = a.Path
 	}

@@ -1,3 +1,5 @@
+//go:build !windows
+
 package tmux
 
 import (
@@ -41,7 +43,7 @@ func TestRealSessions(t *testing.T) {
 	if e := s.Start("agent", t.TempDir(), append(os.Environ(), "LOLAD_TEST_ARG=literal value"), []string{"/bin/sh", "-c", `printf '%s\n' "$LOLAD_TEST_ARG" "$1"; exit 7`, "sh", "[1m] $(not-a-command)"}, 80, 24); e != nil {
 		t.Fatal(e)
 	}
-	until(t, func() bool { d, _, _ := s.PaneDead("agent"); return d })
+	until(t, func() bool { d, status, _ := s.PaneDead("agent"); return d && status == 7 })
 	d, status, e := s.PaneDead("agent")
 	if e != nil || !d || status != 7 {
 		t.Fatalf("dead %v status %d err %v", d, status, e)
@@ -49,9 +51,6 @@ func TestRealSessions(t *testing.T) {
 	capture, e := s.Capture("agent", 40, true)
 	if e != nil || !strings.Contains(capture, "literal value") || !strings.Contains(capture, "[1m] $(not-a-command)") {
 		t.Fatalf("capture %q %v", capture, e)
-	}
-	if pid, e := s.PanePID("agent"); e != nil || pid <= 0 {
-		t.Fatalf("pid %d %v", pid, e)
 	}
 	list, e := s.List()
 	if e != nil || len(list) != 1 || list[0] != "agent" {
@@ -65,6 +64,10 @@ func TestAttachAndKeys(t *testing.T) {
 	s := testSessions(t)
 	if e := s.Start("live", t.TempDir(), os.Environ(), []string{"/bin/cat"}, 80, 24); e != nil {
 		t.Fatal(e)
+	}
+	// Recent tmux versions clear pane_pid after exit; query it while alive.
+	if pid, e := s.PanePID("live"); e != nil || pid <= 0 {
+		t.Fatalf("pid %d %v", pid, e)
 	}
 	if e := s.SendLiteral("live", "hello"); e != nil {
 		t.Fatal(e)

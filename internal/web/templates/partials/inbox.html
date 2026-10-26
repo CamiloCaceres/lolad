@@ -6,7 +6,7 @@
       {{template "avatar" (dict "Display" .Display "State" .State "Size" "")}}
       <span class="conv-main">
         <span class="conv-top">
-          <span class="conv-name">{{.Display}}</span>
+          <span class="conv-name">{{.Display}}{{with .Origin}}<span class="remote-origin">{{.}}</span>{{end}}</span>
           <time class="conv-time" datetime="{{stamp .LastAt}}" title="{{long .LastAt}}" data-when>{{when .LastAt}}</time>
         </span>
         <span class="conv-bottom">
@@ -31,7 +31,7 @@
   <div class="sheet-head"><h2>New message</h2><button class="btn btn-icon btn-ghost" type="button" popovertarget="new-message" popovertargetaction="hide" aria-label="Close">{{template "icon" "x"}}</button></div>
   <p class="sheet-note">Mail goes to the agent's inbox; it answers here.</p>
   <ul class="pick" role="list">
-    {{range .}}<li><a href="/inbox/{{.Name}}">{{template "avatar" (dict "Display" .Display "State" .State "Size" "sm")}}<span class="pick-name">{{.Display}}</span><span class="pick-role">{{.Role}}</span>{{template "state" .}}</a></li>{{end}}
+    {{range .}}<li><a href="/inbox/{{.Name}}">{{template "avatar" (dict "Display" .Display "State" .State "Size" "sm")}}<span class="pick-name">{{.Display}}</span><span class="pick-role">{{.Role}}</span>{{if .State}}{{template "state" .}}{{end}}</a></li>{{end}}
   </ul>
 </div>{{end}}
 
@@ -50,7 +50,7 @@
   {{template "avatar" (dict "Display" .Display "State" (stateOf .Agent) "Size" "md")}}
   <div class="thread-who">
     <h1 class="thread-name">{{.Display}}</h1>
-    <p class="thread-sub">{{with .Agent}}{{template "state" .}}<span class="thread-detail">{{if .Detail}}{{.Detail}}{{else}}{{.Role}}{{end}}</span>{{else}}System messages{{end}}</p>
+    <p class="thread-sub">{{with .Agent}}{{template "state" .}}<span class="thread-detail">{{if .Detail}}{{.Detail}}{{else}}{{.Role}}{{end}}</span>{{else}}{{if .Origin}}{{.Origin}} · External{{else}}System messages{{end}}{{end}}</p>
   </div>
   {{with .Agent}}<a class="btn btn-icon btn-ghost thread-settings" href="/agents/{{.Name}}/settings" aria-label="Settings for {{.Display}}" title="Settings">{{template "icon" "settings"}}</a>{{end}}
   {{with .Agent}}<a class="btn btn-ghost thread-agent" href="/agents/{{.Name}}">Agent<span class="hide-sm"> details</span>{{template "icon" "next"}}</a>{{end}}
@@ -93,7 +93,7 @@
     </form>
     {{if and .Answered (not .Answer)}}<p class="options-note">You replied in your own words; you can still pick one.</p>{{end}}
     {{end}}
-    {{with .Receipt}}<p class="receipt">{{.}}</p>{{end}}
+    {{if and .Mine .Remote .DeliveryError}}<p class="remote-delivery is-{{.Delivery}}">{{.DeliveryError}}</p>{{end}}{{with .Receipt}}<p class="receipt{{if $t.Origin}} remote-delivery{{end}}">{{.}}</p>{{end}}
   </li>
   {{end}}
 {{end}}{{end}}
@@ -125,9 +125,10 @@
 {{template "conv-list" .V}}
 {{template "nav-badges" .Badges}}{{end}}
 
-{{define "home"}}<section class="home" id="inbox-home" aria-label="Inbox" hx-get="/" hx-select="#inbox-home" hx-target="this" hx-swap="outerHTML" hx-trigger="lolad:mail from:body delay:400ms" hx-push-url="false">
+{{define "home"}}<section class="home" id="inbox-home" aria-label="Inbox" hx-get="/" hx-select="#inbox-home" hx-target="this" hx-swap="outerHTML" hx-trigger="lolad:mail from:body delay:400ms, lolad:federation from:body delay:400ms" hx-push-url="false">
   <div class="home-inner">
   <header class="inbox-home-head"><div><h1>Inbox</h1><p>Conversations with your agents.</p></div>{{if .Agents}}{{template "new-message" .Agents}}{{end}}</header>
+  {{if .Approvals}}<section class="federation-approvals" aria-label="Sender approvals"><h2 class="home-h your-turn">New people need your approval <span class="count is-you">{{len .Approvals}}</span></h2>{{range .Approvals}}<article class="federation-approval"><strong>{{or .RemoteDisplay .Remote}} wants to message {{.LocalDisplay}}</strong><p>{{.Peer}} · “{{.FirstSubject}}” · {{.Held}} waiting</p><form method="post" action="/grants/decide"><input type="hidden" name="peer" value="{{.Peer}}"><input type="hidden" name="remote" value="{{.Remote}}"><input type="hidden" name="local" value="{{.Local}}"><button class="btn btn-sm" name="decision" value="allow">Allow</button><button class="btn btn-sm btn-ghost" name="decision" value="block">Block</button></form></article>{{end}}</section>{{end}}
   {{if .Asks}}
     <h2 class="home-h your-turn">Waiting on you <span class="count is-you">{{len .Asks}}</span></h2>
     <ul class="asks" role="list">
@@ -164,5 +165,5 @@
 
 {{define "home-rows"}}<ul class="home-rows" role="list">{{range .}}<li><a href="/inbox/{{.Peer}}">
 {{template "avatar" (dict "Display" .Display "State" .State "Size" "")}}
-<span class="home-row-content"><span class="home-row-top"><strong>{{.Display}}</strong>{{with .Agent}}{{template "state" .}}{{end}}<time datetime="{{stamp .LastAt}}" data-when>{{when .LastAt}}</time></span>
+<span class="home-row-content"><span class="home-row-top"><strong>{{.Display}}{{with .Origin}}<span class="remote-origin">{{.}}</span>{{end}}</strong>{{with .Agent}}{{template "state" .}}{{end}}<time datetime="{{stamp .LastAt}}" data-when>{{when .LastAt}}</time></span>
 <span class="home-row-preview">{{if eq .Chat.Kind "deliver"}}<span class="delivery-label">{{template "icon" "file"}}Deliverable</span>{{end}}{{if .Mine}}You: {{end}}{{excerpt .Last.Body 180}}</span></span>{{if .Unread}}<span class="count">{{.Unread}}<span class="sr-only"> unread</span></span>{{end}}{{template "icon" "next"}}</a></li>{{end}}</ul>{{end}}

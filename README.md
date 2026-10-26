@@ -232,6 +232,12 @@ Policy evaluates paths in this order:
 The Traffic view records every successful message, and policy denials produce
 a policy event. Do not bypass denials by using another identity.
 
+## Federation
+
+Connect another person's lolad, share selected agents and approve each remote
+sender with the [federation guide](docs/federation.md). Both installations keep
+their own keys, agents and mailbox; the durable outbox retries offline peers.
+
 ## Dashboard tour
 
 - **Inbox** is home: conversations, unread counts, threaded replies, and a

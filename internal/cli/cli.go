@@ -34,6 +34,10 @@ const help = `lolad — agent daemon and mail
   pair [--name device]           create a single-use pairing code
   devices [ls|rm <id>]           list or revoke devices
   doctor                        check daemon setup
+  connect invite|accept         pair with another lolad (accept reads stdin)
+  connections | approvals       list peers or sender approvals
+  connect share|unshare|pause|resume|rm <provider> [agent] [--with address]...
+  approve|block <peer> <remote> <local>
   ls | status <agent>           inspect the fleet
   start|stop|interrupt <agent>  control an agent
   restart [--fresh] <agent>     restart/resume or start fresh
@@ -130,6 +134,9 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		}
 		return hooks.Run(ctx, args[1], stdin, stdout, os.Getenv)
 	}
+	if args[0] == "tmux-probe-agent" {
+		return tmuxProbeAgent(stdin, stdout)
+	}
 	if args[0] == "exec-env" {
 		e := tmux.ExecEnv(args[1:])
 		fmt.Fprintln(stderr, "lolad:", e)
@@ -161,6 +168,8 @@ func command(ctx context.Context, args []string, stdin io.Reader, out io.Writer)
 		base = app.URL(c.Listen)
 	}
 	switch args[0] {
+	case "connect", "connections", "approvals", "approve", "block":
+		return federationCommand(ctx, base, args, stdin, out)
 	case "pair", "devices", "doctor":
 		return remoteCommand(ctx, base, c, args, out)
 	case "model", "skills", "env", "email":
@@ -271,7 +280,11 @@ func command(ctx context.Context, args []string, stdin io.Reader, out io.Writer)
 		if e = request(ctx, base, "GET", "/api/agents/"+agent(), nil, io.Discard); e != nil {
 			return e
 		}
-		bin, e := exec.LookPath("tmux")
+		mux := c.TmuxBin
+		if mux == "" {
+			mux = tmux.DefaultBinary()
+		}
+		bin, e := exec.LookPath(mux)
 		if e != nil {
 			return e
 		}
@@ -283,7 +296,7 @@ func command(ctx context.Context, args []string, stdin io.Reader, out io.Writer)
 		if o["read-only"] == "true" {
 			argv = append(argv, "-r")
 		}
-		return syscall.Exec(bin, argv, os.Environ())
+		return attachProcess(bin, argv)
 	default:
 		return fmt.Errorf("unknown command %q; run lolad help", args[0])
 	}

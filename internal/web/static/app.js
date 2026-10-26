@@ -37,6 +37,7 @@
       if (dropped) { // resync whatever we missed
         fire("lolad:mail", {});
         fire("lolad:agent", {});
+ fire("lolad:federation", {});
         if (visible()) fire("lolad:mail-visible", {});
       }
     });
@@ -45,6 +46,10 @@
       let ev;
       try { ev = JSON.parse(e.data); } catch { return; }
       if (ev.class === "mail") {
+        fire("lolad:mail", ev);
+        if (visible()) fire("lolad:mail-visible", ev);
+      } else if (ev.class === "federation") {
+        fire("lolad:federation", ev);
         fire("lolad:mail", ev);
         if (visible()) fire("lolad:mail-visible", ev);
       } else {
@@ -370,4 +375,14 @@ document.addEventListener("htmx:beforeRequest", (event) => {
   const target = event.detail.elt;
   const trigger = event.detail.triggeringEvent;
   if (target && target.id === "traffic" && trigger && trigger.type === "lolad:agent" && target.querySelector("details[open]")) event.preventDefault();
+});
+
+// An invitation only lives in its creation response; never put it in storage.
+document.addEventListener('click', async function(event) {
+ const button=event.target.closest('[data-copy-invite]');
+ if(!button)return;
+ const input=document.getElementById('invitation-code');
+ if(!input)return;
+ try {await navigator.clipboard.writeText(input.value);button.textContent='Copied';}
+ catch {input.focus();input.select();button.textContent='Select and copy invitation';}
 });

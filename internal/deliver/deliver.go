@@ -47,7 +47,11 @@ func Notice(m core.Mail) string {
 	if len(body) > 300 {
 		body = body[:300]
 	}
-	return fmt.Sprintf("%s [MESSAGE] from %s: %s — %s. Read: lolad msg read %s", Ref(m.ID), oneLine(m.FromName), oneLine(m.Subject), string(body), oneLine(m.ID))
+	external := ""
+	if m.Remote != "" {
+		external = "external "
+	}
+	return fmt.Sprintf("%s [MESSAGE] %sfrom %s: %s — %s. Read: lolad msg read %s", Ref(m.ID), external, oneLine(m.FromName), oneLine(m.Subject), string(body), oneLine(m.ID))
 }
 func classify(pane, ref string) core.NotifyResult {
 	p := harness.Plain(pane)

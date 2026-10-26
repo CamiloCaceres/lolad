@@ -99,3 +99,31 @@ No core contract changes or dependency changes were needed. Variations from
 SPEC are the additive history endpoints, fixed tenant until restart, and YAML
 comment loss (explicitly permitted by SPEC). Tests use only loopback HTTP and
 temporary SQLite/state directories; messages are database-only.
+
+## Federation (v4)
+
+Attach an `amp.Remote` implementation with `Provider.SetRemote`; `fed.New` does
+this automatically. `CheckOutbound(ctx, from, to, inReplyTo)` authorizes foreign
+recipients. `Enqueue(ctx, tx, mail, wire)` runs inside the mail/idempotency
+transaction and must use that transaction without network calls. The hook also
+supplies `Enabled()` and `RemoteContacts(ctx, local)` for `/v1/info`, health, and
+the caller's `/v1/agents` directory. A hook implementing the optional
+`Check(from, to) core.Decision` method supplies a read-only policy preview in
+both directions; the federation engine implements it.
+
+`Provider.AcceptRemote` verifies the sender signature, preserves message/thread
+IDs, stores full remote sender names, and deduplicates same-participant IDs;
+a different-participant collision is rejected. Authorization and provider/key
+pinning are the federation engine's responsibility. `Held` and `ResolveHeld`
+allow approval decisions and receipt enqueueing to commit atomically, with
+`OnMail` notifications only after commit. `ReleaseHeld` is the single-message
+helper. Held mail is excluded from pickup, inbox/history, read/ack, and normal
+notifications. `Traffic` remains an owner-level audit view.
+
+Existing databases are migrated additively with nullable `remote`, `delivery`,
+and `delivery_error` columns. Old mail survives and repeated migration is safe.
+`core.Mail` and the HTTP `amp.Message` wire shape expose these fields. Outgoing
+remote mail uses its full recipient address as `ToName`, starts as `queued`,
+and commits with an outbox entry. `SetDelivery` protects final delivery states
+from stale retry/held responses. `Wire` and `PublicKey` provide the outbound
+federation transport with the original signed envelope and public sender key.

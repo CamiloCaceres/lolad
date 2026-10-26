@@ -153,6 +153,8 @@ func (s *server) fleetFragment(w http.ResponseWriter, r *http.Request) {
 }
 
 type agentView struct {
+	Shared []connectionView
+
 	A                core.AgentStatus
 	TeamName         string
 	Events           []core.Event
@@ -176,6 +178,25 @@ func (s *server) agentData(ctx context.Context, name string) (agentView, error) 
 		return agentView{}, err
 	}
 	v := agentView{A: a, Me: s.svc.Me().Name, EnvKeys: slices.Sorted(maps.Keys(a.Runtime.Env)), NextTrigger: nextAgentTrigger(a.Runtime, time.Now())}
+	connections, _ := s.svc.Connections(ctx)
+	grants, _ := s.svc.Grants(ctx)
+	for _, c := range connections {
+		cv := connectionView{Connection: c}
+		cv.Shares = nil
+		for _, sh := range c.Shares {
+			if sh.Local == name {
+				cv.Shares = append(cv.Shares, sh)
+			}
+		}
+		for _, g := range grants {
+			if g.Peer == c.Provider && g.Local == name && g.State == core.GrantAllowed {
+				cv.Grants = append(cv.Grants, g)
+			}
+		}
+		if len(cv.Shares) > 0 || len(cv.Grants) > 0 {
+			v.Shared = append(v.Shared, cv)
+		}
+	}
 	if email, err := s.svc.Email(ctx, name); err == nil {
 		for _, account := range email.Accounts {
 			v.Emails = append(v.Emails, account.Address)
@@ -229,6 +250,9 @@ func (s *server) agentData(ctx context.Context, name string) (agentView, error) 
 		mailDetails[detail] = true
 		mailDetails[fmt.Sprintf("%s → %s: %s", m.FromName, m.ToName, m.Subject)] = true
 		title := "Mail received from " + m.FromName
+		if m.Status == core.MailHeld {
+			title = "Message awaiting approval from " + m.FromName
+		}
 		if m.FromName == name {
 			title = "Mail sent to " + m.ToName
 		}

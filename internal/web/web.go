@@ -74,6 +74,12 @@ func New(svc core.Service, opts Options) http.Handler {
 
 	mux := http.NewServeMux()
 	s.remoteRoutes(mux)
+	mux.HandleFunc("GET /connections", s.connectionsPage)
+	mux.HandleFunc("POST /connections/invite", s.connectionInvite)
+	mux.HandleFunc("POST /connections/accept", s.connectionAccept)
+	mux.HandleFunc("POST /connections/{provider}", s.connectionUpdate)
+	mux.HandleFunc("POST /connections/{provider}/remove", s.connectionRemove)
+	mux.HandleFunc("POST /grants/decide", s.grantDecide)
 	mux.HandleFunc("GET /{$}", s.inbox)
 	mux.HandleFunc("GET /inbox/{peer}", s.thread)
 	mux.HandleFunc("POST /inbox/{peer}", s.send)

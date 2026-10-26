@@ -32,6 +32,8 @@ type cell struct {
 }
 
 type orgView struct {
+	Connections []core.Connection
+
 	Org          core.Org
 	Roots        []*teamNode
 	Teams        []core.Team // flat, tree order, for selects
@@ -53,6 +55,7 @@ type orgView struct {
 
 func (s *server) orgData(ctx context.Context) (orgView, error) {
 	var v orgView
+	v.Connections, _ = s.svc.Connections(ctx)
 	org, err := s.svc.Org(ctx)
 	if err != nil {
 		return v, err

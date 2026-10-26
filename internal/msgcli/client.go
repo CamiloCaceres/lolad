@@ -255,6 +255,20 @@ func (c *client) printMessage(m amp.Message) error {
 	if e := dec.Decode(&p); e != nil {
 		return e
 	}
+	_, localDomain, _ := amp.ParseAddress(c.credentials.Address)
+	_, remoteDomain, _ := amp.ParseAddress(m.Envelope.From)
+	if remoteDomain != "" && remoteDomain != localDomain {
+		display := remoteDomain
+		if entries, err := c.directory(); err == nil {
+			for _, v := range entries {
+				if v.Peer == remoteDomain && v.PeerDisplay != "" {
+					display = v.PeerDisplay
+					break
+				}
+			}
+		}
+		fmt.Fprintf(c.out, "External — from %s via %s's lolad\n", m.Envelope.From, display)
+	}
 	fmt.Fprintf(c.out, "%s\nFrom: %s\nTo: %s\nSubject: %s\nType: %s  Priority: %s\nThread: %s\n\n%s\n", m.ID, m.Envelope.From, m.Envelope.To, m.Envelope.Subject, p.Type, m.Envelope.Priority, m.Envelope.ThreadID, p.Message)
 	if len(p.Context) > 0 {
 		b, _ := json.Marshal(p.Context)
@@ -292,13 +306,16 @@ func (c *client) send(to, subject, body, typ, priority, reply string, context ma
 }
 
 type entry struct {
-	Name       string `json:"name"`
-	Address    string `json:"address"`
-	Kind       string `json:"kind"`
-	Display    string `json:"display"`
-	Role       string `json:"role"`
-	Team       string `json:"team"`
-	MayMessage bool   `json:"may_message"`
+	Name        string `json:"name"`
+	Address     string `json:"address"`
+	Kind        string `json:"kind"`
+	Display     string `json:"display"`
+	Role        string `json:"role"`
+	Team        string `json:"team"`
+	MayMessage  bool   `json:"may_message"`
+	Remote      bool   `json:"remote"`
+	Peer        string `json:"peer"`
+	PeerDisplay string `json:"peer_display"`
 }
 
 func (c *client) directory() ([]entry, error) {
@@ -427,8 +444,23 @@ func (c *client) run(args []string) error {
 		if e != nil {
 			return e
 		}
+		sort.SliceStable(entries, func(i, j int) bool {
+			if entries[i].Peer != entries[j].Peer {
+				return entries[i].Peer < entries[j].Peer
+			}
+			return entries[i].Address < entries[j].Address
+		})
+		previous := ""
 		for _, v := range entries {
 			if v.MayMessage {
+				if v.Remote && v.Peer != previous {
+					display := v.PeerDisplay
+					if display == "" {
+						display = v.Peer
+					}
+					fmt.Fprintf(c.out, "\n%s's lolad (%s):\n", display, v.Peer)
+					previous = v.Peer
+				}
 				fmt.Fprintf(c.out, "%s  %s  %s  %s\n", v.Address, v.Kind, v.Role, v.Team)
 			}
 		}
@@ -456,7 +488,7 @@ func (c *client) run(args []string) error {
 		}
 		to := ""
 		for _, v := range entries {
-			if v.Kind == "human" {
+			if v.Kind == "human" && !v.Remote {
 				to = v.Address
 				break
 			}

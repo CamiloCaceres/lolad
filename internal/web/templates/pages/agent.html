@@ -2,6 +2,7 @@
   <nav class="crumbs" aria-label="Breadcrumb"><a href="/agents">Agents</a>{{template "icon" "next"}}<span aria-current="page">{{.Data.A.Display}}</span></nav>
   {{template "agent-head" .Data}}
   <nav class="agent-sections" aria-label="Agent sections"><a href="#h-activity">Recent activity</a><a href="#h-config">Configuration</a><a href="#term-panel">Live terminal</a></nav>
+  <section class="agent-shared" id="agent-shared" hx-get="/agents/{{.Data.A.Name}}" hx-select="#agent-shared" hx-target="this" hx-swap="outerHTML" hx-trigger="lolad:federation from:body delay:500ms" hx-push-url="false"><h2>Shared with</h2>{{range .Data.Shared}}<p><strong>{{.Display}}'s lolad</strong>{{if .Paused}} · Paused{{end}}</p>{{range .Shares}}<p>{{if .Remote}}Pre-approved: {{range .Remote}}<span>{{.}} </span>{{end}}{{else}}Anyone there may ask to message this agent. Each new sender needs your approval.{{end}}</p>{{end}}{{range .Grants}}<p class="muted">Approved sender: {{or .RemoteDisplay .Remote}}</p>{{end}}{{else}}<p class="muted">This agent is not shared with another lolad.</p>{{end}}<a href="/connections">Manage connections and sharing</a></section>
   {{template "terminal" .Data}}
   <div class="agent-grid">
     <section class="panel" aria-labelledby="h-activity">

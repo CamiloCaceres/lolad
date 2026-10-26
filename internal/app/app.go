@@ -20,6 +20,7 @@ import (
 	"github.com/CamiloCaceres/lolad/internal/core"
 	"github.com/CamiloCaceres/lolad/internal/create"
 	"github.com/CamiloCaceres/lolad/internal/deliver"
+	"github.com/CamiloCaceres/lolad/internal/fed"
 	"github.com/CamiloCaceres/lolad/internal/harness"
 	"github.com/CamiloCaceres/lolad/internal/policy"
 	"github.com/CamiloCaceres/lolad/internal/registry"
@@ -29,6 +30,7 @@ import (
 )
 
 type App struct {
+	*fed.Engine
 	Auth *auth.Store
 	*supervisor.Supervisor
 	Registry   *registry.Registry
@@ -93,6 +95,9 @@ func New(ctx context.Context, configPath string) (_ *App, err error) {
 	if err != nil {
 		return nil, err
 	}
+	if a.Config.TmuxBin != "" {
+		sessions.Binary = a.Config.TmuxBin
+	}
 	claudeBin := a.Config.ClaudeBin
 	if claudeBin == "" {
 		home, _ := os.UserHomeDir()
@@ -113,6 +118,9 @@ func New(ctx context.Context, configPath string) (_ *App, err error) {
 		return nil, err
 	}
 	a.Tracker.Sink = a.Supervisor
+	if err = a.initFederation(); err != nil {
+		return nil, err
+	}
 	a.Creator = create.New(create.Deps{TemplateDir: a.Config.LolabotTemplate, AgentsDir: a.Config.NewAgentsDir, Runtime: runtimeWriter{a}, Identity: a.Provider, Org: a, Contacts: a.Policy, Mail: a.Provider, Starter: deferredStarter{}, Registrar: registrar{a}})
 	for _, e := range r.Diagnostics() {
 		a.RecordEvent(e)
@@ -256,7 +264,7 @@ func (a *App) regenerate() error {
 	}
 	return errors.Join(errs...)
 }
-func (a *App) Check(_ context.Context, f, t string) core.Decision { return a.Policy.Check(f, t) }
+func (a *App) Check(_ context.Context, f, t string) core.Decision { return a.Provider.Check(f, t) }
 func (a *App) UserSend(ctx context.Context, o core.Outgoing) (core.Mail, error) {
 	return a.Provider.Send(ctx, a.Me().Name, o)
 }

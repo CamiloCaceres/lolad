@@ -15,6 +15,7 @@ import (
 
 type convView struct {
 	core.Conversation
+	Origin string
 	Asks   []msgView         // questions from the peer the user hasn't answered, oldest first
 	Agent  *core.AgentStatus // nil when the peer is not an agent (lolad)
 	Active bool
@@ -37,6 +38,7 @@ type msgView struct {
 }
 
 type threadView struct {
+	Origin  string
 	Arrival string // created or adopted landing message
 	Peer    string
 	Display string
@@ -49,15 +51,21 @@ type threadView struct {
 }
 
 type inboxView struct {
-	OOB    bool   // render the list as an out-of-band swap
-	Active string // the open conversation's peer
-	Recent []convView
-	Convs  []convView
-	Thread *threadView
-	Asks   []askView          // home: questions waiting on the user, newest first
-	Unread []convView         // home: unread conversations without an ask
-	Others []core.AgentStatus // agents with no conversation yet
-	Agents []core.AgentStatus // everyone the user could write to
+	Approvals []approvalView
+	OOB       bool   // render the list as an out-of-band swap
+	Active    string // the open conversation's peer
+	Recent    []convView
+	Convs     []convView
+	Thread    *threadView
+	Asks      []askView          // home: questions waiting on the user, newest first
+	Unread    []convView         // home: unread conversations without an ask
+	Others    []core.AgentStatus // agents with no conversation yet
+	Agents    []core.AgentStatus // everyone the user could write to
+}
+
+type approvalView struct {
+	core.Grant
+	LocalDisplay string
 }
 
 type askView struct {
@@ -120,12 +128,47 @@ func (s *server) inboxData(ctx context.Context, active string) (inboxView, map[s
 		return v, nil, err
 	}
 	slices.SortFunc(list, func(a, b core.AgentStatus) int { return strings.Compare(a.Name, b.Name) })
-	v.Agents = list
+	v.Agents = slices.Clone(list)
+	contacts, err := s.svc.RemoteContacts(ctx, s.svc.Me().Name)
+	if err != nil {
+		return v, nil, err
+	}
+	for _, c := range contacts {
+		v.Agents = append(v.Agents, core.AgentStatus{Agent: core.Agent{Name: c.Address, Display: cmp.Or(c.Display, c.Name), Role: c.PeerDisplay + "’s lolad · " + c.Kind}})
+	}
+	grants, err := s.svc.Grants(ctx)
+	if err != nil {
+		return v, nil, err
+	}
+	for _, g := range grants {
+		if g.State == core.GrantPending {
+			name := g.Local
+			for _, a := range list {
+				if a.Name == g.Local {
+					name = cmp.Or(a.Display, a.Name)
+				}
+			}
+			if g.Local == s.svc.Me().Name {
+				name = "you"
+			}
+			v.Approvals = append(v.Approvals, approvalView{Grant: g, LocalDisplay: name})
+		}
+	}
+	connections, err := s.svc.Connections(ctx)
+	if err != nil {
+		return v, nil, err
+	}
 	agents := agentMap(list)
 	me := s.svc.Me().Name
 	asks := s.openAsks(ctx, convs)
 	for _, c := range convs {
 		cv := convView{Conversation: c, Asks: asks[c.Peer], Agent: agents[c.Peer], Active: c.Peer == active, Chat: userChat(c.Last), Mine: c.Last.FromName == me}
+		cv.Origin = remoteLabel(c.Peer, connections)
+		for _, rc := range contacts {
+			if rc.Address == c.Peer {
+				cv.Display = cmp.Or(rc.Display, rc.Name)
+			}
+		}
 		cv.Pending = len(cv.Asks) > 0
 		if cv.Agent != nil && cv.Display == "" {
 			cv.Display = cv.Agent.Display
@@ -183,7 +226,20 @@ func (s *server) loadThread(ctx context.Context, peer string, agents map[string]
 		return nil, err
 	}
 	a := agents[peer]
-	if a == nil && len(msgs) == 0 {
+	var contact *core.RemoteContact
+	if core.IsRemoteName(peer) {
+		cs, err := s.svc.RemoteContacts(ctx, s.svc.Me().Name)
+		if err != nil {
+			return nil, err
+		}
+		for i := range cs {
+			if cs[i].Address == peer {
+				contact = &cs[i]
+				break
+			}
+		}
+	}
+	if a == nil && contact == nil && len(msgs) == 0 {
 		return nil, fmt.Errorf("no agent or conversation %q: %w", peer, core.ErrNotFound)
 	}
 	me := s.svc.Me().Name
@@ -191,7 +247,15 @@ func (s *server) loadThread(ctx context.Context, peer string, agents map[string]
 	if a != nil && a.Display != "" {
 		t.Display = a.Display
 	}
-	if a != nil {
+	if core.IsRemoteName(peer) {
+		t.CanSend = true
+		cs, _ := s.svc.Connections(ctx)
+		t.Origin = remoteLabel(peer, cs)
+		if contact != nil {
+			t.Display = cmp.Or(contact.Display, contact.Name)
+		}
+	}
+	if a != nil || core.IsRemoteName(peer) {
 		t.Policy = s.svc.Check(ctx, me, peer)
 	}
 	marked := false
@@ -256,8 +320,16 @@ func shape(msgs []msgView, me string) {
 			m.Cont = p.FromName == m.FromName && m.CreatedAt.Sub(p.CreatedAt) < 10*time.Minute && !m.ShowSubj
 		}
 	}
+	for i := range msgs {
+		if msgs[i].Mine && msgs[i].Remote != "" {
+			msgs[i].Receipt = deliveryLabel(msgs[i].Delivery)
+		}
+	}
 	for i := len(msgs) - 1; i >= 0; i-- {
 		if msgs[i].Mine {
+			if msgs[i].Remote != "" {
+				break
+			}
 			msgs[i].Receipt = map[core.MailStatus]string{core.MailUnread: "Sent", core.MailNotified: "Delivered", core.MailRead: "Read"}[msgs[i].Status]
 			break
 		}
@@ -352,7 +424,16 @@ func (s *server) renderThread(w http.ResponseWriter, r *http.Request, peer, errM
 
 func (s *server) threadHead(w http.ResponseWriter, r *http.Request) {
 	peer := r.PathValue("peer")
-	t := &threadView{Peer: peer, Display: peer}
+	list, e := s.svc.List(r.Context())
+	if e != nil {
+		s.fail(w, r, e)
+		return
+	}
+	t, e := s.loadThread(r.Context(), peer, agentMap(list))
+	if e != nil {
+		s.fail(w, r, e)
+		return
+	}
 	if a, err := s.svc.Get(r.Context(), peer); err == nil {
 		t.Agent, t.Display, t.CanSend = &a, a.Display, true
 	}

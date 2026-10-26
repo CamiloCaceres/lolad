@@ -31,11 +31,14 @@ type Payload struct {
 	Context map[string]any `json:"context,omitempty"`
 }
 type Message struct {
-	ID       string          `json:"id"`
-	Envelope Envelope        `json:"envelope"`
-	Payload  json.RawMessage `json:"payload"`
-	QueuedAt time.Time       `json:"queued_at"`
-	Status   string          `json:"status"`
+	Remote        string          `json:"remote,omitempty"`
+	Delivery      string          `json:"delivery,omitempty"`
+	DeliveryError string          `json:"delivery_error,omitempty"`
+	ID            string          `json:"id"`
+	Envelope      Envelope        `json:"envelope"`
+	Payload       json.RawMessage `json:"payload"`
+	QueuedAt      time.Time       `json:"queued_at"`
+	Status        string          `json:"status"`
 }
 type RouteRequest struct {
 	To             string          `json:"to"`

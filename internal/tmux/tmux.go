@@ -9,17 +9,16 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
+	"time"
 
 	"github.com/CamiloCaceres/lolad/internal/core"
-	"github.com/creack/pty"
 )
 
 type Sessions struct {
 	Socket, Config, Binary string
 	// Exec is the lolad binary used as `lolad exec-env` to hand agents their
-	// environment through a private file instead of argv. Empty (tests) passes
-	// the environment with tmux -e as before.
+	// environment through a private file instead of argv. New defaults to the
+	// current executable; tests provide the same exec-env entry point.
 	Exec   string
 	RunDir string // where the private env files go
 }
@@ -38,19 +37,22 @@ func New(stateDir, socket string) (*Sessions, error) {
 	if err := os.WriteFile(path, []byte(conf), 0600); err != nil {
 		return nil, err
 	}
-	return &Sessions{Socket: socket, Config: path, Binary: "tmux", RunDir: filepath.Join(stateDir, "run")}, nil
+	return &Sessions{Socket: socket, Config: path, Binary: DefaultBinary(), Exec: currentExecutable(), RunDir: filepath.Join(stateDir, "run")}, nil
 }
 func (s *Sessions) command(ctx context.Context, args ...string) *exec.Cmd {
 	return exec.CommandContext(ctx, s.Binary, append([]string{"-L", s.Socket, "-f", s.Config}, args...)...)
 }
 func (s *Sessions) run(args ...string) (string, error) {
-	b, e := s.command(context.Background(), args...).CombinedOutput()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	b, e := s.command(ctx, args...).CombinedOutput()
 	if e != nil {
 		return "", fmt.Errorf("tmux %s: %w: %s", args[0], e, b)
 	}
 	return string(b), nil
 }
-func target(name string) string { return "=" + name + ":0.0" }
+func windowTarget(name string) string { return "=" + name + ":0" }
+func target(name string) string       { return "=" + name + ":0.0" }
 func (s *Sessions) Exists(name string) bool {
 	_, e := s.run("has-session", "-t", "="+name)
 	return e == nil
@@ -76,54 +78,23 @@ func (s *Sessions) Start(name, dir string, env, argv []string, cols, rows int) e
 		rows = 50
 	}
 	args := []string{"new-session", "-d", "-s", name, "-c", dir, "-x", strconv.Itoa(cols), "-y", strconv.Itoa(rows)}
-	if s.Exec != "" {
-		return s.startPrivate(name, args, env, argv, cols, rows)
-	}
-	provided := make(map[string]bool)
-	for _, v := range env {
-		k, _, _ := strings.Cut(v, "=")
-		provided[k] = true
-		args = append(args, "-e", v)
-	}
-	// Existing private servers retain their original environment. Explicitly
-	// blank absent values per session so daemon credentials cannot leak through.
-	inherited := os.Environ()
-	if global, err := s.run("show-environment", "-g"); err == nil {
-		inherited = append(inherited, strings.Split(global, "\n")...)
-	}
-	removed := make(map[string]bool)
-	for _, v := range inherited {
-		k, _, ok := strings.Cut(v, "=")
-		if ok && !provided[k] && !removed[k] {
-			args = append(args, "-e", k+"=")
-			removed[k] = true
-		}
-	}
-	args = append(args, "--")
-	// tmux treats a lone command argument as shell text. env execs a lone
-	// executable directly without changing its argv or invoking a shell.
-	if len(argv) == 1 {
-		args = append(args, "/usr/bin/env", "--")
-	}
-	args = append(args, argv...)
-	cmd := s.command(context.Background(), args...)
-	cmd.Env = append([]string{}, env...)
-	out, e := cmd.CombinedOutput()
-	if e != nil {
-		return fmt.Errorf("tmux new-session: %w: %s", e, out)
-	}
-	return s.size(name, cols, rows)
+	return s.startPrivate(name, args, env, argv, cols, rows)
 }
 
 // startPrivate launches through `lolad exec-env` so no environment value
 // reaches argv or the tmux server. The env file is removed by the helper, or
 // here when tmux fails before running it.
 func (s *Sessions) startPrivate(name string, args, env, argv []string, cols, rows int) error {
+	if s.Exec == "" {
+		return fmt.Errorf("%w: no exec-env helper (a test binary must call tmux.ServeExecEnv in TestMain)", core.ErrInvalid)
+	}
 	file, err := writeEnvFile(s.RunDir, env)
 	if err != nil {
 		return fmt.Errorf("agent env: %w", err)
 	}
-	args = append(args, "--", s.Exec, "exec-env", file, "--")
+	args = append(args, "--", s.Exec, "exec-env", file)
+	args = append(args, exitStatusArgs(s.RunDir, name)...)
+	args = append(args, "--")
 	args = append(args, argv...)
 	cmd := s.command(context.Background(), args...)
 	cmd.Env = baseEnv(os.Getenv)
@@ -138,7 +109,7 @@ func (s *Sessions) startPrivate(name string, args, env, argv []string, cols, row
 // server) gets: enough to run, nothing secret.
 func baseEnv(getenv func(string) string) []string {
 	var out []string
-	for _, k := range []string{"HOME", "USER", "LOGNAME", "PATH", "SHELL", "LANG", "LC_ALL", "TMPDIR", "TMUX_TMPDIR"} {
+	for _, k := range []string{"HOME", "USER", "LOGNAME", "PATH", "SHELL", "LANG", "LC_ALL", "TMPDIR", "TMUX_TMPDIR", "USERPROFILE", "SystemRoot", "SYSTEMROOT", "COMSPEC", "TEMP", "TMP", "PATHEXT", "APPDATA", "LOCALAPPDATA"} {
 		if v := getenv(k); v != "" {
 			out = append(out, k+"="+v)
 		}
@@ -149,11 +120,11 @@ func baseEnv(getenv func(string) string) []string {
 func (s *Sessions) size(name string, cols, rows int) error {
 	// Keep detached windows independent of the last attached client's dimensions.
 	for _, option := range [][2]string{{"window-size", "manual"}, {"@lolad-cols", strconv.Itoa(cols)}, {"@lolad-rows", strconv.Itoa(rows)}} {
-		if _, err := s.run("set-option", "-w", "-t", target(name), option[0], option[1]); err != nil {
+		if _, err := s.run("set-option", "-w", "-t", windowTarget(name), option[0], option[1]); err != nil {
 			return err
 		}
 	}
-	_, e := s.run("resize-window", "-t", target(name), "-x", strconv.Itoa(cols), "-y", strconv.Itoa(rows))
+	_, e := s.run("resize-window", "-t", windowTarget(name), "-x", strconv.Itoa(cols), "-y", strconv.Itoa(rows))
 	return e
 }
 
@@ -165,19 +136,42 @@ func (s *Sessions) PanePID(name string) (int, error) {
 	return strconv.Atoi(strings.TrimSpace(v))
 }
 func (s *Sessions) PaneDead(name string) (bool, int, error) {
-	v, e := s.run("display-message", "-p", "-t", target(name), "#{pane_dead}:#{pane_dead_status}")
+	v, e := s.run("display-message", "-p", "-t", target(name), "#{pane_dead}:#{pane_dead_status}:#{pane_dead_signal}")
 	if e != nil {
 		return false, 0, e
 	}
 	p := strings.Split(strings.TrimSpace(v), ":")
-	status, _ := strconv.Atoi(p[1])
-	return p[0] == "1", status, nil
+	if len(p) != 3 {
+		return false, 0, fmt.Errorf("invalid pane state %q", v)
+	}
+	if p[0] != "1" {
+		return false, 0, nil
+	}
+	status, err := strconv.Atoi(p[1])
+	if err != nil {
+		if signal, e := strconv.Atoi(p[2]); e == nil && signal > 0 {
+			status = -signal
+		} else {
+			status = -1 // killed by a signal or exit metadata not yet available
+		}
+	}
+	return true, s.exitStatus(name, status), nil
 }
 func (s *Sessions) Kill(name string) error {
 	_, e := s.run("kill-session", "-t", "="+name)
 	return e
 }
 func (s *Sessions) SendLiteral(name, text string) error {
+	// The tmux command-list parser consumes a trailing semicolon even after
+	// -- and -l. Hex transport avoids interpreting pasted text as a command.
+	if strings.HasSuffix(text, ";") {
+		args := []string{"send-keys", "-t", target(name), "-H"}
+		for _, b := range []byte(text) {
+			args = append(args, fmt.Sprintf("%02x", b))
+		}
+		_, err := s.run(args...)
+		return err
+	}
 	_, e := s.run("send-keys", "-t", target(name), "-l", "--", text)
 	return e
 }
@@ -189,7 +183,7 @@ func (s *Sessions) Capture(name string, lines int, esc bool) (string, error) {
 	if lines <= 0 {
 		lines = 40
 	}
-	args := []string{"capture-pane", "-p", "-t", target(name), "-S", "-" + strconv.Itoa(lines)}
+	args := []string{"capture-pane", "-p", "-J", "-t", target(name), "-S", "-" + strconv.Itoa(lines)}
 	if esc {
 		args = append(args, "-e")
 	}
@@ -204,64 +198,14 @@ func (s *Sessions) Capture(name string, lines int, esc bool) (string, error) {
 	return strings.Join(all, "\n"), nil
 }
 
-type terminal struct {
-	*os.File
-	cmd      *exec.Cmd
-	once     sync.Once
-	err      error
-	readOnly bool
-	sessions *Sessions
-	name     string
-	done     chan struct{}
-}
-
-func (t *terminal) Resize(cols, rows uint16) error {
-	if t.readOnly {
-		return nil
+func (s *Sessions) restoreSize(name string) {
+	cols, rows := "220", "50"
+	if v, err := s.run("show-option", "-wqv", "-t", windowTarget(name), "@lolad-cols"); err == nil && strings.TrimSpace(v) != "" {
+		cols = strings.TrimSpace(v)
 	}
-	if err := pty.Setsize(t.File, &pty.Winsize{Cols: cols, Rows: rows}); err != nil {
-		return err
+	if v, err := s.run("show-option", "-wqv", "-t", windowTarget(name), "@lolad-rows"); err == nil && strings.TrimSpace(v) != "" {
+		rows = strings.TrimSpace(v)
 	}
-	_, err := t.sessions.run("resize-window", "-t", target(t.name), "-x", strconv.Itoa(int(cols)), "-y", strconv.Itoa(int(rows)))
-	return err
-}
-func (t *terminal) Close() error {
-	t.once.Do(func() {
-		t.err = t.File.Close()
-		if t.cmd.Process != nil {
-			_ = t.cmd.Process.Kill()
-		}
-		<-t.done
-	})
-	return t.err
-}
-func (s *Sessions) Attach(ctx context.Context, name string, readOnly bool) (core.Terminal, error) {
-	args := []string{"attach"}
-	if readOnly {
-		args = append(args, "-r", "-f", "ignore-size")
-	}
-	args = append(args, "-t", "="+name)
-	cmd := s.command(ctx, args...)
-	cmd.Env = append(os.Environ(), "TERM=xterm-256color")
-	f, e := pty.Start(cmd)
-	if e != nil {
-		return nil, e
-	}
-	t := &terminal{File: f, cmd: cmd, readOnly: readOnly, sessions: s, name: name, done: make(chan struct{})}
-	go func() {
-		defer close(t.done)
-		_ = cmd.Wait()
-		if !readOnly {
-			cols, rows := "220", "50"
-			if v, err := s.run("show-option", "-wqv", "-t", target(name), "@lolad-cols"); err == nil && strings.TrimSpace(v) != "" {
-				cols = strings.TrimSpace(v)
-			}
-			if v, err := s.run("show-option", "-wqv", "-t", target(name), "@lolad-rows"); err == nil && strings.TrimSpace(v) != "" {
-				rows = strings.TrimSpace(v)
-			}
-			_, _ = s.run("set-option", "-w", "-t", target(name), "window-size", "manual")
-			_, _ = s.run("resize-window", "-t", target(name), "-x", cols, "-y", rows)
-		}
-	}()
-	return t, nil
+	_, _ = s.run("set-option", "-w", "-t", windowTarget(name), "window-size", "manual")
+	_, _ = s.run("resize-window", "-t", windowTarget(name), "-x", cols, "-y", rows)
 }

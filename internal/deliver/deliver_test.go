@@ -126,3 +126,14 @@ func TestTrackerSessionBoundary(t *testing.T) {
 		t.Fatal(s)
 	}
 }
+
+func TestExternalNotice(t *testing.T) {
+	m := core.Mail{ID: "msg_12345678", FromName: "jugui@jugui.lolad.local", Remote: "jugui.lolad.local", Subject: "Review", Body: "hello"}
+	if text := Notice(m); !strings.Contains(text, "[MESSAGE] external from jugui@jugui.lolad.local:") {
+		t.Fatal(text)
+	}
+	m.Remote = ""
+	if text := Notice(m); !strings.Contains(text, "[MESSAGE] from jugui@jugui.lolad.local:") || strings.Contains(text, "external") {
+		t.Fatal(text)
+	}
+}

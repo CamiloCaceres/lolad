@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 
 	"github.com/CamiloCaceres/lolad/internal/core"
 )
@@ -24,10 +23,10 @@ func mergeJSON(path string, update func(map[string]json.RawMessage) error) error
 		return err
 	}
 	defer lock.Close()
-	if err = syscall.Flock(int(lock.Fd()), syscall.LOCK_EX); err != nil {
+	if err = lockFile(lock); err != nil {
 		return err
 	}
-	defer syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
+	defer unlockFile(lock)
 	if st, err := os.Lstat(path); err == nil && st.Mode()&os.ModeSymlink != 0 {
 		return fmt.Errorf("refusing managed symlink %s", path)
 	}

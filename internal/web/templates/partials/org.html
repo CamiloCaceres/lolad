@@ -1,14 +1,18 @@
 {{define "org-body"}}{{$v := .}}<div id="org-body" class="org-workspace">
 {{if .Error}}<div class="flash is-error" role="alert">{{.Error}}</div>{{end}}
 {{if .Notice}}<div class="flash" role="status">{{.Notice}}</div>{{end}}
-<nav class="org-jump" aria-label="On this page"><a href="#org-chart">Structure</a><a href="#org-access">Message access</a><a href="#org-exceptions">Exceptions <span>{{len .Org.Rules}}</span></a><a href="#org-defaults">Defaults</a></nav>
+<nav class="org-jump" aria-label="On this page"><a href="#org-chart">Structure</a><a href="#external-connections">Connected lolads</a><a href="#org-access">Message access</a><a href="#org-exceptions">Exceptions <span>{{len .Org.Rules}}</span></a><a href="#org-defaults">Defaults</a></nav>
 <section id="org-chart" class="org-section" aria-labelledby="org-chart-title">
 <header class="org-section-head"><div><h2 id="org-chart-title">Your organization</h2><p>Heads connect teams. Members report to their head.</p></div><a class="btn" href="/org?create=1#org-add-team">{{template "icon" "plus"}} Create a team</a></header>
+<div class="org-federation-layout"><div>
 <div class="org-chart">
 <div class="org-operator">{{template "avatar" (dict "Display" .Org.User.Display "Size" "sm")}}<div><strong>{{.Org.User.Display}}</strong><span>You · operator</span></div></div>
 {{if .Roots}}<ul class="org-branches">{{range .Roots}}{{template "team-node" (dict "N" . "V" $v)}}{{end}}</ul>{{else}}<div class="org-empty"><h3>A team starts with a head.</h3><p>Create a team, choose who leads it, then tap the agents who belong to it.</p>{{if not .Agents}}<a class="btn" href="/new">Create your first agent</a>{{end}}</div>{{end}}
 </div>
 {{if .Independents}}<div class="org-independent"><div><h3>Independent agents</h3><p>No team or reporting line. Message access follows your defaults and exceptions.</p></div><div class="people">{{range .Independents}}{{template "org-person" .}}{{end}}</div></div>{{end}}
+</div>
+  <section class="external-connections" id="external-connections" aria-label="Connected lolads" hx-get="/org" hx-select="#external-connections" hx-swap="outerHTML" hx-trigger="lolad:federation from:body delay:500ms" hx-push-url="false"><h2>Outside this lolad</h2>{{range .Connections}}<div class="external-box"><strong>{{.Display}}'s lolad</strong><span class="remote-origin">External{{if .Paused}} · Paused{{end}}</span>{{range .Shares}}<div class="external-edge"><a href="/agents/{{.Local}}">{{.Local}}</a><span class="muted">{{if .Remote}}{{len .Remote}} pre-approved{{else}}New senders need approval{{end}}</span></div>{{else}}<p class="muted">No agents shared</p>{{end}}</div>{{else}}<p class="muted">No other lolads connected.</p>{{end}}<a href="/connections">Manage connections</a></section>
+</div>
 <details id="org-add-team" class="org-disclosure"{{if .Create}} open{{end}}><summary>Create a team</summary><form class="form" hx-post="/org/teams" hx-target="#org-body" hx-swap="outerHTML" method="post" action="/org/teams"><label class="field"><span class="label">Team name</span><input name="name" required placeholder="Operations"></label>{{template "team-fields" (dict "T" (dict "ID" "" "Parent" "" "Head" "" "Members" (list) "Open" false "Instructions" "") "V" $v)}}<button class="btn btn-primary" type="submit">Create team</button></form></details>
 </section>
 <section id="org-access" class="org-section" aria-labelledby="org-access-title">

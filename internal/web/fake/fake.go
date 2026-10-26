@@ -43,8 +43,10 @@ type Service struct {
 	subs   map[chan core.Event]struct{}
 	cfg    map[string]*agentCfg // per-agent settings (settings.go), created on first use
 
-	stop chan struct{}
-	once sync.Once
+	connections []core.Connection
+	grants      []core.Grant
+	stop        chan struct{}
+	once        sync.Once
 }
 
 var _ core.Service = (*Service)(nil)
@@ -66,6 +68,7 @@ func New(opts Options) *Service {
 			Defaults: core.Defaults{UserToAgents: "all", AgentsToUser: "all", Vertical: true, Independents: "user-only"}}
 	} else {
 		s.seed()
+		s.seedFederation()
 	}
 	if s.simulate {
 		go s.run()
@@ -99,7 +102,7 @@ func (s *Service) status(a *core.AgentStatus) core.AgentStatus {
 	st := *a
 	st.Unread = 0
 	for _, m := range s.mail {
-		if m.ToName == a.Name && m.Status != core.MailRead {
+		if m.ToName == a.Name && m.Status != core.MailRead && m.Status != core.MailHeld {
 			st.Unread++
 		}
 	}
@@ -418,6 +421,12 @@ func (s *Service) display(name string) string {
 	if name == s.org.User.Name {
 		return s.org.User.Display
 	}
+	if name == "jugui@jugui.lolad.local" {
+		return "Jugui"
+	}
+	if name == "nova@jugui.lolad.local" {
+		return "Nova"
+	}
 	if name == "lolad" {
 		return "lolad"
 	}
@@ -441,6 +450,9 @@ func (s *Service) Conversations(ctx context.Context) ([]core.Conversation, error
 	me := s.org.User.Name
 	by := map[string]*core.Conversation{}
 	for _, m := range s.mail {
+		if m.Status == core.MailHeld {
+			continue
+		}
 		peer := ""
 		switch me {
 		case m.FromName:
@@ -529,6 +541,17 @@ func (s *Service) agentOf(name string) string {
 func (s *Service) UserSend(ctx context.Context, out core.Outgoing) (core.Mail, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if core.IsRemoteName(out.To) {
+		for _, c := range s.connections {
+			if strings.HasSuffix(out.To, "@"+c.Provider) && !c.Paused {
+				m := core.Mail{ID: newID(s.now()), FromName: s.org.User.Name, ToName: out.To, From: s.addr(s.org.User.Name), To: out.To, Subject: out.Subject, Body: out.Body, Remote: c.Provider, Delivery: core.DeliveryQueued, CreatedAt: s.now(), Status: core.MailRead}
+				s.mail = append(s.mail, m)
+				s.emit("", "mail", "Remote message queued")
+				return m, nil
+			}
+		}
+		return core.Mail{}, core.ErrDenied
+	}
 	to := strings.SplitN(strings.ToLower(out.To), "@", 2)[0]
 	if s.find(to) == nil {
 		return core.Mail{}, fmt.Errorf("recipient %q: %w", to, core.ErrNotFound)
@@ -621,5 +644,16 @@ func (s *Service) SaveOrg(ctx context.Context, org core.Org) error {
 func (s *Service) Check(ctx context.Context, from, to string) core.Decision {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if core.IsRemoteName(to) {
+		for _, c := range s.connections {
+			if strings.HasSuffix(to, "@"+c.Provider) {
+				if c.Paused {
+					return core.Decision{Reason: "This connection is paused"}
+				}
+				return core.Decision{Allow: true, Reason: "Connected lolad"}
+			}
+		}
+		return core.Decision{Reason: "No connection"}
+	}
 	return check(s.org, from, to)
 }

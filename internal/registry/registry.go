@@ -4,6 +4,8 @@ package registry
 import (
 	"bytes"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -24,16 +26,24 @@ type RemoteConfig struct {
 	TailscaleLogins []string `yaml:"tailscale_logins"`
 }
 
+type FederationConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	Display string `yaml:"display"`
+	URL     string `yaml:"url"`
+}
+
 type Config struct {
-	Remote          RemoteConfig `yaml:"remote"`
-	Listen          string       `yaml:"listen"`
-	TmuxSocket      string       `yaml:"tmux_socket"`
-	AgentsDirs      []string     `yaml:"agents_dirs"`
-	Agents          []string     `yaml:"agents"`
-	LolabotTemplate string       `yaml:"lolabot_template"`
-	NewAgentsDir    string       `yaml:"new_agents_dir"`
-	ClaudeBin       string       `yaml:"claude_bin"`
-	StateDir        string       `yaml:"-"`
+	Federation      FederationConfig `yaml:"federation"`
+	Remote          RemoteConfig     `yaml:"remote"`
+	Listen          string           `yaml:"listen"`
+	TmuxBin         string           `yaml:"tmux_bin"`
+	TmuxSocket      string           `yaml:"tmux_socket"`
+	AgentsDirs      []string         `yaml:"agents_dirs"`
+	Agents          []string         `yaml:"agents"`
+	LolabotTemplate string           `yaml:"lolabot_template"`
+	NewAgentsDir    string           `yaml:"new_agents_dir"`
+	ClaudeBin       string           `yaml:"claude_bin"`
+	StateDir        string           `yaml:"-"`
 }
 
 func DefaultConfig() Config {
@@ -42,7 +52,7 @@ func DefaultConfig() Config {
 	if state == "" {
 		state = filepath.Join(home, ".local/share/lolad")
 	}
-	return Config{TmuxSocket: "lolad", Listen: "127.0.0.1:4100", AgentsDirs: []string{"/Users/you/agents"}, LolabotTemplate: "/Users/you/lolabot", NewAgentsDir: "/Users/you/agents", StateDir: state}
+	return Config{Federation: FederationConfig{Enabled: true}, TmuxSocket: "lolad", Listen: "127.0.0.1:4100", AgentsDirs: []string{"/Users/you/agents"}, LolabotTemplate: "/Users/you/lolabot", NewAgentsDir: "/Users/you/agents", StateDir: state}
 }
 func ConfigPath() string {
 	if p := os.Getenv("LOLAD_CONFIG"); p != "" {
@@ -67,7 +77,13 @@ func LoadConfig(path string) (Config, error) {
 	// config inherits the built-in search directory.
 	c.AgentsDirs = nil
 	e = yaml.Unmarshal(b, &c)
-	return c, e
+	if e != nil {
+		return c, e
+	}
+	if c.Federation.URL == "" {
+		c.Federation.URL = c.Remote.PublicURL
+	}
+	return c, ValidateFederationURL(c.Federation.URL)
 }
 
 var invalidSlug = regexp.MustCompile(`[^a-z0-9]+`)
@@ -391,4 +407,21 @@ func WriteRuntime(dir string, r core.Runtime) error {
 		return ce
 	}
 	return os.Rename(tmp, path)
+}
+
+// ValidateFederationURL allows cleartext only on the local machine.
+func ValidateFederationURL(raw string) error {
+	if raw == "" {
+		return nil
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
+		return fmt.Errorf("%w: federation.url must be an HTTP(S) origin without credentials, path or query", core.ErrInvalid)
+	}
+	host := u.Hostname()
+	ip := net.ParseIP(host)
+	if u.Scheme != "https" && !(u.Scheme == "http" && (host == "localhost" || ip != nil && ip.IsLoopback())) {
+		return fmt.Errorf("%w: federation.url requires HTTPS except on loopback", core.ErrInvalid)
+	}
+	return nil
 }

@@ -88,11 +88,11 @@ func (p *Provider) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			httpError(w, e)
 			return
 		}
-		respond(w, 200, map[string]any{"status": "healthy", "version": "amp/0.1", "provider": p.Name(), "federation": false, "agents_online": len(ids), "uptime_seconds": int(time.Since(p.started).Seconds())})
+		respond(w, 200, map[string]any{"status": "healthy", "version": "amp/0.1", "provider": p.Name(), "federation": p.FederationEnabled(), "agents_online": len(ids), "uptime_seconds": int(time.Since(p.started).Seconds())})
 		return
 	}
 	if path == "/v1/info" && r.Method == "GET" {
-		v := map[string]any{"provider": p.Name(), "version": "amp/0.1", "capabilities": []string{"threading", "priority"}, "registration_modes": []string{"preapproved"}}
+		v := map[string]any{"provider": p.Name(), "federation": p.FederationEnabled(), "version": "amp/0.1", "capabilities": []string{"threading", "priority"}, "registration_modes": []string{"preapproved"}}
 		if id, pub, e := p.identity(ctx, "lolad"); e == nil {
 			v["public_key"] = publicPEM(pub)
 			v["fingerprint"] = id.Fingerprint
@@ -135,7 +135,7 @@ func (p *Provider) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		respond(w, 200, v)
 	case path == "/v1/messages/pending/count" && r.Method == "GET":
 		var count int
-		e := p.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM amp_messages WHERE to_name=? AND status<>?`, caller.Name, core.MailRead).Scan(&count)
+		e := p.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM amp_messages WHERE to_name=? AND status<>? AND status<>'held'`, caller.Name, core.MailRead).Scan(&count)
 		if e != nil {
 			httpError(w, e)
 			return
@@ -172,7 +172,7 @@ func (p *Provider) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			httpError(w, e)
 			return
 		}
-		if m.ToName != caller.Name && m.FromName != caller.Name {
+		if m.Status == core.MailHeld || (m.ToName != caller.Name && m.FromName != caller.Name) {
 			httpError(w, core.ErrNotFound)
 			return
 		}
@@ -255,12 +255,16 @@ func (p *Provider) route(w http.ResponseWriter, r *http.Request, caller core.Ide
 	var response map[string]any
 	persist := func(ctx context.Context, m core.Mail, wire Message) error {
 		response = map[string]any{"id": m.ID, "status": "delivered", "method": "local", "delivered_at": m.CreatedAt, "thread_id": m.ThreadID}
+		if m.Remote != "" {
+			response["status"] = "queued"
+			response["method"] = "federation"
+		}
 		tx, e := p.db.BeginTx(ctx, nil)
 		if e != nil {
 			return e
 		}
 		defer tx.Rollback()
-		if e = insertMail(ctx, tx, m, wire); e != nil {
+		if e = p.PersistMail(ctx, tx, m, wire); e != nil {
 			return e
 		}
 		if req.IdempotencyKey != "" {
@@ -321,7 +325,7 @@ func (p *Provider) ack(w http.ResponseWriter, r *http.Request, caller core.Ident
 	defer tx.Rollback()
 	for _, id := range ids {
 		var owner string
-		if e = tx.QueryRowContext(r.Context(), `SELECT to_name FROM amp_messages WHERE id=?`, id).Scan(&owner); e != nil || owner != caller.Name {
+		if e = tx.QueryRowContext(r.Context(), `SELECT to_name FROM amp_messages WHERE id=? AND status<>'held'`, id).Scan(&owner); e != nil || owner != caller.Name {
 			httpError(w, core.ErrNotFound)
 			return
 		}
@@ -417,6 +421,14 @@ func (p *Provider) directory(w http.ResponseWriter, r *http.Request, caller core
 	entries := []map[string]any{}
 	for _, i := range ids {
 		entries = append(entries, p.directoryEntry(i, caller.Name))
+	}
+	if remote := p.remoteHook(); remote != nil {
+		contacts, e := remote.RemoteContacts(r.Context(), caller.Name)
+		if e == nil {
+			for _, c := range contacts {
+				entries = append(entries, map[string]any{"name": c.Address, "address": c.Address, "display": c.Display, "kind": c.Kind, "role": c.Role, "remote": true, "peer": c.Peer, "peer_display": c.PeerDisplay, "may_message": true})
+			}
+		}
 	}
 	respond(w, 200, map[string]any{"agents": entries, "total": len(entries)})
 }

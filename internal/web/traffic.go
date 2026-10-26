@@ -25,6 +25,9 @@ type trafficPair struct {
 	URL            string
 }
 type trafficView struct {
+	Connection  string
+	Connections []core.Connection
+
 	Entries                                      []trafficEntry
 	Pairs                                        []trafficPair
 	Peer, Other, Direction, Status, Period, View string
@@ -81,6 +84,8 @@ func (s *server) traffic(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	q := r.URL.Query()
 	v := trafficView{Peer: q.Get("peer"), Other: q.Get("other"), Direction: q.Get("direction"), Status: q.Get("status"), Period: q.Get("period"), View: q.Get("view"), Me: s.svc.Me().Name, Query: q}
+	v.Connection = q.Get("connection")
+	v.Connections, _ = s.svc.Connections(ctx)
 	v.Before, _ = time.Parse(time.RFC3339Nano, q.Get("before"))
 	var entries []trafficEntry
 	cursor := v.Before
@@ -93,12 +98,23 @@ func (s *server) traffic(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		for _, m := range batch {
+			if v.Connection != "" && m.Remote != v.Connection {
+				continue
+			}
 			delivery := "Queued"
 			if m.Status == core.MailNotified {
 				delivery = "Notified"
 			}
 			if m.Status == core.MailRead {
 				delivery = "Read"
+			}
+			if m.Remote != "" && m.Status == core.MailUnread {
+				delivery = "Received"
+			}
+			if m.Delivery != "" {
+				delivery = deliveryLabel(m.Delivery)
+			} else if m.Status == core.MailHeld {
+				delivery = "Awaiting approval"
 			}
 			entries = append(entries, trafficEntry{Mail: m, Delivery: delivery})
 		}
@@ -172,6 +188,9 @@ func (s *server) traffic(w http.ResponseWriter, r *http.Request) {
 		focus = v.Me
 	}
 	for _, e := range entries {
+		if v.Connection != "" && e.Remote != v.Connection {
+			continue
+		}
 		if !since.IsZero() && e.CreatedAt.Before(since) {
 			continue
 		}

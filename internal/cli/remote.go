@@ -55,6 +55,7 @@ func remoteCommand(ctx context.Context, base string, c registry.Config, args []s
 	return fmt.Errorf("unknown command")
 }
 func doctor(ctx context.Context, c registry.Config, out io.Writer) error {
+	federationDoctor(ctx, c, out)
 	check := func(ok bool, label, fix string) {
 		if ok {
 			fmt.Fprintln(out, "OK   "+label)
@@ -68,15 +69,8 @@ func doctor(ctx context.Context, c registry.Config, out io.Writer) error {
 		info, e := os.Stat(d)
 		check(e == nil && info.IsDir(), "agent directory "+d, "create it or correct agents_dirs/agents in config")
 	}
-	socket := c.TmuxSocket
-	if socket == "" {
-		socket = "lolad"
-	}
-	tmuxCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-	defer cancel()
-	e = exec.CommandContext(tmuxCtx, "tmux", "-L", socket, "list-sessions").Run()
-	check(e == nil, "tmux socket "+socket, "start an agent; an empty private server has no sessions")
-	for _, bin := range []string{"tmux", "claude", "codewhale"} {
+	doctorTmux(ctx, c, out)
+	for _, bin := range []string{"claude", "codewhale"} {
 		if bin == "claude" && c.ClaudeBin != "" {
 			bin = c.ClaudeBin
 		}

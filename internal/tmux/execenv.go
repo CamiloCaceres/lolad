@@ -9,8 +9,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
-	"syscall"
 )
 
 // Agent environments carry secrets (the agent's env file), so they never go on
@@ -83,6 +83,9 @@ func childEnv(env []string, getenv func(string) string) []string {
 	set := map[string]bool{}
 	for _, v := range env {
 		k, _, _ := strings.Cut(v, "=")
+		if runtime.GOOS == "windows" {
+			k = strings.ToUpper(k)
+		}
 		set[k] = true
 	}
 	out := append([]string{}, env...)
@@ -96,6 +99,11 @@ func childEnv(env []string, getenv func(string) string) []string {
 
 // ExecEnv implements `lolad exec-env <file> -- argv...`. It only returns on error.
 func ExecEnv(args []string) error {
+	statusPath := ""
+	if len(args) >= 5 && args[1] == "--exit-status" {
+		statusPath = args[2]
+		args = append([]string{args[0]}, args[3:]...)
+	}
 	if len(args) < 3 || args[1] != "--" {
 		return fmt.Errorf("usage: lolad exec-env <file> -- command [args...]")
 	}
@@ -106,11 +114,12 @@ func ExecEnv(args []string) error {
 	env = childEnv(env, os.Getenv)
 	argv := args[2:]
 	bin := argv[0]
-	if !strings.Contains(bin, "/") {
+	if !strings.ContainsAny(bin, `/\`) {
 		path := ""
 		for _, v := range env {
-			if p, ok := strings.CutPrefix(v, "PATH="); ok {
-				path = p
+			k, value, _ := strings.Cut(v, "=")
+			if k == "PATH" || (runtime.GOOS == "windows" && strings.EqualFold(k, "PATH")) {
+				path = value
 			}
 		}
 		os.Setenv("PATH", path)
@@ -118,5 +127,5 @@ func ExecEnv(args []string) error {
 			return fmt.Errorf("exec-env: %w", err)
 		}
 	}
-	return syscall.Exec(bin, argv, env)
+	return execEnvProcess(bin, argv, env, statusPath)
 }

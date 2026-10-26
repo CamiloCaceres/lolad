@@ -1,0 +1,67 @@
+name: CI
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  unix:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Install tmux (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y tmux
+      - name: Install tmux (macOS)
+        if: runner.os == 'macOS'
+        run: brew install tmux
+      - run: go build ./...
+      - run: go vet ./...
+      - run: go test -p 1 ./...
+  windows:
+    runs-on: windows-latest
+    env:
+      LOLAD_TMUX_BIN: psmux
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Install psmux 3.4.0
+        shell: pwsh
+        run: |
+          $url = 'https://github.com/psmux/psmux/releases/download/v3.4.0/psmux-v3.4.0-windows-x64.zip'
+          Invoke-WebRequest $url -OutFile "$env:RUNNER_TEMP/psmux.zip"
+          Expand-Archive "$env:RUNNER_TEMP/psmux.zip" "$env:RUNNER_TEMP/psmux"
+          $binary = Get-ChildItem "$env:RUNNER_TEMP/psmux" -Recurse -Filter psmux.exe | Select-Object -First 1
+          $binary.DirectoryName | Out-File -FilePath $env:GITHUB_PATH -Append
+      - run: go build ./...
+      - run: go vet ./...
+      - run: go test -v -timeout 3m ./internal/tmux/...
+      - run: go test -v ./internal/harness/... -run TestWindows
+      - name: Build Windows release
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          go build -trimpath -ldflags "-X main.version=ci-${{ github.sha }}" -o dist/lolad-windows-amd64.exe .
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:LOLAD_CONFIG = "$env:RUNNER_TEMP/lolad-doctor.yaml"
+          $env:LOLAD_STATE = "$env:RUNNER_TEMP/lolad-doctor-state"
+          "listen: 127.0.0.1:4199`nagents_dirs: []`nagents: []`n" | Set-Content $env:LOLAD_CONFIG
+          $doctor = & ./dist/lolad-windows-amd64.exe doctor
+          $doctor
+          if (-not ($doctor -match 'OK   tmux conformance')) { throw 'Native doctor multiplexer probe failed' }
+          $env:GOARCH = 'arm64'
+          go build -trimpath -ldflags "-X main.version=ci-${{ github.sha }}" -o dist/lolad-windows-arm64.exe .
+          exit $LASTEXITCODE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lolad-windows
+          path: dist/*.exe

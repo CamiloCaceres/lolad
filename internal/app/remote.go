@@ -49,7 +49,7 @@ func ValidateListeners(local, remote, public string) error {
 	return nil
 }
 
-// Handler constructs independent routing trees; remote never mounts AMP or hooks
+// Handler constructs independent routing trees; remote mounts only signed federation from AMP, never local AMP or hooks
 // from harnesses. Webhook triggers keep their own per-agent authentication.
 func (a *App) Handler(remote bool, version string, logger *slog.Logger) http.Handler {
 	mux := http.NewServeMux()
@@ -77,6 +77,16 @@ func (a *App) Handler(remote bool, version string, logger *slog.Logger) http.Han
 	if remote {
 		h = a.Auth.Remote(h, a.Config.Remote.TailscaleLogins)
 	}
+	// Signed server-to-server traffic has its own authentication and must not
+	// require a browser device cookie or a same-origin browser request.
+	browser := h
+	h = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/v1/federation/") {
+			a.Engine.Handler().ServeHTTP(w, r)
+			return
+		}
+		browser.ServeHTTP(w, r)
+	})
 	return harden(h, remote, logger)
 }
 func (a *App) download(w http.ResponseWriter, r *http.Request) {

@@ -29,8 +29,11 @@ type Provider struct {
 	event            func(core.Event)
 	identityMu       sync.Mutex
 	sendMu           sync.Mutex
+	inboundMu        sync.Mutex
 	subsMu           sync.RWMutex
 	subs             []func(core.Mail)
+	remoteMu         sync.RWMutex
+	remote           Remote
 	started          time.Time
 }
 type Option func(*Provider)
@@ -47,6 +50,9 @@ func New(db *sql.DB, stateDir, tenant string, policy core.Policy, opts ...Option
 		o(p)
 	}
 	if _, e := db.Exec(schema); e != nil {
+		return nil, e
+	}
+	if e := p.migrateRemote(); e != nil {
 		return nil, e
 	}
 	return p, nil
@@ -120,13 +126,19 @@ func (p *Provider) acceptWith(ctx context.Context, from string, env Envelope, pa
 	if e != nil {
 		return zero, e
 	}
-	to, e := p.local(env.To)
+	to, domain, e := ParseAddress(env.To)
 	if e != nil {
 		return zero, e
 	}
-	recipient, _, e := p.identity(ctx, to)
-	if e != nil {
-		return zero, e
+	remote := domain != "" && domain != p.Name()
+	recipient := core.Identity{Address: env.To}
+	if remote {
+		to = strings.ToLower(env.To)
+	} else {
+		recipient, _, e = p.identity(ctx, to)
+		if e != nil {
+			return zero, e
+		}
 	}
 	env.From = sender.Address
 	env.To = recipient.Address
@@ -136,12 +148,10 @@ func (p *Provider) acceptWith(ctx context.Context, from string, env Envelope, pa
 	if !Verify(pub, env, payload) {
 		return zero, errSignature
 	}
-	d := p.policy.Check(from, to)
-	if !d.Allow {
-		if p.event != nil {
-			p.event(core.Event{At: time.Now().UTC(), Agent: from, Kind: "policy", Detail: from + " → " + to + ": " + d.Reason})
+	if !remote {
+		if e = p.authorize(ctx, from, to, env.InReplyTo, false); e != nil {
+			return zero, e
 		}
-		return zero, fmt.Errorf("%w: %s", core.ErrDenied, d.Reason)
 	}
 	if utf8.RuneCountInString(env.Subject) > 256 || env.Subject == "" {
 		return zero, fmt.Errorf("%w: subject must have 1–256 characters", core.ErrInvalid)
@@ -183,10 +193,29 @@ func (p *Provider) acceptWith(ctx context.Context, from string, env Envelope, pa
 		}
 		env.ThreadID = parent.ThreadID
 	}
+	if remote {
+		if e = p.authorize(ctx, from, to, env.InReplyTo, true); e != nil {
+			return zero, e
+		}
+	}
 	m := core.Mail{ID: env.ID, ThreadID: env.ThreadID, InReplyTo: env.InReplyTo, From: env.From, To: env.To, FromName: from, ToName: to, Subject: env.Subject, Priority: env.Priority, Type: body.Type, Body: body.Message, Context: body.Context, Signed: true, Verified: true, CreatedAt: now, Status: core.MailUnread}
+	if remote {
+		m.Remote = domain
+		m.Delivery = core.DeliveryQueued
+	}
 	wire := Message{ID: m.ID, Envelope: env, Payload: payload, QueuedAt: now, Status: string(m.Status)}
 	if persist == nil {
-		persist = func(ctx context.Context, m core.Mail, wire Message) error { return insertMail(ctx, p.db, m, wire) }
+		persist = func(ctx context.Context, m core.Mail, wire Message) error {
+			tx, e := p.db.BeginTx(ctx, nil)
+			if e != nil {
+				return e
+			}
+			defer tx.Rollback()
+			if e = p.PersistMail(ctx, tx, m, wire); e != nil {
+				return e
+			}
+			return tx.Commit()
+		}
 	}
 	if e = persist(ctx, m, wire); e != nil {
 		return zero, e
@@ -211,7 +240,7 @@ func insertMail(ctx context.Context, db sqlExecer, m core.Mail, wire Message) er
 	if len(wb) > 1<<20 {
 		return errTooLarge
 	}
-	_, e = db.ExecContext(ctx, `INSERT INTO amp_messages(id,from_name,to_name,thread_id,created_at,status,mail,wire) VALUES(?,?,?,?,?,?,?,?)`, m.ID, m.FromName, m.ToName, m.ThreadID, m.CreatedAt.Format(time.RFC3339Nano), m.Status, string(mb), string(wb))
+	_, e = db.ExecContext(ctx, `INSERT INTO amp_messages(id,from_name,to_name,thread_id,created_at,status,mail,wire,remote,delivery,delivery_error) VALUES(?,?,?,?,?,?,?,?,?,?,?)`, m.ID, m.FromName, m.ToName, m.ThreadID, m.CreatedAt.Format(time.RFC3339Nano), m.Status, string(mb), string(wb), m.Remote, m.Delivery, m.DeliveryError)
 	return e
 }
 
@@ -221,8 +250,9 @@ var errTooLarge = errors.New("request exceeds 1 MB")
 func scanMail(row interface{ Scan(...any) error }) (core.Mail, error) {
 	var m core.Mail
 	var raw, status, notified, read string
+	var remote, delivery, deliveryError sql.NullString
 	var attempts int
-	e := row.Scan(&raw, &status, &notified, &read, &attempts)
+	e := row.Scan(&raw, &status, &notified, &read, &attempts, &remote, &delivery, &deliveryError)
 	if errors.Is(e, sql.ErrNoRows) {
 		return m, core.ErrNotFound
 	}
@@ -236,10 +266,13 @@ func scanMail(row interface{ Scan(...any) error }) (core.Mail, error) {
 	m.NotifiedAt, _ = time.Parse(time.RFC3339Nano, notified)
 	m.ReadAt, _ = time.Parse(time.RFC3339Nano, read)
 	m.Attempts = attempts
+	m.Remote = remote.String
+	m.Delivery = delivery.String
+	m.DeliveryError = deliveryError.String
 	return m, e
 }
 
-const mailCols = `mail,status,notified_at,read_at,attempts`
+const mailCols = `mail,status,notified_at,read_at,attempts,remote,delivery,delivery_error`
 
 func (p *Provider) Get(ctx context.Context, id string) (core.Mail, error) {
 	return scanMail(p.db.QueryRowContext(ctx, `SELECT `+mailCols+` FROM amp_messages WHERE id=?`, id))
@@ -265,13 +298,14 @@ func (p *Provider) List(ctx context.Context, owner string, f core.MailFilter) ([
 		return nil, core.ErrInvalid
 	}
 	if f.Peer != "" {
-		peer, e := p.local(f.Peer)
+		peer, e := p.participant(f.Peer)
 		if e != nil {
 			return nil, e
 		}
 		q += ` AND (to_name=? OR from_name=?)`
 		args = append(args, peer, peer)
 	}
+	q += ` AND status<>'held'`
 	if f.Status != "" {
 		q += ` AND status=?`
 		args = append(args, f.Status)
@@ -323,10 +357,10 @@ func (p *Provider) Unread(ctx context.Context, owner string) ([]core.Mail, error
 	if e != nil {
 		return nil, e
 	}
-	return p.queryMail(ctx, `SELECT `+mailCols+` FROM amp_messages WHERE to_name=? AND status<>? ORDER BY created_at,id`, n, core.MailRead)
+	return p.queryMail(ctx, `SELECT `+mailCols+` FROM amp_messages WHERE to_name=? AND status<>? AND status<>'held' ORDER BY created_at,id`, n, core.MailRead)
 }
 func (p *Provider) MarkNotified(ctx context.Context, id string) error {
-	r, e := p.db.ExecContext(ctx, `UPDATE amp_messages SET status=?,notified_at=?,attempts=attempts+1 WHERE id=? AND status<>?`, core.MailNotified, time.Now().UTC().Format(time.RFC3339Nano), id, core.MailRead)
+	r, e := p.db.ExecContext(ctx, `UPDATE amp_messages SET status=?,notified_at=?,attempts=attempts+1 WHERE id=? AND status<>? AND status<>'held'`, core.MailNotified, time.Now().UTC().Format(time.RFC3339Nano), id, core.MailRead)
 	if e != nil {
 		return e
 	}
@@ -345,7 +379,7 @@ func (p *Provider) MarkRead(ctx context.Context, owner, id string) error {
 	if e != nil {
 		return e
 	}
-	if m.ToName != n {
+	if m.ToName != n || m.Status == core.MailHeld {
 		return core.ErrDenied
 	}
 	_, e = p.db.ExecContext(ctx, `UPDATE amp_messages SET status=?,read_at=CASE WHEN read_at='' THEN ? ELSE read_at END WHERE id=? AND to_name=?`, core.MailRead, time.Now().UTC().Format(time.RFC3339Nano), id, n)
@@ -354,13 +388,35 @@ func (p *Provider) MarkRead(ctx context.Context, owner, id string) error {
 func (p *Provider) wire(ctx context.Context, id string) (Message, error) {
 	var m Message
 	var raw, status string
-	e := p.db.QueryRowContext(ctx, `SELECT wire,status FROM amp_messages WHERE id=?`, id).Scan(&raw, &status)
+	var remote, delivery, deliveryError sql.NullString
+	e := p.db.QueryRowContext(ctx, `SELECT wire,status,remote,delivery,delivery_error FROM amp_messages WHERE id=?`, id).Scan(&raw, &status, &remote, &delivery, &deliveryError)
 	if errors.Is(e, sql.ErrNoRows) {
 		return m, core.ErrNotFound
 	}
 	if e == nil {
 		e = json.Unmarshal([]byte(raw), &m)
 		m.Status = status
+		m.Remote = remote.String
+		m.Delivery = delivery.String
+		m.DeliveryError = deliveryError.String
 	}
 	return m, e
+}
+
+func (p *Provider) authorize(ctx context.Context, from, to, reply string, remote bool) error {
+	d := p.policy.Check(from, to)
+	if remote {
+		if r := p.remoteHook(); r != nil {
+			d = r.CheckOutbound(ctx, from, to, reply)
+		} else {
+			d = core.Decision{Reason: "federation disabled"}
+		}
+	}
+	if !d.Allow {
+		if p.event != nil {
+			p.event(core.Event{At: time.Now().UTC(), Agent: from, Kind: "policy", Detail: from + " → " + to + ": " + d.Reason})
+		}
+		return fmt.Errorf("%w: %s", core.ErrDenied, d.Reason)
+	}
+	return nil
 }

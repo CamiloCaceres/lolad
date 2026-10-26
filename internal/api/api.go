@@ -80,6 +80,7 @@ func before(r *http.Request) time.Time {
 func New(s core.Service, o Options) http.Handler {
 	m := http.NewServeMux()
 	settingsRoutes(m, s)
+	federationRoutes(m, s)
 	// Creation metadata stays behind the same authentication boundary as the service.
 	m.HandleFunc("GET /api/create/options", func(w http.ResponseWriter, r *http.Request) { v, e := s.CreateOptions(r.Context()); write(w, v, e) })
 	remoteRoutes(m, s, o)
