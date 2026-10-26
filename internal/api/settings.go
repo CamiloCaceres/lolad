@@ -2,10 +2,12 @@ package api
 
 import (
 	"github.com/CamiloCaceres/lolad/internal/core"
+	"github.com/CamiloCaceres/lolad/internal/mailprov"
 	"net/http"
 )
 
 func settingsRoutes(m *http.ServeMux, s core.Service) {
+	emailRoutes(m, s)
 	m.HandleFunc("GET /api/models", func(w http.ResponseWriter, r *http.Request) {
 		write(w, s.Models(core.Harness(r.URL.Query().Get("harness"))), nil)
 	})
@@ -116,7 +118,11 @@ func settingsRoutes(m *http.ServeMux, s core.Service) {
 			write(w, nil, e)
 			return
 		}
-		v, e := s.TestEmail(r.Context(), r.PathValue("name"), b.Address)
+		test := s.TestEmail
+		if managed, ok := s.(mailprov.Service); ok {
+			test = managed.CheckEmail
+		}
+		v, e := test(r.Context(), r.PathValue("name"), b.Address)
 		write(w, v, e)
 	})
 }

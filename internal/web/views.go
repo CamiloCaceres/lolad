@@ -30,6 +30,7 @@ func funcs(s *server) template.FuncMap {
 		"future":     func(t time.Time) bool { return time.Until(t) > time.Second },
 		"initials":   initials,
 		"rich":       rich,
+		"markdown":   markdown, // v3 inbox messages use the full safe Markdown renderer.
 		"excerpt":    excerpt,
 		"short":      shortID,
 		"attention":  attention,
@@ -49,6 +50,7 @@ func funcs(s *server) template.FuncMap {
 		"stampNano":  func(t time.Time) string { return t.Format(time.RFC3339Nano) },
 		"sentence":   sentence,
 		"baseOf":     path.Base,
+		"pathMid":    settingsPath, // Settings keeps path context around a middle ellipsis.
 		"dirOf": func(p string) string {
 			if d := path.Dir(p); d != "." {
 				return d

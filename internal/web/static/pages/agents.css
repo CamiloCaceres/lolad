@@ -1,0 +1,66 @@
+/* Agents roster: an operating list with team boundaries and readable work. */
+.roster-filters { display:flex; gap:12px; align-items:end; margin:24px 0 18px; }
+.roster-filters label { display:grid; gap:6px; color:var(--muted); font-size:var(--t-xs); }
+.roster-filters label:first-child { flex:1; max-width:460px; }
+.roster-filters input,.roster-filters select { min-height:40px; font-size:var(--t-md); }
+.roster-filters > .btn { min-height:40px; }
+.roster-summary { display:flex; align-items:baseline; flex-wrap:wrap; gap:8px 20px; font-size:var(--t-sm); color:var(--muted); padding:0 0 12px; border-bottom:1px solid var(--line); }
+.roster-summary strong { color:var(--ink); }
+.roster-state-counts { margin-left:auto; display:flex; gap:12px; flex-wrap:wrap; }
+.roster-team { margin-top:28px; }
+.roster-team h2 { font-size:var(--t-md); margin-bottom:8px; }
+.roster-team h2 > span { margin-left:8px; color:var(--muted); font-size:var(--t-xs); font-weight:400; }
+.roster-row { display:grid; grid-template-columns:minmax(145px, .9fr) minmax(220px,1.65fr) minmax(145px,.95fr) minmax(128px,.8fr) auto; align-items:center; gap:16px; padding:18px 4px; border-bottom:1px solid var(--line); }
+.roster-row:hover { background:var(--bg-2); }
+.roster-row > * { min-width:0; }
+.roster-identity .agent-link { align-items:center; gap:10px; }
+.roster-identity .agent-link > span { min-width:0; }
+.roster-identity strong { color:var(--ink); font-weight:600; }
+.roster-role { display:block; margin-top:3px; color:var(--muted); font-size:var(--t-xs); overflow-wrap:anywhere; }
+.roster-state { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.roster-state > span:last-child { color:var(--muted); font-size:var(--t-xs); }
+.roster-work p { font-size:var(--t-sm); color:var(--ink-2); margin-top:5px; overflow-wrap:anywhere; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.roster-work .roster-pending { display:block; font-size:var(--t-xs); color:var(--you-text); margin-top:5px; }
+.roster-runtime,.roster-next { display:grid; gap:4px; font-size:var(--t-xs); color:var(--ink-2); overflow-wrap:anywhere; }
+.roster-runtime small,.roster-next small { color:var(--muted); font-size:var(--t-xs); }
+.roster-unread { color:var(--ink); font-weight:600; text-decoration:underline; text-underline-offset:3px; }
+.roster-actions { display:flex; gap:6px; align-items:center; flex-wrap:wrap; justify-content:flex-end; max-width:176px; }
+.agent-controls { display:flex; gap:6px; align-items:center; }
+.agent-action-menu { position:relative; }
+.agent-action-menu > summary { list-style:none; cursor:pointer; }
+.agent-action-menu > summary::-webkit-details-marker { display:none; }
+.agent-action-options { position:absolute; right:0; top:calc(100% + 6px); width:min(310px,82vw); padding:6px; z-index:30; background:var(--bg); border:1px solid var(--line-2); border-radius:var(--r); }
+.agent-action-options button,.agent-action-options > a { display:block; width:100%; text-align:left; border:0; background:transparent; color:var(--ink); padding:11px 10px; border-radius:var(--r-sm); font-size:var(--t-sm); }
+.agent-action-options button strong { display:block; font-weight:600; }
+.agent-action-options button span { display:block; margin-top:4px; color:var(--muted); font-size:var(--t-xs); line-height:1.5; }
+.agent-action-options button:hover,.agent-action-options > a:hover { background:var(--bg-3); }
+.agent-action-options button:disabled { opacity:.5; cursor:not-allowed; }
+.agent-action-options form + form { border-top:1px solid var(--line); }
+.agent-action-menu[open] > summary { background:var(--bg-3); }
+.roster-empty { padding:48px 0; }
+.roster-empty h2 { font-size:var(--t-lg); }
+.roster-empty p { margin-top:8px; color:var(--muted); }
+.agents-roster time,.agent-vitals dd { font-variant-numeric:tabular-nums; }
+@media (max-width:1250px) and (min-width:701px) {
+ .roster-row { grid-template-columns:150px minmax(200px,1fr) 150px; }
+ .roster-runtime { grid-column:2; grid-row:2; }
+ .roster-next { grid-column:3; grid-row:2; }
+ .roster-actions { grid-column:3; grid-row:1; }
+}
+@media (max-width:700px) {
+ .roster-filters { flex-wrap:wrap; gap:10px; }
+ .roster-filters label:first-child { flex-basis:100%; max-width:none; }
+ .roster-filters label:nth-child(2) { flex:1; }
+ .roster-state-counts { display:none; }
+ .roster-row { grid-template-columns:minmax(0,1fr) auto; gap:12px; padding:18px 0; align-items:start; }
+ .roster-identity { grid-column:1; grid-row:1; }
+ .roster-work { grid-column:1 / -1; grid-row:2; }
+ .roster-runtime { grid-column:1; grid-row:3; }
+ .roster-next { grid-column:2; grid-row:3; text-align:right; max-width:145px; }
+ .roster-actions { grid-column:2; grid-row:1; max-width:150px; }
+ .roster-actions > .btn { display:none; }
+ .roster-actions .btn,.agent-controls .btn { min-height:40px; padding-inline:10px; }
+ .roster-identity .avatar { display:none; }
+ .roster-work p { -webkit-line-clamp:3; }
+ .roster-team { margin-top:26px; }
+}

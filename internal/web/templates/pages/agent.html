@@ -1,20 +1,18 @@
 {{define "content"}}<div class="page page-agent">
   <nav class="crumbs" aria-label="Breadcrumb"><a href="/agents">Agents</a>{{template "icon" "next"}}<span aria-current="page">{{.Data.A.Display}}</span></nav>
   {{template "agent-head" .Data}}
+  <nav class="agent-sections" aria-label="Agent sections"><a href="#h-activity">Recent activity</a><a href="#h-config">Configuration</a><a href="#term-panel">Live terminal</a></nav>
   {{template "terminal" .Data}}
   <div class="agent-grid">
     <section class="panel" aria-labelledby="h-activity">
-      <header class="panel-head"><h2 id="h-activity">Activity</h2><span class="panel-note">lifecycle, state, triggers, delivery</span></header>
+      <header class="panel-head"><h2 id="h-activity">Recent activity</h2><span class="panel-note">Turns, triggers, mail &amp; lifecycle</span></header>
       {{template "agent-events" .Data}}
     </section>
     <div class="agent-side">
-      <section class="panel" aria-labelledby="h-mail">
-        <header class="panel-head"><h2 id="h-mail">Mail</h2></header>
-        {{template "agent-mail" .Data}}
-      </section>
       <section class="panel" aria-labelledby="h-config">
-        <header class="panel-head"><h2 id="h-config">Configuration</h2><span class="panel-note">lolabot.yaml runtime</span><a class="panel-link" href="/agents/{{.Data.A.Name}}/settings">{{template "icon" "edit"}}<span>Edit settings</span></a></header>
+        <header class="panel-head"><h2 id="h-config">Configuration</h2><a class="panel-link" href="/agents/{{.Data.A.Name}}/settings">{{template "icon" "edit"}}<span>Edit settings</span></a></header>
         {{template "agent-facts" .Data}}
+ <p class="panel-foot"><a href="/traffic?peer={{.Data.A.Name}}">All mail traffic {{template "icon" "next"}}</a></p>
       </section>
     </div>
   </div>

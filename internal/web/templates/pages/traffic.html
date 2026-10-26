@@ -1,17 +1,12 @@
-{{define "content"}}<div class="page page-wide">
-  <header class="page-head">
-    <div>
-      <h1 class="page-title">Traffic</h1>
-      <p class="page-sub">Every message through lolad, newest first.</p>
-    </div>
-    {{if or .Data.HasAgents .Data.Mail .Data.Peer}}<form class="filter" method="get" action="/traffic" data-autosubmit>
-      <label for="peer-filter">Participant</label>
-      <select id="peer-filter" name="peer">
-        <option value="">Everyone</option>
-        {{range .Data.People}}<option value="{{.Name}}"{{if eq .Name $.Data.Peer}} selected{{end}}>{{.Display}}{{if ne .Name .Display}} ({{.Name}}){{end}}</option>{{end}}
-      </select>
-      <noscript><button class="btn btn-sm" type="submit">Filter</button></noscript>
-    </form>{{end}}
-  </header>
-  {{template "traffic-rows" .Data}}
+{{define "content"}}<div class="page page-wide traffic-page">
+ <header class="page-head"><div><h1 class="page-title">Traffic</h1><p class="page-sub">Who said what to whom. What got through, and what didn’t.</p></div><a class="btn btn-sm" href="/org">Messaging policy {{template "icon" "arrow"}}</a></header>
+ {{if or .Data.HasAgents .Data.Entries .Data.Peer}}<form class="traffic-filters" method="get" action="/traffic">
+  <label for="peer-filter">Participant<select id="peer-filter" name="peer"><option value="">Everyone</option>{{range .Data.People}}<option value="{{.Name}}"{{if eq .Name $.Data.Peer}} selected{{end}}>{{.Display}}{{if ne .Name .Display}} ({{.Name}}){{end}}</option>{{end}}</select></label>
+  <label for="traffic-direction">Direction<select id="traffic-direction" name="direction"><option value="">Both ways</option><option value="out"{{if eq .Data.Direction "out"}} selected{{end}}>Sent by participant</option><option value="in"{{if eq .Data.Direction "in"}} selected{{end}}>Received by participant</option></select></label>
+  <label for="traffic-period">Time<select id="traffic-period" name="period"><option value="">All available</option><option value="1h"{{if eq .Data.Period "1h"}} selected{{end}}>Last hour</option><option value="24h"{{if eq .Data.Period "24h"}} selected{{end}}>Last 24 hours</option><option value="7d"{{if eq .Data.Period "7d"}} selected{{end}}>Last 7 days</option></select></label>
+  {{with .Data.Other}}<input type="hidden" name="other" value="{{.}}">{{end}}<input type="hidden" name="status" value="{{.Data.Status}}"><input type="hidden" name="view" value="{{.Data.View}}">
+  <button class="btn" type="submit">Apply filters</button>{{if or .Data.Peer .Data.Other .Data.Direction .Data.Period .Data.Status}}<a class="traffic-reset" href="/traffic">Reset</a>{{end}}
+  {{if .Data.Direction}}{{if not .Data.Peer}}<p class="traffic-filter-note">Direction is relative to you. Choose a participant to inspect their mail.</p>{{end}}{{end}}
+ </form>{{end}}
+ {{template "traffic-rows" .Data}}
 </div>{{end}}

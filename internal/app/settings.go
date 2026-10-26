@@ -35,6 +35,8 @@ func (a *App) UpdateRuntime(ctx context.Context, name string, rt core.Runtime) (
 	if rt.Slug != v.Runtime.Slug || rt.Harness != v.Runtime.Harness {
 		return core.AgentStatus{}, fmt.Errorf("%w: slug and harness cannot be changed here", core.ErrInvalid)
 	}
+	// Status responses omit env values; runtime edits must preserve the private map.
+	rt.Env = v.Runtime.Env
 	if e = registry.Validate(rt); e != nil {
 		return core.AgentStatus{}, e
 	}

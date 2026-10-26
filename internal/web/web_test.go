@@ -105,7 +105,7 @@ func TestPages(t *testing.T) {
 		{"/agents/quill", "restart in"},
 		{"/org", "Who can message whom"},
 		{"/new", "Create agent"},
-		{"/traffic", "Every message through lolad"},
+		{"/traffic", "Who said what to whom"},
 		{"/traffic?peer=quill", "Tighten pricing page copy"},
 		{"/fragments/conversations?active=lola", `id="conv-list"`},
 		{"/fragments/nav", `id="nav-badges"`},
@@ -151,7 +151,7 @@ func TestFirstRun(t *testing.T) {
 	}{
 		{"/", []string{"Welcome to lolad", `href="/new"`, `href="/new?mode=adopt"`}, []string{"caught up", "popovertarget=\"new-message\""}},
 		{"/agents", []string{"No agents yet", `href="/new?mode=adopt"`}, []string{"<table"}},
-		{"/org", []string{"No agents yet", "Add team"}, []string{`class="matrix"`, "Test a message"}},
+		{"/org", []string{"A team starts with a head", "Create a team"}, []string{`class="matrix"`, "Test a message"}},
 		{"/traffic", []string{"No mail yet", `href="/new"`}, []string{`id="peer-filter"`}},
 		{"/new?mode=adopt", []string{`id="mode-adopt" value="adopt" checked`}, nil},
 	} {
@@ -538,7 +538,7 @@ func TestCreateAndAdopt(t *testing.T) {
 		"name": {"Nova"}, "role": {"Designer"}, "harness": {"codewhale"}, "permissions": {"bypass"},
 		"team": {"growth"}, "mission": {"Own the design system."}, "start": {"on"},
 	}, true)
-	if resp.StatusCode != http.StatusNoContent || resp.Header.Get("HX-Redirect") != "/agents/nova" {
+	if resp.StatusCode != http.StatusNoContent || resp.Header.Get("HX-Redirect") != "/inbox/nova?created=1" {
 		t.Fatalf("create: %d redirect %q", resp.StatusCode, resp.Header.Get("HX-Redirect"))
 	}
 	a, err := e.svc.Get(ctx, "nova")
@@ -552,7 +552,7 @@ func TestCreateAndAdopt(t *testing.T) {
 	}
 
 	resp, _ = e.do("POST", "/adopt", url.Values{"dir": {"/Users/you/agents/jugui"}, "harness": {"claude"}}, false)
-	if resp.StatusCode != http.StatusSeeOther || resp.Header.Get("Location") != "/agents/jugui" {
+	if resp.StatusCode != http.StatusSeeOther || resp.Header.Get("Location") != "/inbox/jugui?adopted=1" {
 		t.Errorf("adopt: %d %q", resp.StatusCode, resp.Header.Get("Location"))
 	}
 	resp, body = e.do("POST", "/adopt", url.Values{"dir": {"relative/dir"}, "harness": {"claude"}}, true)

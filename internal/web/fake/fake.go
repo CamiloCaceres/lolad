@@ -74,7 +74,7 @@ func New(opts Options) *Service {
 }
 
 // Close stops the simulation.
-func (s *Service) Close() { s.once.Do(func() { close(s.stop) }) }
+func (s *Service) Close() { s.once.Do(func() { close(s.stop); s.closeEmail() }) }
 
 func (s *Service) addr(name string) string { return name + "@" + s.org.Tenant + ".lolad.local" }
 
@@ -316,7 +316,14 @@ func (s *Service) Create(ctx context.Context, req core.CreateRequest) (core.Agen
 	}
 	slug := cmp.Or(req.Slug, slugify(req.Name))
 	dir := cmp.Or(req.Dir, filepath.Join("/Users/you/agents", slug))
-	rt := core.Runtime{Harness: req.Harness, Model: req.Model, Permissions: cmp.Or(req.Permissions, core.PermBypass), OnWake: req.OnWake}
+	rt := core.Runtime{Harness: req.Harness, Model: req.Model, Skills: req.Skills, Permissions: cmp.Or(req.Permissions, core.PermBypass), OnWake: req.OnWake}
+	rt.Autostart = new(req.Start)
+	if !req.Start {
+		rt.WakeOnMessage = new(false)
+	}
+	if req.Skills != "" && req.Skills != core.SkillsInherit && req.Skills != core.SkillsBarebones {
+		return core.AgentStatus{}, fmt.Errorf("%w: invalid skills mode", core.ErrInvalid)
+	}
 	if req.Team != "" && teamByID(s.org, req.Team) == nil {
 		return core.AgentStatus{}, fmt.Errorf("%w: no team %q", core.ErrInvalid, req.Team)
 	}
@@ -350,6 +357,9 @@ func (s *Service) Adopt(ctx context.Context, req core.AdoptRequest) (core.AgentS
 	defer s.mu.Unlock()
 	if !filepath.IsAbs(req.Dir) {
 		return core.AgentStatus{}, fmt.Errorf("%w: dir must be an absolute path", core.ErrInvalid)
+	}
+	if req.Runtime.Autostart == nil {
+		req.Runtime.Autostart = new(false)
 	}
 	base := filepath.Base(req.Dir)
 	slug := cmp.Or(req.Slug, slugify(base))

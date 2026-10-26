@@ -1,39 +1,20 @@
-{{define "traffic-rows"}}{{$v := .}}<div id="traffic"{{if .Before.IsZero}} hx-get="/traffic?part=rows&amp;peer={{.Peer}}" hx-trigger="lolad:mail from:body delay:700ms" hx-swap="outerHTML" data-live{{end}}>
-  {{if .Mail}}
-  <div class="tlist" role="list">
-    <div class="trow thead" aria-hidden="true"><span>When</span><span>Route</span><span>Message</span><span>Type</span><span>Status</span></div>
-    {{range .Mail}}
-    <details class="tmsg" role="listitem">
-      <summary class="trow">
-        <time class="t-when" datetime="{{stamp .CreatedAt}}" title="{{long .CreatedAt}}">{{evtime .CreatedAt}}</time>
-        <span class="t-route"><span class="t-p{{if eq .FromName $v.Me}} is-user{{end}}">{{.FromName}}</span>{{template "icon" "arrow"}}<span class="t-p{{if eq .ToName $v.Me}} is-user{{end}}">{{.ToName}}</span></span>
-        <span class="t-msg">{{with subject .}}<span class="t-subj">{{.}}</span> {{end}}<span class="t-prev">{{excerpt .Body 160}}</span></span>
-        <span class="t-type"><span class="tag">{{.Type}}</span>{{$t := .Type}}{{with (chat .).Kind}}{{if ne . $t}} <span class="tag">{{.}}</span>{{end}}{{end}}</span>
-        <span class="t-status"><span class="mstatus ms-{{.Status}}">{{.Status}}</span></span>
-      </summary>
-      <div class="t-detail">
-        <div class="rich t-body">{{rich .Body}}</div>
-        <dl class="t-meta">
-          <div><dt>From</dt><dd class="mono">{{.From}}</dd></div>
-          <div><dt>To</dt><dd class="mono">{{.To}}</dd></div>
-          <div><dt>Id</dt><dd class="mono">{{.ID}}</dd></div>
-          {{if ne .ThreadID .ID}}<div><dt>Thread</dt><dd class="mono">{{.ThreadID}}</dd></div>{{end}}
-          {{with .InReplyTo}}<div><dt>In reply to</dt><dd class="mono">{{.}}</dd></div>{{end}}
-          <div><dt>Priority</dt><dd>{{.Priority}}</dd></div>
-          <div><dt>Signature</dt><dd>{{if .Verified}}verified{{else if .Signed}}signed, not verified{{else}}unsigned{{end}}</dd></div>
-          {{if not .NotifiedAt.IsZero}}<div><dt>Notified</dt><dd>{{long .NotifiedAt}}{{if .Attempts}} · {{plural .Attempts "attempt" "attempts"}}{{end}}</dd></div>{{end}}
-          {{if not .ReadAt.IsZero}}<div><dt>Read</dt><dd>{{long .ReadAt}}</dd></div>{{end}}
-          {{with .Context}}<div class="is-wide"><dt>Context</dt><dd><code class="ctx">{{json .}}</code></dd></div>{{end}}
-        </dl>
-      </div>
-    </details>
-    {{end}}
+{{define "traffic-entry"}}<details class="audit-entry{{if .Denied}} is-denied{{end}}" id="{{.ID}}">
+ <summary><time datetime="{{stamp .CreatedAt}}" title="{{long .CreatedAt}}">{{evtime .CreatedAt}}</time><span class="audit-message"><span class="audit-route">{{.FromName}} {{template "icon" "arrow"}} {{if .ToName}}{{.ToName}}{{else}}Unknown recipient{{end}}</span><span class="audit-subject">{{if .Subject}}{{.Subject}}{{else}}No subject{{end}}</span><span class="audit-preview">{{if .Denied}}{{.Reason}}{{else}}{{excerpt .Body 130}}{{end}}</span></span><span class="audit-state state-{{.Delivery}}">{{.Delivery}}</span><span class="audit-expand" aria-hidden="true">{{template "icon" "down"}}</span></summary>
+ <div class="audit-detail">
+  <div>{{if .Denied}}<h3>Why it was denied</h3><p>{{.Reason}}</p><p class="muted">This attempt was blocked before a message was stored. Its subject and body are unavailable.</p>{{else}}<div class="rich">{{rich .Body}}</div>{{end}}
+   <div class="audit-actions">{{with .FromURL}}<a href="{{.}}">Open sender</a>{{end}}{{with .ToURL}}<a href="{{.}}">Open recipient</a>{{end}}{{if .Denied}}<a href="{{.OrgURL}}">Review deciding rule or default</a>{{else}}<a href="/org#org-access">Review messaging policy</a>{{end}}</div>
   </div>
-  <nav class="pager" aria-label="Pages">
-    {{if not .Before.IsZero}}<a class="btn btn-sm" href="/traffic{{with .Peer}}?peer={{.}}{{end}}">{{template "icon" "up"}}<span>Newest</span></a>{{end}}
-    {{if not .Next.IsZero}}<a class="btn btn-sm" href="/traffic?{{with .Peer}}peer={{.}}&amp;{{end}}before={{stampNano .Next}}"><span>Older</span>{{template "icon" "down"}}</a>{{end}}
-  </nav>
-  {{else}}
-  <div class="empty"><p class="empty-title">No mail{{with .Peer}} to or from {{.}}{{end}} yet</p><p>Every message between agents, you and lolad lands here as it is sent: the audit log of who said what to whom.</p>{{if not .HasAgents}}<p class="step-actions"><a class="btn btn-primary" href="/new">{{template "icon" "plus"}}<span>New agent</span></a><a class="btn" href="/new?mode=adopt">Adopt a directory</a></p>{{end}}</div>
-  {{end}}
-</div>{{end}}
+  <dl class="audit-meta">{{if not .Denied}}<div><dt>From</dt><dd>{{.From}}</dd></div><div><dt>To</dt><dd>{{.To}}</dd></div><div><dt>Message ID</dt><dd class="mono">{{.ID}}</dd></div>{{if ne .ThreadID .ID}}<div><dt>Thread</dt><dd class="mono">{{.ThreadID}}</dd></div>{{end}}<div><dt>Type · priority</dt><dd>{{.Type}} · {{.Priority}}</dd></div><div><dt>Signature</dt><dd>{{if .Verified}}Verified{{else if .Signed}}Signed, not verified{{else}}Unsigned{{end}}</dd></div>{{if .NotifiedAt.IsZero}}<div><dt>Delivery</dt><dd>Waiting for recipient notification{{if .Attempts}} · {{plural .Attempts "attempt" "attempts"}}{{end}}</dd></div>{{else}}<div><dt>Notified</dt><dd>{{long .NotifiedAt}}{{if .Attempts}} · {{plural .Attempts "attempt" "attempts"}}{{end}}</dd></div>{{end}}{{if not .ReadAt.IsZero}}<div><dt>Read</dt><dd>{{long .ReadAt}}</dd></div>{{end}}{{with .InReplyTo}}<div><dt>In reply to</dt><dd class="mono">{{.}}</dd></div>{{end}}{{with .Context}}<div><dt>Context</dt><dd><code class="ctx">{{json .}}</code></dd></div>{{end}}{{end}}<div><dt>Recorded</dt><dd>{{long .CreatedAt}}</dd></div></dl>
+ </div>
+</details>{{end}}
+
+{{define "traffic-rows"}}<section id="traffic"{{if .Before.IsZero}} hx-get="{{.LiveURL}}" hx-trigger="lolad:mail from:body delay:700ms, lolad:agent from:body delay:700ms" hx-swap="outerHTML" data-live{{end}} aria-label="Mail audit">
+ <div class="traffic-tools"><nav class="traffic-scopes" aria-label="Delivery filter"><a href="{{.URL "status" ""}}"{{if eq .Status ""}} aria-current="page"{{end}}>All traffic <span>{{.Total}}</span></a><a href="{{.URL "status" "denied"}}"{{if eq .Status "denied"}} aria-current="page"{{end}}>Denied <span>{{.Denied}}</span></a><a href="{{.URL "status" "queued"}}"{{if eq .Status "queued"}} aria-current="page"{{end}}>Queued <span>{{.Queued}}</span></a></nav><nav class="traffic-modes" aria-label="Audit view"><a href="{{.URL "view" ""}}"{{if ne .View "pairs"}} aria-current="page"{{end}}>Timeline</a><a href="{{.URL "view" "pairs"}}"{{if eq .View "pairs"}} aria-current="page"{{end}}>By pair</a></nav></div>
+ {{if .Other}}<p class="traffic-pair-filter">Conversation: <strong>{{.Peer}} ↔ {{.Other}}</strong> <a href="{{.URL "other" ""}}">Show all for {{.Peer}}</a></p>{{end}}
+ <div class="traffic-caption"><p>{{if eq .View "pairs"}}Pairs ranked by volume on this page. Expand to inspect repeated exchanges.{{else}}Newest first · Open a row to inspect the message.{{end}}</p><p>Queued = not yet notified · Read = opened by recipient</p></div>
+ {{if .Limited}}<p class="traffic-warning" role="status">Showing the latest 2,000 messages and policy events. Older records may fall outside this audit window.</p>{{end}}
+ {{if .Entries}}
+ {{if eq .View "pairs"}}<div class="audit-pairs">{{range .Pairs}}<details class="audit-pair"><summary><strong>{{.From}} ↔ {{.To}}</strong><span>{{plural (len .Entries) "entry" "entries"}}{{if .Denied}} · {{.Denied}} denied{{end}}{{if .Queued}} · {{.Queued}} queued{{end}}</span>{{template "icon" "down"}}</summary><a class="audit-pair-link" href="{{.URL}}">Focus on this pair {{template "icon" "arrow"}}</a>{{range .Entries}}{{template "traffic-entry" .}}{{end}}</details>{{end}}</div>{{else}}<div class="audit-list">{{range .Entries}}{{template "traffic-entry" .}}{{end}}</div>{{end}}
+ <nav class="pager" aria-label="Pages">{{if not .Before.IsZero}}<a class="btn btn-sm" href="{{.URL "before" ""}}">Newest</a>{{end}}{{if not .Next.IsZero}}<a class="btn btn-sm" href="{{.Older}}">Older traffic {{template "icon" "down"}}</a>{{end}}</nav>
+ {{else}}<div class="empty"><p class="empty-title">{{if or .Peer .Status .Period .Direction}}No traffic matches these filters{{else}}No mail yet{{end}}</p><p>{{if or .Peer .Status .Period .Direction}}Try another participant, a longer time range, or all traffic.{{else}}Messages and policy denials will appear here as agents start talking.{{end}}</p>{{if not .HasAgents}}<p class="step-actions"><a class="btn btn-primary" href="/new">New agent</a><a class="btn" href="/new?mode=adopt">Adopt a directory</a></p>{{else}}<a href="/traffic">Clear filters</a>{{end}}</div>{{end}}
+</section>{{end}}

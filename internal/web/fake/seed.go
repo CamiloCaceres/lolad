@@ -236,6 +236,7 @@ func (s *Service) seed() {
 		}
 		ev(ml.CreatedAt, agent, "mail", fmt.Sprintf("%s → %s: %s", ml.FromName, ml.ToName, ml.Subject))
 	}
+	s.seedTrafficAudit()
 	slices.SortStableFunc(s.events, func(a, b core.Event) int { return a.At.Compare(b.At) })
 	for i := range s.events {
 		s.events[i].ID = int64(i + 1)

@@ -1,86 +1,51 @@
+{{/* Agents surface: an operating roster. State and current work lead; team headings
+keep a growing staff legible. Recovery actions always name their consequence. */}}
 {{define "controls"}}{{$a := .A}}{{$c := eq .From "fleet"}}
-<div class="controls{{if $c}} is-compact{{end}}" hx-target="{{if $c}}#fleet{{else}}#agent-head{{end}}" hx-swap="outerHTML" hx-vals='{"from":"{{.From}}"}' role="group" aria-label="Controls for {{$a.Display}}">
-  {{if or (not (running $a.State)) (eq $a.State "crashed")}}
-  <button class="btn{{if $c}} btn-icon btn-ghost{{else}} btn-sm{{end}}" hx-post="/agents/{{$a.Name}}/start" aria-label="{{if eq $a.State "crashed"}}Restart {{$a.Display}} now{{else}}Start {{$a.Display}}{{end}}" title="{{if eq $a.State "crashed"}}Restart now (skip backoff){{else}}Start{{end}}">{{template "icon" "start"}}{{if not $c}}<span>{{if eq $a.State "crashed"}}Retry now{{else}}Start{{end}}</span>{{end}}</button>
-  {{end}}
-  {{if running $a.State}}
-  {{if not $c}}<button class="btn btn-sm" hx-post="/agents/{{$a.Name}}/interrupt" aria-label="Interrupt {{$a.Display}}" title="Send Escape to the session"{{if not (or (eq $a.State "busy") (eq $a.State "waiting"))}} disabled{{end}}>{{template "icon" "interrupt"}}<span>Interrupt</span></button>{{end}}
-  <button class="btn{{if $c}} btn-icon btn-ghost{{else}} btn-sm{{end}}" hx-post="/agents/{{$a.Name}}/restart" aria-label="Restart {{$a.Display}}" title="Restart, resuming the conversation">{{template "icon" "restart"}}{{if not $c}}<span>Restart</span>{{end}}</button>
-  {{if not $c}}<button class="btn btn-sm" hx-post="/agents/{{$a.Name}}/fresh" hx-confirm="Restart {{$a.Display}} with a fresh conversation? It starts over from on_wake; brain/ and memory/ carry over." aria-label="Fresh session for {{$a.Display}}" title="Restart with a new conversation">{{template "icon" "fresh"}}<span>Fresh</span></button>{{end}}
-  <button class="btn{{if $c}} btn-icon btn-ghost{{else}} btn-sm{{end}} is-stop" hx-post="/agents/{{$a.Name}}/stop" hx-confirm="Stop {{$a.Display}}? It stays down until you start it again." aria-label="Stop {{$a.Display}}" title="Stop">{{template "icon" "stop"}}{{if not $c}}<span>Stop</span>{{end}}</button>
-  {{end}}
+<div class="agent-controls" role="group" aria-label="Controls for {{$a.Display}}" hx-target="{{if $c}}#fleet{{else}}#agent-head{{end}}" hx-swap="outerHTML" hx-include="{{if $c}}#fleet-filters{{else}}this{{end}}" hx-disabled-elt="find button">
+ {{if or (not (running $a.State)) (eq $a.State "crashed")}}
+ <form method="post" action="/agents/{{$a.Name}}/start" hx-post="/agents/{{$a.Name}}/start"><input type="hidden" name="from" value="{{.From}}"><button class="btn btn-sm" title="Resume the last conversation; clear crash backoff">{{template "icon" "start"}}<span>{{if eq $a.State "crashed"}}Retry now{{else}}Start{{end}}</span></button></form>
+ {{end}}
+ <details class="agent-action-menu"><summary class="btn btn-sm">Actions {{template "icon" "down"}}</summary><div class="agent-action-options">
+ {{if running $a.State}}
+ <form method="post" action="/agents/{{$a.Name}}/restart" hx-post="/agents/{{$a.Name}}/restart"><input type="hidden" name="from" value="{{.From}}"><button><strong>Restart · resume</strong><span>Restart the process and continue this conversation. Applies pending settings.</span></button></form>
+ <form method="post" action="/agents/{{$a.Name}}/interrupt" hx-post="/agents/{{$a.Name}}/interrupt"><input type="hidden" name="from" value="{{.From}}"><button{{if not (or (eq $a.State "busy") (eq $a.State "waiting"))}} disabled{{end}}><strong>Interrupt turn</strong><span>Send Escape. Keep the process running.</span></button></form>
+ <form method="post" action="/agents/{{$a.Name}}/stop" hx-post="/agents/{{$a.Name}}/stop" hx-confirm="Stop {{$a.Display}}? Current work will be interrupted.{{if $a.Runtime.WakeOnMessageEnabled}} New mail can start it again because wake on mail is enabled.{{else}} It stays stopped until you start it.{{end}}"><input type="hidden" name="from" value="{{.From}}"><button><strong>Stop agent</strong><span>End current work. {{if $a.Runtime.WakeOnMessageEnabled}}New mail can wake it again.{{else}}Stays stopped until started.{{end}}</span></button></form>
+ {{end}}
+ <form method="post" action="/agents/{{$a.Name}}/fresh" hx-post="/agents/{{$a.Name}}/fresh" hx-confirm="Wake {{$a.Display}} with a fresh conversation? Current work ends and on_wake runs again. brain/ and memory/ carry over."><input type="hidden" name="from" value="{{.From}}"><button><strong>Wake · fresh conversation</strong><span>Start over with on_wake. Keep brain/ and memory/.</span></button></form>
+ <a href="/inbox/{{$a.Name}}">Open conversation {{template "icon" "message"}}</a>
+ <a href="/agents/{{$a.Name}}/settings">Change settings {{template "icon" "next"}}</a>
+ </div></details>
 </div>{{end}}
 
-{{define "state-detail"}}{{if eq .State "crashed"}}{{if future .NextRestart}}restart in {{until .NextRestart}}{{else}}restart due{{end}}{{with .LastError}} · {{.}}{{end}}{{else if eq .State "failed"}}{{.LastError}}{{else if eq .State "stopped"}}{{if eq .Desired "down"}}stays down until started{{end}}{{else}}{{.Detail}}{{end}}{{end}}
+{{define "state-detail"}}{{if eq .State "crashed"}}{{if future .NextRestart}}Automatic retry in {{until .NextRestart}}{{else}}Automatic retry due{{end}}{{with .LastError}} · {{.}}{{end}}{{else if eq .State "failed"}}{{.LastError}}{{else if eq .State "stopped"}}Stopped. {{if .Runtime.WakeOnMessageEnabled}}New mail can wake this agent.{{else}}Start when needed.{{end}}{{else if .Detail}}{{.Detail}}{{else if eq .State "idle"}}Ready for the next message{{else if eq .State "unknown"}}No recent status signal; check the terminal{{else if eq .State "starting"}}Starting the harness…{{else}}Working on a turn{{end}}{{end}}
 
-{{define "fleet"}}<div id="fleet" class="fleet-wrap" hx-get="/fragments/fleet" hx-trigger="lolad:agent from:body delay:500ms, lolad:mail from:body delay:900ms" hx-swap="outerHTML">
-  {{if not .Agents}}{{template "first-run" (dict "Title" "No agents yet")}}{{else}}
-  <p class="summary">{{range $i, $c := .Counts}}{{if $i}}<span class="summary-sep" aria-hidden="true">·</span>{{end}}<span class="summary-item st-{{.State}}"><i aria-hidden="true"></i>{{.N}} {{.State}}</span>{{end}}</p>
-  <div class="table-scroll">
-  <table class="fleet">
-    <thead><tr>
-      <th scope="col">Agent</th><th scope="col">State</th><th scope="col" class="c-team">Team</th><th scope="col" class="c-harness">Harness</th>
-      <th scope="col" class="c-num" title="Unread mail addressed to the agent">Mail</th><th scope="col" class="c-num c-restarts" title="Crash restarts in the last 24h">Restarts</th>
-      <th scope="col" class="c-when">Active</th><th scope="col" class="c-actions"><span class="sr-only">Controls</span></th>
-    </tr></thead>
-    <tbody>
-    {{range .Agents}}
-    <tr class="{{if attention .State}}is-attention{{end}}">
-      <td class="c-agent"><a class="agent-link" href="/agents/{{.Name}}">{{template "avatar" (dict "Display" .Display "State" .State "Size" "sm")}}<span class="agent-cell"><span class="agent-name">{{.Display}}</span><span class="agent-meta">{{.Role}}</span></span></a></td>
-      <td class="c-state">{{template "state" .}}<span class="state-detail">{{template "state-detail" .}}</span></td>
-      <td class="c-team">{{with .Team}}{{index $.Teams .}}{{else}}<span class="muted">independent</span>{{end}}{{if .IsHead}} <span class="tag">head</span>{{end}}</td>
-      <td class="c-harness"><span class="mono">{{.Runtime.Harness}}</span>{{with .Runtime.Model}}<span class="sub mono">{{.}}</span>{{end}}</td>
-      <td class="c-num">{{if .Unread}}<span class="count">{{.Unread}}</span>{{else}}<span class="muted">–</span>{{end}}</td>
-      <td class="c-num c-restarts">{{if .Restarts}}{{.Restarts}}{{else}}<span class="muted">–</span>{{end}}</td>
-      <td class="c-when">{{if .LastActivity.IsZero}}<span class="muted">never</span>{{else}}<time datetime="{{stamp .LastActivity}}" title="{{long .LastActivity}}" data-ago>{{ago .LastActivity}}</time>{{end}}</td>
-      <td class="c-actions">{{template "controls" (dict "A" . "From" "fleet")}}</td>
-    </tr>
-    {{end}}
-    </tbody>
-  </table>
-  </div>
-  {{end}}
+{{define "fleet"}}<div id="fleet" class="agents-roster" hx-get="/fragments/fleet" hx-include="#fleet-filters" hx-trigger="lolad:agent from:body delay:500ms, lolad:mail from:body delay:900ms" hx-swap="outerHTML">
+ {{if not .Agents}}{{template "first-run" (dict "Title" "No agents yet")}}{{else}}
+ <div class="roster-summary"><strong>{{.Total}} agents</strong><span>{{if .NeedsAttention}}{{.NeedsAttention}} need attention{{else}}No agents need attention{{end}}</span><span class="roster-state-counts">{{range .Counts}}<span class="st-{{.State}}">{{.N}} {{.State}}</span>{{end}}</span></div>
+ {{range .Groups}}
+ <section class="roster-team" aria-label="{{.Name}}"><h2>{{.Name}} <span>{{len .Agents}}</span></h2><ul role="list">
+ {{range .Agents}}<li class="roster-row{{if or (attention .State) .PendingRestart}} needs-attention{{end}}">
+ <div class="roster-identity"><a class="agent-link" href="/agents/{{.Name}}">{{template "avatar" (dict "Display" .Display "State" .State "Size" "sm")}}<span><strong>{{.Display}}</strong>{{if .IsHead}} <span class="tag">head</span>{{end}}<span class="roster-role">{{.Role}}</span></span></a></div>
+ <div class="roster-work"><div class="roster-state">{{template "state" .AgentStatus}}<span>Last signal {{if .LastActivity.IsZero}}not received{{else}}<time datetime="{{stamp .LastActivity}}" title="{{long .LastActivity}}" data-ago>{{ago .LastActivity}}</time>{{end}}</span></div><p>{{template "state-detail" .AgentStatus}}</p>{{if .PendingRestart}}<a class="roster-pending" href="/agents/{{.Name}}">Pending restart{{with .PendingReason}} · {{.}}{{end}}</a>{{end}}</div>
+ <div class="roster-runtime"><span>{{if .Runtime.Model}}{{.Runtime.Model}}{{else}}Default model{{end}}</span><small>{{.Runtime.Harness}}{{if and (running .State) (not .StartedAt.IsZero)}} · up {{since .StartedAt}}{{end}}</small><small>{{.Restarts}} crash restarts / 24h</small></div>
+ <div class="roster-next">{{if .Unread}}<a href="/agents/{{.Name}}#h-activity" class="roster-unread">{{.Unread}} unread mail</a>{{else}}<span>No unread mail</span>{{end}}{{if not .NextTrigger.IsZero}}<small>Next trigger <time datetime="{{stamp .NextTrigger}}" title="{{long .NextTrigger}}">{{when .NextTrigger}}</time></small>{{else if .Runtime.Triggers}}<small>Mail / webhook triggers</small>{{else}}<small>No scheduled triggers</small>{{end}}</div>
+ <div class="roster-actions"><a class="btn btn-sm" href="/inbox/{{.Name}}" aria-label="Message {{.Display}}">{{template "icon" "message"}}<span>Message</span></a>{{template "controls" (dict "A" .AgentStatus "From" "fleet")}}</div>
+ </li>{{end}}</ul></section>
+ {{else}}<div class="roster-empty"><h2>No matching agents</h2><p>Try another name, model or team, or choose All agents.</p></div>{{end}}
+ {{end}}
 </div>{{end}}
-
 {{define "fleet-body"}}{{template "fleet" .}}{{end}}
 
-{{define "agent-head"}}{{$a := .A}}<header class="agent-head" id="agent-head" hx-get="/agents/{{.A.Name}}/part/head" hx-trigger="lolad:a-{{.A.Name}} from:body delay:300ms" hx-swap="outerHTML">
-  <div class="agent-title">
-    {{template "avatar" (dict "Display" .A.Display "State" .A.State "Size" "lg")}}
-    <div class="agent-id">
-      <h1>{{.A.Display}}</h1>
-      <p class="agent-role">{{.A.Role}}{{with .TeamName}} · {{.}}{{if $a.IsHead}} (head){{end}}{{else}} · independent{{end}}</p>
-    </div>
-  </div>
-  <div class="agent-actions">
-    <a class="btn btn-primary" href="/inbox/{{.A.Name}}">{{template "icon" "message"}}<span>Message</span></a>
-    <a class="btn" href="/agents/{{.A.Name}}/settings">{{template "icon" "settings"}}<span>Settings</span></a>
-    {{template "controls" (dict "A" .A "From" "detail")}}
-  </div>
-  <p class="agent-status">
-    {{template "state" .A}}
-    {{with .A}}{{if eq .State "crashed" "failed" "waiting" "busy"}}<span class="agent-detail">{{template "state-detail" .}}</span>{{end}}{{end}}
-    {{if running .A.State}}{{if not .A.StartedAt.IsZero}}<span class="fact">up {{since .A.StartedAt}}</span>{{end}}{{if not .A.SessionSince.IsZero}}<span class="fact">conversation {{since .A.SessionSince}}</span>{{end}}{{end}}
-    <span class="fact">{{plural .A.Restarts "restart" "restarts"}} in 24h</span>
-    {{if .A.Unread}}<span class="fact">{{.A.Unread}} unread</span>{{end}}
-  </p>
-  {{template "pending" (dict "A" .A "From" "detail")}}
+{{define "agent-head"}}<header class="agent-head" id="agent-head" hx-get="/agents/{{.A.Name}}/part/head" hx-trigger="lolad:a-{{.A.Name}} from:body delay:300ms, lolad:mail from:body delay:500ms" hx-swap="outerHTML">
+ <div class="agent-title">{{template "avatar" (dict "Display" .A.Display "State" .A.State "Size" "lg")}}<div class="agent-id"><h1>{{.A.Display}}</h1><p class="agent-role">{{.A.Role}}{{with .TeamName}} · {{.}}{{else}} · Independent{{end}}</p></div></div>
+ <div class="agent-actions"><a class="btn btn-primary" href="/inbox/{{.A.Name}}">{{template "icon" "message"}}<span>Open conversation</span></a><a class="btn" href="/agents/{{.A.Name}}/settings">{{template "icon" "settings"}}<span>Settings</span></a>{{template "controls" (dict "A" .A "From" "detail")}}</div>
+ <div class="agent-situation"><div class="agent-current">{{template "state" .A}}<p>{{template "state-detail" .A}}</p></div><dl class="agent-vitals"><div><dt>Last signal</dt><dd>{{if .A.LastActivity.IsZero}}Not received{{else}}<time datetime="{{stamp .A.LastActivity}}" title="{{long .A.LastActivity}}" data-ago>{{ago .A.LastActivity}}</time>{{end}}</dd></div><div><dt>Uptime</dt><dd>{{if and (running .A.State) (not .A.StartedAt.IsZero)}}{{since .A.StartedAt}}{{else}}Not running{{end}}</dd></div><div><dt>Crash restarts / 24h</dt><dd>{{.A.Restarts}}</dd></div><div><dt>Unread agent mail</dt><dd>{{.A.Unread}}</dd></div><div><dt>Next scheduled trigger</dt><dd>{{if not .NextTrigger.IsZero}}<time datetime="{{stamp .NextTrigger}}" title="{{long .NextTrigger}}">{{when .NextTrigger}}</time>{{else}}None{{end}}</dd></div></dl></div>
+ {{template "pending" (dict "A" .A "From" "detail")}}
 </header>{{end}}
 
-{{define "agent-events"}}<div id="agent-events" hx-get="/agents/{{.A.Name}}/part/events" hx-trigger="lolad:a-{{.A.Name}} from:body delay:500ms" hx-swap="outerHTML">
-  {{if .Events}}
-  <ol class="timeline" role="list">
-    {{range .Events}}
-    <li class="ev ev-{{.Kind}}">
-      <time datetime="{{stamp .At}}" title="{{long .At}}">{{evtime .At}}</time>
-      <span class="ev-kind">{{.Kind}}</span>
-      <span class="ev-detail">{{.Detail}}</span>
-    </li>
-    {{end}}
-  </ol>
-  {{else}}<p class="empty-inline">No events recorded yet.</p>{{end}}
+{{define "agent-events"}}<div id="agent-events" hx-get="/agents/{{.A.Name}}/part/events" hx-trigger="lolad:a-{{.A.Name}} from:body delay:500ms, lolad:mail from:body delay:700ms" hx-swap="outerHTML">
+ {{if .Timeline}}<ol class="activity-stream" role="list">{{range .Timeline}}<li class="activity-entry kind-{{.Kind}}"><time datetime="{{stamp .At}}" title="{{long .At}}">{{evtime .At}}</time><div><strong>{{.Title}}</strong><p>{{.Detail}}</p></div></li>{{end}}</ol>{{else}}<p class="empty-inline">No activity yet. Starts, turns, triggers and mail will appear here.</p>{{end}}
 </div>{{end}}
-
 {{define "agent-mail"}}{{$name := .A.Name}}<div id="agent-mail" hx-get="/agents/{{.A.Name}}/part/mail" hx-trigger="lolad:mail from:body delay:700ms" hx-swap="outerHTML">
   {{if .Mail}}
   <ul class="mail-list" role="list">
@@ -98,18 +63,18 @@
   {{else}}<p class="empty-inline">No mail to or from {{.A.Display}} yet.</p>{{end}}
 </div>{{end}}
 
-{{define "agent-facts"}}{{$a := .A}}{{$rt := .A.Runtime}}<dl class="facts" id="agent-facts">
+{{define "agent-facts"}}{{$a := .A}}{{$rt := .A.Runtime}}<dl class="facts" id="agent-facts" hx-get="/agents/{{.A.Name}}/part/facts" hx-trigger="lolad:a-{{.A.Name}} from:body delay:900ms" hx-swap="outerHTML">
   <div><dt>Address</dt><dd class="mono">{{.A.Address}}</dd></div>
-  <div><dt>Directory</dt><dd class="mono">{{.A.Dir}}</dd></div>
-  <div><dt>Harness</dt><dd>{{harness $rt}}</dd></div>
+  <div class="is-wide"><dt>Directory</dt><dd class="mono">{{.A.Dir}} <a href="/agents/{{$a.Name}}/settings/files">Browse files</a></dd></div>
+  <div><dt>Harness &amp; model</dt><dd>{{harness $rt}} <a href="/agents/{{$a.Name}}/settings">Change</a></dd></div>
+ <div><dt>Skills mode</dt><dd>{{if eq $rt.SkillsMode "barebones"}}Agent skills only{{else}}Inherit user skills{{end}} <a href="/agents/{{$a.Name}}/settings/skills">Change</a></dd></div>
+ <div class="is-wide"><dt>Email</dt><dd>{{if .EmailUnavailable}}Could not load email settings{{else}}{{range .Emails}}<span class="agent-email">{{.}}</span>{{else}}No email account configured{{end}}{{end}} <a href="/agents/{{$a.Name}}/settings/email">Change</a></dd></div>
   <div><dt>Permissions</dt><dd>{{if $rt.Permissions}}{{$rt.Permissions}}{{else}}bypass{{end}}</dd></div>
   <div><dt>Autostart</dt><dd>{{if $rt.AutostartEnabled}}yes{{else}}no{{end}}</dd></div>
   <div><dt>Wake on mail</dt><dd>{{if $rt.WakeOnMessageEnabled}}yes{{else}}no{{end}}</dd></div>
   <div><dt>Rotate</dt><dd>{{with $rt.Rotate}}daily at {{.}}{{else}}never{{end}}</dd></div>
-  {{with $rt.OnWake}}<div class="is-wide"><dt>On wake</dt><dd>{{.}}</dd></div>{{end}}
   {{with $rt.Triggers}}<div class="is-wide"><dt>Triggers</dt><dd><ul class="triggers">{{range .}}<li><span class="tag">{{.Kind}}</span> <span class="mono">{{if .Cron}}{{.Cron}}{{else if .Mail}}{{.Mail}}{{if .Every}} every {{.Every}}{{end}}{{else}}POST /hook/{{$a.Name}}/{{.Webhook}}{{end}}</span>{{with .Prompt}}<span class="trig-prompt">{{.}}</span>{{end}}</li>{{end}}</ul></dd></div>{{end}}
   {{if or $rt.EnvFile .EnvKeys}}<div class="is-wide"><dt>Environment</dt><dd>{{with $rt.EnvFile}}<span class="mono">{{.}}</span>{{if $.EnvKeys}} + {{end}}{{end}}{{range $i, $k := .EnvKeys}}{{if $i}}, {{end}}<span class="mono">{{$k}}</span>{{end}}<span class="muted"> (values hidden)</span></dd></div>{{end}}
-  {{with $rt.Args}}<div class="is-wide"><dt>Extra args</dt><dd class="mono">{{range .}}{{.}} {{end}}</dd></div>{{end}}
   {{if .A.PID}}<div><dt>PID</dt><dd class="mono">{{.A.PID}}</dd></div>{{end}}
   {{if not .A.StartedAt.IsZero}}<div><dt>Started</dt><dd>{{long .A.StartedAt}}</dd></div>{{end}}
   <div><dt>Desired</dt><dd>{{.A.Desired}}</dd></div>
@@ -119,7 +84,7 @@
   data-xterm-js="{{asset "vendor/xterm.js"}}" data-xterm-css="{{asset "vendor/xterm.css"}}" data-fit-js="{{asset "vendor/addon-fit.js"}}">
   <summary>
     {{template "icon" "terminal"}}<span class="term-title">Live terminal</span>
-    <span class="term-sub">for debugging; {{.A.Display}} is reached by mail</span>
+    <span class="term-sub">Watch the running session · read-only by default</span>
     {{template "icon" "down"}}
   </summary>
   <div class="term-bar">

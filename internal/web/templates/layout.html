@@ -14,6 +14,12 @@
 {{end}}<script src="{{asset "vendor/htmx.min.js"}}" defer></script>
 <script src="{{asset "app.js"}}" defer></script>
 <script src="{{asset "term.js"}}" defer></script>
+<!-- New agent previews and adoption selection; listeners are scoped to the New screen. -->
+<script src="{{asset "new.js"}}" defer></script>
+<!-- Remote device pairing countdown. -->
+<script src="{{asset "devices.js"}}" defer></script>
+{{/* Settings workspace keyboard navigation and safe GET-form leave guard. */}}
+<script src="{{asset "settings.js"}}" defer></script>
 </head>
 <body hx-boost="true">
 {{template "icons"}}
@@ -25,12 +31,16 @@
       <span>lolad</span>
     </a>
     <ul class="nav-list">
-      <li><a href="/" class="nav-link" {{if eq .Nav "inbox"}}aria-current="page"{{end}}>{{template "icon" "inbox"}}<span>Inbox</span>{{template "nav-badges" .Badges}}</a></li>
-      <li><a href="/agents" class="nav-link" {{if eq .Nav "agents"}}aria-current="page"{{end}}>{{template "icon" "agents"}}<span>Agents</span>{{template "nav-alert" .Badges}}</a></li>
-      <li><a href="/org" class="nav-link" {{if eq .Nav "org"}}aria-current="page"{{end}}>{{template "icon" "org"}}<span>Org</span></a></li>
-      <li><a href="/traffic" class="nav-link" {{if eq .Nav "traffic"}}aria-current="page"{{end}}>{{template "icon" "traffic"}}<span>Traffic</span></a></li>
-      <li><a href="/new" class="nav-link" {{if eq .Nav "new"}}aria-current="page"{{end}}>{{template "icon" "plus"}}<span>New agent</span></a></li>
+      <li><a href="/" class="nav-link" aria-label="Inbox" title="Inbox" {{if eq .Nav "inbox"}}aria-current="page"{{end}}>{{template "icon" "inbox"}}<span>Inbox</span>{{template "nav-badges" .Badges}}</a></li>
+      <li><a href="/agents" class="nav-link" aria-label="Agents" title="Agents" {{if eq .Nav "agents"}}aria-current="page"{{end}}>{{template "icon" "agents"}}<span>Agents</span>{{template "nav-alert" .Badges}}</a></li>
+      <!-- External email fleet. -->
+      <li><a href="/email" class="nav-link" aria-label="Email" title="Email" {{if eq .Nav "email"}}aria-current="page"{{end}}>{{template "icon" "mail"}}<span>Email</span></a></li>
+      <li><a href="/org" class="nav-link" aria-label="Org" title="Org" {{if eq .Nav "org"}}aria-current="page"{{end}}>{{template "icon" "org"}}<span>Org</span></a></li>
+      <li><a href="/traffic" class="nav-link" aria-label="Traffic" title="Traffic" {{if eq .Nav "traffic"}}aria-current="page"{{end}}>{{template "icon" "traffic"}}<span>Traffic</span></a></li>
+      <li><a href="/new" class="nav-link" aria-label="New agent" title="New agent" {{if eq .Nav "new"}}aria-current="page"{{end}}>{{template "icon" "plus"}}<span>New agent</span></a></li>
     </ul>
+    <!-- Remote access management stays beside the operator identity. -->
+    <a href="/devices" class="nav-link nav-devices" aria-label="Devices" title="Devices{{if .Version}} · {{.Version}}{{end}}" {{if eq .Nav "devices"}}aria-current="page"{{end}}>{{template "icon" "devices"}}<span>Devices{{if .Version}} · {{.Version}}{{end}}</span></a>
     <div class="nav-foot">
       <span class="avatar avatar-sm is-user" aria-hidden="true">{{initials .Me.Display}}</span>
       <span class="nav-me"><span class="nav-me-name">{{.Me.Display}}</span><span class="nav-me-id">{{.Me.Name}}</span></span>

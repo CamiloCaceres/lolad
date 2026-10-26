@@ -65,6 +65,9 @@ func validateSlug(slug string) error {
 	return nil
 }
 func runtimeDefaults(r core.Runtime) (core.Runtime, error) {
+	if r.Skills != "" && r.Skills != core.SkillsInherit && r.Skills != core.SkillsBarebones {
+		return r, fmt.Errorf("%w: skills must be inherit or barebones", core.ErrInvalid)
+	}
 	if r.Harness != core.HarnessClaude && r.Harness != core.HarnessCodewhale {
 		return r, fmt.Errorf("%w: unsupported harness %q", core.ErrInvalid, r.Harness)
 	}
@@ -111,13 +114,16 @@ func (c *Creator) Create(ctx context.Context, req core.CreateRequest) (core.Agen
 	if err != nil {
 		return zero, err
 	}
-	r, err := runtimeDefaults(core.Runtime{Slug: slug, Harness: req.Harness, Model: req.Model, Permissions: req.Permissions, OnWake: req.OnWake})
+	r, err := runtimeDefaults(core.Runtime{Slug: slug, Harness: req.Harness, Model: req.Model, Skills: req.Skills, Permissions: req.Permissions, OnWake: req.OnWake})
 	if err != nil {
 		return zero, err
 	}
 	if !req.Start {
 		no := false
 		r.Autostart = &no
+		// The initial mission is queued mail too. Keep a deliberately stopped
+		// creation stopped when the supervisor replays that mail.
+		r.WakeOnMessage = &no
 	}
 	org, err := c.deps.Org.Org(ctx)
 	if err != nil {

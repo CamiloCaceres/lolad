@@ -49,11 +49,12 @@
   <a class="btn btn-icon btn-ghost back" href="/" aria-label="All conversations">{{template "icon" "back"}}</a>
   {{template "avatar" (dict "Display" .Display "State" (stateOf .Agent) "Size" "md")}}
   <div class="thread-who">
-    <h2 class="thread-name">{{.Display}}</h2>
+    <h1 class="thread-name">{{.Display}}</h1>
     <p class="thread-sub">{{with .Agent}}{{template "state" .}}<span class="thread-detail">{{if .Detail}}{{.Detail}}{{else}}{{.Role}}{{end}}</span>{{else}}System messages{{end}}</p>
   </div>
   {{with .Agent}}<a class="btn btn-icon btn-ghost thread-settings" href="/agents/{{.Name}}/settings" aria-label="Settings for {{.Display}}" title="Settings">{{template "icon" "settings"}}</a>{{end}}
   {{with .Agent}}<a class="btn btn-ghost thread-agent" href="/agents/{{.Name}}">Agent<span class="hide-sm"> details</span>{{template "icon" "next"}}</a>{{end}}
+{{with .Arrival}}<div class="arrival" role="status"><strong>{{.}}</strong><span><a href="/agents/{{$.Peer}}/settings/email">Give it an email</a><a href="/org">Add to a team</a></span><button class="btn btn-icon btn-ghost" type="button" data-dismiss-arrival aria-label="Dismiss welcome">{{template "icon" "x"}}</button></div>{{end}}
 </header>{{end}}
 
 {{define "msgs"}}{{$t := .}}
@@ -62,8 +63,8 @@
   <p>Anything you write lands in {{.Display}}'s inbox and is surfaced in its session. Replies, updates and questions show up here.</p>
 </li>{{end}}
 {{range .Msgs}}
-  {{if .Day}}<li class="sep" role="separator"><span>{{.Day}}</span></li>{{end}}
-  {{if .New}}<li class="sep is-new" role="separator" id="new"><span>New</span></li>{{end}}
+  {{if .Day}}<li class="sep"><span>{{.Day}}</span></li>{{end}}
+  {{if .New}}<li class="sep is-new" id="new"><span>New</span></li>{{end}}
   {{if eq .Kind "system"}}
   <li class="msg is-system" id="m-{{short .ID}}">
     <p>{{template "icon" "pulse"}}<span>{{with subject .Mail}}<strong>{{.}}</strong> · {{end}}{{excerpt .Body 220}}</span><time datetime="{{stamp .CreatedAt}}" title="{{long .CreatedAt}}">{{clock .CreatedAt}}</time></p>
@@ -72,7 +73,7 @@
   <li class="msg is-update" id="m-{{short .ID}}">
     <div class="note">
       <p class="note-head">{{template "icon" "pulse"}}<span class="note-subj">{{with subject .Mail}}{{.}}{{else}}Update{{end}}</span><time datetime="{{stamp .CreatedAt}}" title="{{long .CreatedAt}}">{{clock .CreatedAt}}</time></p>
-      <div class="note-body rich">{{rich .Body}}</div>
+      <div class="note-body rich">{{markdown .Body}}</div>
     </div>
   </li>
   {{else}}
@@ -83,7 +84,7 @@
       {{if eq .Kind "ask"}}<p class="bubble-kind">{{template "icon" "ask"}}{{if .Answered}}Question{{else}}Waiting on you{{end}}</p>{{end}}
       {{if .ShowSubj}}<p class="bubble-subj">{{subject .Mail}}</p>{{end}}
       {{if eq .Kind "decision"}}<p class="decision">{{template "icon" "check"}}<span>{{.Chat.Decision}}</span></p>
-      {{else}}<div class="rich">{{rich .Body}}</div>{{end}}
+      {{else}}<div class="rich">{{markdown .Body}}</div>{{if eq .Kind "deliver"}}<button class="btn btn-ghost deliver-copy" type="button" data-copy-message>Copy deliverable</button><textarea hidden readonly aria-label="Deliverable Markdown" data-deliver-source>{{.Body}}</textarea>{{end}}{{end}}
     </div>
     {{if eq .Kind "ask"}}{{$m := .}}
     <form class="options" method="post" action="/inbox/{{$t.Peer}}/decide" hx-post="/inbox/{{$t.Peer}}/decide" hx-target="#msgs" hx-disabled-elt="find button">
@@ -124,16 +125,17 @@
 {{template "conv-list" .V}}
 {{template "nav-badges" .Badges}}{{end}}
 
-{{define "home"}}<section class="home" aria-label="Overview">
+{{define "home"}}<section class="home" id="inbox-home" aria-label="Inbox" hx-get="/" hx-select="#inbox-home" hx-target="this" hx-swap="outerHTML" hx-trigger="lolad:mail from:body delay:400ms" hx-push-url="false">
   <div class="home-inner">
+  <header class="inbox-home-head"><div><h1>Inbox</h1><p>Conversations with your agents.</p></div>{{if .Agents}}{{template "new-message" .Agents}}{{end}}</header>
   {{if .Asks}}
-    <h2 class="home-h">{{if eq (len .Asks) 1}}One question is{{else}}{{len .Asks}} questions are{{end}} waiting on you</h2>
+    <h2 class="home-h your-turn">Waiting on you <span class="count is-you">{{len .Asks}}</span></h2>
     <ul class="asks" role="list">
     {{range .Asks}}{{$c := .Conv}}
       <li class="ask-card">
         <a class="ask-who" href="/inbox/{{$c.Peer}}">{{template "avatar" (dict "Display" $c.Display "State" $c.State "Size" "sm")}}<span>{{$c.Display}}</span><time datetime="{{stamp .Ask.CreatedAt}}" title="{{long .Ask.CreatedAt}}" data-when>{{when .Ask.CreatedAt}}</time></a>
         {{with subject .Ask.Mail}}<p class="ask-subj">{{.}}</p>{{end}}
-        <div class="ask-body rich">{{rich .Ask.Body}}</div>
+        <div class="ask-body rich">{{markdown .Ask.Body}}</div>
         <form class="options" method="post" action="/inbox/{{$c.Peer}}/decide">
           <input type="hidden" name="id" value="{{.Ask.ID}}">
           {{range .Ask.Chat.Options}}<button class="option" type="submit" name="option" value="{{.}}">{{.}}</button>{{end}}
@@ -144,16 +146,13 @@
     </ul>
   {{end}}
   {{if .Unread}}
-    <h2 class="home-h">Unread</h2>
-    <ul class="unread" role="list">
-    {{range .Unread}}
-      <li><a href="/inbox/{{.Peer}}">{{template "avatar" (dict "Display" .Display "State" .State "Size" "sm")}}<span class="unread-who">{{.Display}}</span><span class="unread-text">{{excerpt .Last.Body 120}}</span><span class="count">{{.Unread}}</span></a></li>
-    {{end}}
-    </ul>
+    <h2 class="home-h">New messages <span class="count">{{len .Unread}}</span></h2>
+    {{template "home-rows" .Unread}}
   {{end}}
+  {{if .Recent}}<h2 class="home-h">Recent conversations</h2>{{template "home-rows" .Recent}}{{end}}
   {{if not .Agents}}{{if not .Convs}}{{template "first-run" (dict "Title" "Welcome to lolad")}}{{end}}
   {{else if not .Convs}}{{template "start-chat" .Agents}}
-  {{else if and (not .Asks) (not .Unread)}}
+  {{else if and (not .Asks) (not .Unread) (not .Recent)}}
     <div class="empty empty-home">
       {{template "icon" "check"}}
       <p class="empty-title">You're caught up</p>
@@ -162,3 +161,8 @@
   {{end}}
   </div>
 </section>{{end}}
+
+{{define "home-rows"}}<ul class="home-rows" role="list">{{range .}}<li><a href="/inbox/{{.Peer}}">
+{{template "avatar" (dict "Display" .Display "State" .State "Size" "")}}
+<span class="home-row-content"><span class="home-row-top"><strong>{{.Display}}</strong>{{with .Agent}}{{template "state" .}}{{end}}<time datetime="{{stamp .LastAt}}" data-when>{{when .LastAt}}</time></span>
+<span class="home-row-preview">{{if eq .Chat.Kind "deliver"}}<span class="delivery-label">{{template "icon" "file"}}Deliverable</span>{{end}}{{if .Mine}}You: {{end}}{{excerpt .Last.Body 180}}</span></span>{{if .Unread}}<span class="count">{{.Unread}}<span class="sr-only"> unread</span></span>{{end}}{{template "icon" "next"}}</a></li>{{end}}</ul>{{end}}

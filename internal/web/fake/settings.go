@@ -102,6 +102,9 @@ func (s *Service) cfgOf(a *core.AgentStatus) *agentCfg {
 		return c
 	}
 	c := &agentCfg{files: map[string]*fileEntry{}}
+	if a.Name == "iris" {
+		seedSettingsWorkspace(c, s.now().Add(-2*time.Hour))
+	}
 	c.put("CLAUDE.md", claudeMD(a), s.now().Add(-3*24*time.Hour))
 	c.put("lolabot.yaml", lolabotYAML(a, nil), s.now().Add(-26*time.Hour))
 	c.put("brain/profile.md", "# "+a.Display+"\n\n"+a.Role+" for Camilo Caceres.\n", s.now().Add(-9*24*time.Hour))
@@ -586,8 +589,8 @@ func (s *Service) seedSettings() {
 			{key: "OPENWEATHER_KEY", value: strings.Repeat("w", 32)},
 		}
 		c.email = core.EmailSettings{Supported: true, OperatorEmails: []string{"you@example.com"},
-			Accounts: []core.EmailAccount{{Address: "ultron@mail.example.com", ConfigKey: "ultron", IMAPServer: "imap.migadu.com", IMAPPort: 993,
-				SMTPServer: "smtp.migadu.com", SMTPPort: 465, Username: "ultron@mail.example.com", PasswordKey: "EMAIL_PASSWORD_ULTRON"}}}
+			Accounts: []core.EmailAccount{{Address: "ultron@mail.example.com", ConfigKey: "ultron", IMAPServer: "imap.purelymail.com", IMAPPort: 993,
+				SMTPServer: "smtp.purelymail.com", SMTPPort: 465, Username: "ultron@mail.example.com", PasswordKey: "EMAIL_PASSWORD_ULTRON"}}}
 		c.put(".claude/settings.json", "{\n  \"enabledPlugins\": {\n    \"ultron-mail@local\": true\n  }\n}\n", now.Add(-10*24*h))
 		c.put("brain/credentials.yaml", "email_accounts:\n  ultron:\n    username: ultron@mail.example.com\n    password_secret: EMAIL_PASSWORD_ULTRON\n", now.Add(-10*24*h))
 		c.put("brain/routines.md", "# Routines\n\n- 07:30 plan the day from the calendar.\n- Gym on Tuesdays and Thursdays.\n", now.Add(-4*24*h))

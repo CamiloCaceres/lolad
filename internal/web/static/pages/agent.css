@@ -1,0 +1,50 @@
+/* Agent detail: situation first; chronological work beside editable facts. */
+.page-agent .agent-head { gap:20px; margin:24px 0; }
+.page-agent .agent-situation { grid-column:1 / -1; border-block:1px solid var(--line); padding-block:18px; }
+.agent-current { display:flex; gap:16px; align-items:baseline; }
+.agent-current p { color:var(--ink-2); font-size:var(--t-md); overflow-wrap:anywhere; }
+.agent-vitals { display:flex; flex-wrap:wrap; gap:16px 36px; margin-top:20px; }
+.agent-vitals dt { font-size:var(--t-xs); color:var(--muted); }
+.agent-vitals dd { margin-top:4px; font-size:var(--t-md); }
+.page-agent .agent-grid { grid-template-columns:minmax(0,1.45fr) minmax(290px,1fr); gap:28px; }
+.page-agent .panel { border:0; border-radius:0; padding:0; box-shadow:none; background:transparent; }
+.page-agent .panel-head { padding:0 0 14px; border-bottom:1px solid var(--line); margin:0; flex-wrap:wrap; }
+.page-agent .panel-head h2 { font-size:var(--t-lg); }
+.page-agent .panel-note { font-size:var(--t-xs); }
+.activity-stream { list-style:none; }
+.activity-entry { display:grid; grid-template-columns:78px minmax(0,1fr); gap:16px; padding:16px 0; border-bottom:1px solid var(--line); }
+.activity-entry time { font-size:var(--t-xs); color:var(--muted); font-variant-numeric:tabular-nums; padding-top:2px; }
+.activity-entry strong { font-size:var(--t-sm); font-weight:600; }
+.activity-entry p { margin-top:4px; font-size:var(--t-sm); color:var(--ink-2); overflow-wrap:anywhere; line-height:1.55; }
+.activity-entry.kind-crashed strong,.activity-entry.kind-error strong { color:var(--st-failed-text); }
+.page-agent .facts { padding-top:18px; gap:18px; grid-template-columns:1fr; }
+.page-agent .facts a { color:var(--ink-2); text-decoration:underline; text-underline-offset:3px; font-family:var(--font); margin-left:6px; }
+.agent-email { display:block; }
+.page-agent .term-panel { margin-bottom:28px; }
+.page-agent .term-panel summary { min-height:52px; }
+.page-agent .term-sub { overflow-wrap:anywhere; }
+.page-agent .term-bar { flex-wrap:wrap; }
+@media (max-width:1050px) {
+ .page-agent .agent-grid { grid-template-columns:minmax(0,1fr); }
+ .page-agent .agent-side { border-top:1px solid var(--line); padding-top:24px; }
+ .page-agent .facts { grid-template-columns:1fr 1fr; }
+}
+@media (max-width:700px) {
+ .page-agent .agent-head { grid-template-columns:1fr; }
+ .page-agent .agent-actions { justify-content:flex-start; }
+ .page-agent .agent-actions .btn { min-height:40px; }
+ .agent-current { flex-direction:column; gap:8px; }
+ .agent-vitals { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+ .page-agent .agent-grid { gap:26px; }
+ .page-agent .facts { grid-template-columns:1fr; }
+ .activity-entry { grid-template-columns:65px minmax(0,1fr); gap:12px; }
+ .page-agent .term-panel .term-sub { display:none; }
+ .page-agent .term-bar .term-status { flex-basis:100%; order:2; }
+}
+.agent-sections { display:flex; gap:20px; margin:0 0 20px; color:var(--ink-2); font-size:var(--t-sm); }
+.agent-sections a { text-underline-offset:4px; text-decoration:underline; padding-block:8px; }
+.page-agent :is(#h-activity,#h-config,#term-panel) { scroll-margin-top:20px; }
+/* Detail actions sit at the left on a phone; keep their disclosure on-screen. */
+@media (max-width:700px) {
+ .page-agent .agent-action-options { left:0; right:auto; }
+}

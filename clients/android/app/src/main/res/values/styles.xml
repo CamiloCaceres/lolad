@@ -1,0 +1,12 @@
+<resources>
+ <style name="AppTheme" parent="Theme.Material3.DayNight.NoActionBar">
+  <item name="colorPrimary">#24272D</item><item name="colorOnPrimary">#FAFBFD</item>
+  <item name="colorSurface">#FAFBFD</item><item name="colorOnSurface">#24272D</item>
+  <item name="colorOnSurfaceVariant">#525D6C</item><item name="colorOutline">#7F8D9F</item>
+  <item name="colorSecondaryContainer">#E9EDF3</item><item name="colorOnSecondaryContainer">#24272D</item>
+  <item name="colorSurfaceContainerHigh">#FAFBFD</item><item name="colorSurfaceContainer">#FAFBFD</item>
+  <item name="android:windowBackground">#E9EDF3</item><item name="android:colorBackground">#E9EDF3</item><item name="android:colorBackgroundFloating">#FAFBFD</item>
+  <item name="android:fontFamily">sans</item><item name="android:windowLightStatusBar">true</item>
+  <item name="android:colorAccent">#596A7D</item><item name="android:windowActionModeOverlay">true</item>
+ </style>
+</resources>

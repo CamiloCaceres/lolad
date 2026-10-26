@@ -18,15 +18,22 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type Config struct {
+type RemoteConfig struct {
 	Listen          string   `yaml:"listen"`
-	TmuxSocket      string   `yaml:"tmux_socket"`
-	AgentsDirs      []string `yaml:"agents_dirs"`
-	Agents          []string `yaml:"agents"`
-	LolabotTemplate string   `yaml:"lolabot_template"`
-	NewAgentsDir    string   `yaml:"new_agents_dir"`
-	ClaudeBin       string   `yaml:"claude_bin"`
-	StateDir        string   `yaml:"-"`
+	PublicURL       string   `yaml:"public_url"`
+	TailscaleLogins []string `yaml:"tailscale_logins"`
+}
+
+type Config struct {
+	Remote          RemoteConfig `yaml:"remote"`
+	Listen          string       `yaml:"listen"`
+	TmuxSocket      string       `yaml:"tmux_socket"`
+	AgentsDirs      []string     `yaml:"agents_dirs"`
+	Agents          []string     `yaml:"agents"`
+	LolabotTemplate string       `yaml:"lolabot_template"`
+	NewAgentsDir    string       `yaml:"new_agents_dir"`
+	ClaudeBin       string       `yaml:"claude_bin"`
+	StateDir        string       `yaml:"-"`
 }
 
 func DefaultConfig() Config {

@@ -14,14 +14,19 @@ import (
 	"strings"
 	"time"
 
+	"github.com/CamiloCaceres/lolad/internal/auth"
 	"github.com/CamiloCaceres/lolad/internal/core"
 	"github.com/CamiloCaceres/lolad/internal/hooks"
 )
 
 type Options struct {
-	HookSink core.HookSink
-	StateDir string
-	Trigger  func(*http.Request, string, string, string) error
+	Auth      *auth.Store
+	Version   string
+	Remote    bool
+	PublicURL string
+	HookSink  core.HookSink
+	StateDir  string
+	Trigger   func(*http.Request, string, string, string) error
 }
 
 func write(w http.ResponseWriter, v any, e error) {
@@ -75,6 +80,9 @@ func before(r *http.Request) time.Time {
 func New(s core.Service, o Options) http.Handler {
 	m := http.NewServeMux()
 	settingsRoutes(m, s)
+	// Creation metadata stays behind the same authentication boundary as the service.
+	m.HandleFunc("GET /api/create/options", func(w http.ResponseWriter, r *http.Request) { v, e := s.CreateOptions(r.Context()); write(w, v, e) })
+	remoteRoutes(m, s, o)
 	m.HandleFunc("GET /api/agents", func(w http.ResponseWriter, r *http.Request) { v, e := s.List(r.Context()); write(w, v, e) })
 	m.HandleFunc("GET /api/agents/{name}", func(w http.ResponseWriter, r *http.Request) {
 		v, e := s.Get(r.Context(), r.PathValue("name"))
@@ -110,6 +118,8 @@ func New(s core.Service, o Options) http.Handler {
 		write(w, v, e)
 	})
 	m.HandleFunc("GET /api/stream", func(w http.ResponseWriter, r *http.Request) {
+		_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
+		w.Header().Set("X-Accel-Buffering", "no")
 		f, ok := w.(http.Flusher)
 		if !ok {
 			http.Error(w, "stream unavailable", 500)
@@ -221,5 +231,9 @@ func New(s core.Service, o Options) http.Handler {
 		}
 		write(w, nil, o.Trigger(r, a, r.PathValue("name"), string(b)))
 	})
-	return http.NewCrossOriginProtection().Handler(m)
+	protection := http.NewCrossOriginProtection()
+	if o.PublicURL != "" {
+		_ = protection.AddTrustedOrigin(o.PublicURL)
+	}
+	return protection.Handler(m)
 }

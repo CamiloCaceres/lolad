@@ -314,19 +314,36 @@ type Policy interface {
 
 // CreateRequest makes a new lolabot instance and registers it.
 type CreateRequest struct {
-	Name        string      `json:"name"`        // display name, e.g. "Ultron"; slug derived unless Slug set
-	Slug        string      `json:"slug"`        // optional
-	Role        string      `json:"role"`        // default "Personal Assistant"
-	User        string      `json:"user"`        // operator's full name; default org.user.display
-	Dir         string      `json:"dir"`         // optional; default <config agents_dir>/<slug>
-	Harness     Harness     `json:"harness"`     // required
-	Model       string      `json:"model"`       // optional
-	Permissions Permissions `json:"permissions"` // default bypass
-	OnWake      string      `json:"on_wake"`     // optional; sensible default
-	Mission     string      `json:"mission"`     // optional: what this agent is for; sent as its first mail from the user
-	Team        string      `json:"team"`        // optional: team id to join
-	Head        bool        `json:"head"`        // make it the team's head
-	Start       bool        `json:"start"`       // start it right away
+	Name        string      `json:"name"`             // display name, e.g. "Ultron"; slug derived unless Slug set
+	Slug        string      `json:"slug"`             // optional
+	Role        string      `json:"role"`             // default "Personal Assistant"
+	User        string      `json:"user"`             // operator's full name; default org.user.display
+	Dir         string      `json:"dir"`              // optional; default <config agents_dir>/<slug>
+	Harness     Harness     `json:"harness"`          // required
+	Model       string      `json:"model"`            // optional
+	Skills      SkillsMode  `json:"skills,omitempty"` // empty = inherit; written before first launch
+	Permissions Permissions `json:"permissions"`      // default bypass
+	OnWake      string      `json:"on_wake"`          // optional; sensible default
+	Mission     string      `json:"mission"`          // optional: what this agent is for; sent as its first mail from the user
+	Team        string      `json:"team"`             // optional: team id to join
+	Head        bool        `json:"head"`             // make it the team's head
+	Start       bool        `json:"start"`            // start it right away
+}
+
+// CreateOptions describes configured creation placement and discovered lolabot instances.
+type CreateOptions struct {
+	DefaultDir string           `json:"default_dir"`
+	Candidates []AdoptCandidate `json:"candidates"`
+}
+
+type AdoptCandidate struct {
+	Dir        string  `json:"dir"`
+	Name       string  `json:"name"`
+	Slug       string  `json:"slug"`
+	Harness    Harness `json:"harness"`
+	Model      string  `json:"model"`
+	Registered bool    `json:"registered"`
+	Error      string  `json:"error,omitempty"`
 }
 
 // AdoptRequest registers an existing lolabot dir (adds the runtime block).
@@ -355,6 +372,7 @@ type Service interface {
 	Interrupt(ctx context.Context, name string) error                    // Escape into the session
 	Events(ctx context.Context, name string, limit int) ([]Event, error) // name "" = all
 	Subscribe(ctx context.Context) <-chan Event                          // live; closed when ctx ends
+	CreateOptions(ctx context.Context) (CreateOptions, error)
 	Create(ctx context.Context, req CreateRequest) (AgentStatus, error)
 	Adopt(ctx context.Context, req AdoptRequest) (AgentStatus, error)
 	Reload(ctx context.Context) error

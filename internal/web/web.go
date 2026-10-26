@@ -23,6 +23,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/CamiloCaceres/lolad/internal/auth"
 	"github.com/CamiloCaceres/lolad/internal/core"
 )
 
@@ -31,7 +32,11 @@ var embedded embed.FS
 
 // Options configure the dashboard.
 type Options struct {
-	Logger *slog.Logger // default slog.Default()
+	Auth          *auth.Store
+	PublicURL     string
+	TrustedOrigin string
+	Version       string
+	Logger        *slog.Logger // default slog.Default()
 	// Dir, when set, is this package's source directory: templates and static
 	// files are read from it and templates re-parsed on every request, so the
 	// UI can be edited without restarting. Leave empty in production.
@@ -39,10 +44,14 @@ type Options struct {
 }
 
 type server struct {
-	svc    core.Service
-	log    *slog.Logger
-	files  fs.FS // holds templates/ and static/
-	reload bool
+	auth          *auth.Store
+	publicURL     string
+	trustedOrigin string
+	version       string
+	svc           core.Service
+	log           *slog.Logger
+	files         fs.FS // holds templates/ and static/
+	reload        bool
 
 	mu     sync.Mutex
 	base   *template.Template
@@ -52,7 +61,7 @@ type server struct {
 
 // New returns the dashboard handler, to be mounted at "/".
 func New(svc core.Service, opts Options) http.Handler {
-	s := &server{svc: svc, log: opts.Logger, files: embedded}
+	s := &server{svc: svc, log: opts.Logger, files: embedded, auth: opts.Auth, publicURL: opts.PublicURL, trustedOrigin: opts.TrustedOrigin, version: opts.Version}
 	if s.log == nil {
 		s.log = slog.Default()
 	}
@@ -64,6 +73,7 @@ func New(svc core.Service, opts Options) http.Handler {
 	}
 
 	mux := http.NewServeMux()
+	s.remoteRoutes(mux)
 	mux.HandleFunc("GET /{$}", s.inbox)
 	mux.HandleFunc("GET /inbox/{peer}", s.thread)
 	mux.HandleFunc("POST /inbox/{peer}", s.send)
@@ -107,14 +117,24 @@ func New(svc core.Service, opts Options) http.Handler {
 	mux.HandleFunc("POST /new", s.create)
 	mux.HandleFunc("POST /adopt", s.adopt)
 
+	// Email provisioning routes (optional mailprov.Service).
+	mux.HandleFunc("GET /email", s.emailPage)
+	mux.HandleFunc("POST /email/provider", s.emailProviderSave)
+	mux.HandleFunc("POST /email/{name}/{op}", s.emailAction)
 	mux.HandleFunc("GET /traffic", s.traffic)
 	mux.HandleFunc("GET /stream", s.stream)
+	// Remote clients using the historical browser event path get the same stream.
+	mux.HandleFunc("GET /events", s.stream)
 	mux.HandleFunc("GET /static/", s.static)
 	mux.HandleFunc("/", s.notFound)
 
 	// Loopback-only, but a page on any other origin could still POST here
 	// from the user's browser; refuse cross-origin writes.
-	return headers(http.NewCrossOriginProtection().Handler(mux))
+	protection := http.NewCrossOriginProtection()
+	if opts.TrustedOrigin != "" {
+		_ = protection.AddTrustedOrigin(opts.TrustedOrigin)
+	}
+	return headers(protection.Handler(mux))
 }
 
 func headers(h http.Handler) http.Handler {
@@ -184,6 +204,7 @@ func (s *server) templates() (*template.Template, map[string]*template.Template)
 
 // layout is what every full page gets.
 type layout struct {
+	Version string
 	Title   string
 	Nav     string // inbox | agents | org | traffic | new
 	Class   string // extra body class
@@ -227,6 +248,7 @@ func (s *server) page(w http.ResponseWriter, r *http.Request, status int, name s
 		http.Error(w, "no page "+name, http.StatusInternalServerError)
 		return
 	}
+	l.Version = s.version
 	l.Me, l.Request = s.svc.Me(), r
 	l.Badges = s.badges(r)
 	if l.Nav == "" {

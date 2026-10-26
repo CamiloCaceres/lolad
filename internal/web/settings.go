@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/CamiloCaceres/lolad/internal/core"
+	"github.com/CamiloCaceres/lolad/internal/mailprov"
 )
 
 // The agent settings area: /agents/{name}/settings/{tab}. Every tab is a
@@ -51,12 +52,17 @@ type settingsView struct {
 	NewKey  string // echoed after a refused add; the value never is
 
 	// files
-	Groups   []fileGroup
-	File     *core.FileContent
-	Draft    string // the text in the editor when it differs from File (conflict)
-	Base     string // the hash the draft was based on, when that isn't File.Hash
-	Conflict bool
-	FileErr  string
+	Groups      []fileGroup
+	Tree        []*fileNode
+	Query       string
+	ShowAll     bool
+	HiddenFiles int
+	FileCount   int
+	File        *core.FileContent
+	Draft       string // the text in the editor when it differs from File (conflict)
+	Base        string // the hash the draft was based on, when that isn't File.Hash
+	Conflict    bool
+	FileErr     string
 
 	// email
 	Email      core.EmailSettings
@@ -133,14 +139,9 @@ func (s *server) settingsData(r *http.Request, name, tab string) (settingsView, 
 		if err != nil {
 			return v, err
 		}
-		for _, f := range files {
-			i := slices.IndexFunc(v.Groups, func(g fileGroup) bool { return g.Key == f.Group })
-			if i < 0 {
-				v.Groups = append(v.Groups, fileGroup{Key: f.Group, Label: cmp.Or(fileGroupLabels[f.Group], f.Group)})
-				i = len(v.Groups) - 1
-			}
-			v.Groups[i].Files = append(v.Groups[i].Files, f)
-		}
+		v.Query = strings.TrimSpace(r.URL.Query().Get("q"))
+		v.ShowAll = r.URL.Query().Get("all") == "1"
+		v.Groups, v.Tree, v.HiddenFiles, v.FileCount = organizeFiles(files, v.Query, v.ShowAll, cmp.Or(r.URL.Query().Get("path"), r.FormValue("path")))
 		if p := r.URL.Query().Get("path"); p != "" {
 			fc, err := s.svc.ReadFile(ctx, name, p)
 			if err != nil {
@@ -412,14 +413,41 @@ func (s *server) saveAccount(w http.ResponseWriter, r *http.Request) {
 	} else {
 		in.Accounts = append(in.Accounts, acc)
 	}
+	if i < 0 {
+		if managed, ok := s.svc.(mailprov.Service); ok {
+			if defaults, e := managed.EmailProvider(ctx, nil); e == nil {
+				if len(in.OperatorEmails) == 0 {
+					in.OperatorEmails = defaults.Operators
+				}
+				if len(cur.Accounts) == 0 && cur.Watch != "mod" {
+					in.Watch = defaults.Watch
+					in.WatchAccount = acc.Address
+					in.Every = "2m"
+				}
+			}
+		}
+	}
 	if err == nil {
 		_, err = s.svc.SaveEmail(ctx, name, in)
+	}
+	testMessage := ""
+	if err == nil && i < 0 {
+		test := s.svc.TestEmail
+		if managed, ok := s.svc.(mailprov.Service); ok {
+			test = managed.CheckEmail
+		}
+		result, e := test(ctx, name, acc.Address)
+		if e == nil && result.OK {
+			testMessage = " IMAP and SMTP logins passed."
+		} else {
+			testMessage = " Saved; connection needs attention. Use Test connection to check it again."
+		}
 	}
 	verb := "Added "
 	if i >= 0 {
 		verb = "Saved "
 	}
-	s.settled(w, r, "email", verb+acc.Address+".", err, func(v *settingsView) {
+	s.settled(w, r, "email", verb+acc.Address+"."+testMessage, err, func(v *settingsView) {
 		if err != nil {
 			acc.Password = "" // never echoed
 			v.EditAcct, v.AcctDraft = cmp.Or(orig, "new"), &acc
@@ -476,7 +504,11 @@ func (s *server) saveEmailGeneral(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) testEmail(w http.ResponseWriter, r *http.Request) {
 	addr := field(r, "address")
-	res, err := s.svc.TestEmail(r.Context(), r.PathValue("name"), addr)
+	test := s.svc.TestEmail
+	if managed, ok := s.svc.(mailprov.Service); ok {
+		test = managed.CheckEmail
+	}
+	res, err := test(r.Context(), r.PathValue("name"), addr)
 	if err != nil {
 		res = core.EmailTest{IMAP: "not tried", SMTP: "not tried", Detail: humanize(err, "")}
 	}

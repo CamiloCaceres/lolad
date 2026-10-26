@@ -37,6 +37,7 @@ type msgView struct {
 }
 
 type threadView struct {
+	Arrival string // created or adopted landing message
 	Peer    string
 	Display string
 	Agent   *core.AgentStatus
@@ -50,6 +51,7 @@ type threadView struct {
 type inboxView struct {
 	OOB    bool   // render the list as an out-of-band swap
 	Active string // the open conversation's peer
+	Recent []convView
 	Convs  []convView
 	Thread *threadView
 	Asks   []askView          // home: questions waiting on the user, newest first
@@ -139,6 +141,27 @@ func (s *server) inboxData(ctx context.Context, active string) (inboxView, map[s
 			v.Unread = append(v.Unread, cv)
 		}
 	}
+	slices.SortFunc(v.Convs, func(a, b convView) int {
+		rank := func(c convView) int {
+			if c.Pending {
+				return 0
+			}
+			if c.Unread > 0 {
+				return 1
+			}
+			return 2
+		}
+		if n := cmp.Compare(rank(a), rank(b)); n != 0 {
+			return n
+		}
+		return b.LastAt.Compare(a.LastAt)
+	})
+	for _, c := range v.Convs {
+		if !c.Pending && c.Unread == 0 {
+			v.Recent = append(v.Recent, c)
+		}
+	}
+	slices.SortFunc(v.Unread, func(a, b convView) int { return b.LastAt.Compare(a.LastAt) })
 	slices.SortFunc(v.Asks, func(a, b askView) int { return b.Ask.CreatedAt.Compare(a.Ask.CreatedAt) })
 	return v, agents, nil
 }
@@ -286,6 +309,11 @@ func (s *server) thread(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.fail(w, r, err)
 		return
+	}
+	if r.URL.Query().Get("created") == "1" {
+		t.Arrival = t.Display + " is ready"
+	} else if r.URL.Query().Get("adopted") == "1" {
+		t.Arrival = t.Display + " was added"
 	}
 	v.Thread = t
 	s.page(w, r, http.StatusOK, "inbox", layout{Title: t.Display, Class: "is-inbox has-thread", Data: v})

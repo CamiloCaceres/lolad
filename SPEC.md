@@ -388,3 +388,15 @@ func (d *Dir) Fingerprint(envFile string, rt core.Runtime) (sum string, parts ma
   `internal/harness/NOTES.md`.
 - codewhale: `[skills] scan_codewhale_only` (barebones = true, inherit =
   false), set per run without editing the agent's config if possible.
+
+### Creation metadata and first-launch skills (v3)
+
+`CreateRequest.Skills` is written into `runtime.skills` before the initial
+mission/start. Empty means inherit. When `Start` is false, creation disables both
+autostart and wake-on-message so its own queued mission cannot start it.
+`Service.CreateOptions(ctx) (CreateOptions, error)` supplies `DefaultDir` and
+`[]AdoptCandidate` (Dir, Name, Slug, Harness, Model, Registered, Error) from the
+configured discovery roots and explicit agent paths. It is read-only and exposed
+at `GET /api/create/options`. The New screen previews setup, validates known
+collisions inline, shows indeterminate setup progress and retained-input recovery,
+and lands in the agent conversation with optional Email/Org setup links.

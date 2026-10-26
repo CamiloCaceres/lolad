@@ -1,0 +1,11 @@
+/* Remote login: standalone, with no authenticated navigation or live requests. */
+.login-page { min-height:100dvh; display:grid; place-items:center; padding:24px; background:var(--bg); color:var(--ink); }
+.login-panel { width:100%; max-width:400px; }
+.login-brand { font-size:20px; font-weight:650; color:inherit; text-decoration:none; }
+.login-panel h1 { font-size:26px; line-height:1.2; margin:40px 0 16px; letter-spacing:-.6px; }
+.login-panel p { line-height:1.6; color:var(--muted); }
+.login-panel form { display:grid; gap:12px; margin:28px 0; }
+.login-panel input { width:100%; min-height:44px; font-size:16px; }
+.login-panel button { min-height:44px; justify-content:center; }
+.login-panel .login-note { font-size:12px; }
+.login-panel .login-error { padding:12px; border:1px solid currentColor; border-radius:6px; color:var(--ink); }

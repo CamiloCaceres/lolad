@@ -1,0 +1,1 @@
+Vendored from github.com/skip2/go-qrcode, commit da1b6568686e (2020-06-17), from the pre-existing local module cache. MIT license in LICENSE. Import paths changed to the internal location; no network dependency.

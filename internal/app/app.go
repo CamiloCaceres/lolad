@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/CamiloCaceres/lolad/internal/amp"
+	"github.com/CamiloCaceres/lolad/internal/auth"
 	"github.com/CamiloCaceres/lolad/internal/core"
 	"github.com/CamiloCaceres/lolad/internal/create"
 	"github.com/CamiloCaceres/lolad/internal/deliver"
@@ -28,6 +29,7 @@ import (
 )
 
 type App struct {
+	Auth *auth.Store
 	*supervisor.Supervisor
 	Registry   *registry.Registry
 	Provider   *amp.Provider
@@ -68,6 +70,10 @@ func New(ctx context.Context, configPath string) (_ *App, err error) {
 			a.DB.Close()
 		}
 	}()
+	a.Auth, err = auth.New(a.DB)
+	if err != nil {
+		return nil, err
+	}
 	a.Policy, err = policy.Open(filepath.Join(filepath.Dir(configPath), "org.yaml"), a.names()...)
 	if err != nil {
 		return nil, err
@@ -101,6 +107,7 @@ func New(ctx context.Context, configPath string) (_ *App, err error) {
 	if err != nil {
 		return nil, err
 	}
+	sessions.Exec = bin
 	a.Supervisor, err = supervisor.New(supervisor.Options{DB: a.DB, Agents: r.List(), Sessions: sessions, Launchers: launchers, Notifier: deliver.NewRouter(sessions, launchers, a.Tracker.State), Mailer: a.Provider, Launch: core.LaunchOpts{StateDir: a.Config.StateDir, LoladBin: bin, LoladURL: URL(a.Config.Listen)}, ReloadAgents: a.reloadRegistry})
 	if err != nil {
 		return nil, err
@@ -143,7 +150,7 @@ func URL(listen string) string {
 	}
 	return "http://" + listen
 }
-func (a *App) Close() error { return a.DB.Close() }
+func (a *App) Close() error { mailManagers.Delete(a); return a.DB.Close() }
 func (a *App) names() []string {
 	var n []string
 	for _, v := range a.Registry.List() {
@@ -327,6 +334,8 @@ func (a *App) Get(ctx context.Context, n string) (core.AgentStatus, error) {
 	return v, e
 }
 func (a *App) decorate(v *core.AgentStatus) {
+	// Runtime environment values are write-only, including on general status routes.
+	v.Runtime.Env = nil
 	v.Address = v.Name + "@" + a.Provider.Name()
 	for _, t := range a.Policy.Org().Teams {
 		if t.Head == v.Name {

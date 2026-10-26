@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-26T06:12:22.560524+00:00",
+  "title": "Design System: lolad Agents",
+  "extensions": {
+    "motion": [
+      {
+        "name": "ease",
+        "value": "cubic-bezier(0.22, 1, 0.36, 1)",
+        "purpose": "Inherited control easing."
+      },
+      {
+        "name": "control-feedback",
+        "value": "120ms",
+        "purpose": "Inherited button, field, and navigation feedback."
+      },
+      {
+        "name": "terminal-chevron",
+        "value": "160ms",
+        "purpose": "Terminal disclosure chevron rotation."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "1ms",
+        "purpose": "Animation and transition duration under prefers-reduced-motion: reduce."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "roster-three-column",
+        "value": "1250px"
+      },
+      {
+        "name": "shell-compact",
+        "value": "1180px"
+      },
+      {
+        "name": "detail-stack",
+        "value": "1050px"
+      },
+      {
+        "name": "shell-phone",
+        "value": "760px"
+      },
+      {
+        "name": "agents-phone",
+        "value": "700px"
+      }
+    ]
+  },
+  "narrative": {
+    "northStar": "A well-run control room.",
+    "overview": "Scoped record of the built Agents roster and detail. Neutral operating rows lead with current work; detail puts situation and vitals before unified activity and configuration. Mail is primary; terminal debugging starts closed.",
+    "keyCharacteristics": [
+      "Neutral surfaces with state hue",
+      "Teams with attention-first rows",
+      "Situation-first detail",
+      "Explicit action consequences"
+    ],
+    "rules": [
+      {
+        "name": "Hue means state",
+        "body": "Neutrals carry the interface; subdued hue marks state or operator attention. State always includes words or a glyph.",
+        "section": "colors"
+      }
+    ],
+    "dos": [
+      "Preserve existing Service and write-only secrets.",
+      "Review 1440px and 390px in light and dark.",
+      "Anchor detail action menus left on phones."
+    ],
+    "donts": [
+      "Do not blur resume restart with fresh wake.",
+      "Do not open the terminal automatically.",
+      "Do not expose secret values."
+    ]
+  }
+}

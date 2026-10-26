@@ -1,0 +1,87 @@
+/* Traffic: a mail audit, with attention reserved for blocked and queued mail. */
+.traffic-page { max-width: 1500px; }
+.traffic-page .page-head { align-items: center; }
+.traffic-filters { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; padding: 18px 0 22px; border-top: 1px solid var(--line); }
+.traffic-filters label { display: grid; gap: 6px; color: var(--muted); font-size: var(--t-xs); min-width: 180px; }
+.traffic-filters label:first-child { min-width: 230px; }
+.traffic-filters select { min-height: 38px; color: var(--ink); width: 100%; font-size: var(--t-sm); }
+.traffic-filters .btn { min-height: 38px; }
+.traffic-reset { padding: 9px 4px; font-size: var(--t-sm); }
+.traffic-filter-note { flex-basis: 100%; color: var(--muted); font-size: var(--t-xs); }
+.traffic-tools { display: flex; justify-content: space-between; align-items: center; gap: 16px; border-bottom: 1px solid var(--line); }
+.traffic-scopes, .traffic-modes { display: flex; gap: 18px; }
+.traffic-scopes a, .traffic-modes a { display: inline-flex; align-items: center; gap: 7px; min-height: 44px; text-decoration: none; color: var(--muted); font-size: var(--t-sm); border-bottom: 2px solid transparent; }
+.traffic-scopes a:hover, .traffic-modes a:hover { color: var(--ink); }
+.traffic-scopes a[aria-current], .traffic-modes a[aria-current] { border-color: var(--ink); color: var(--ink); font-weight: 600; }
+.traffic-scopes span { font-size: var(--t-xs); font-variant-numeric: tabular-nums; background: var(--bg-3); border-radius: 4px; padding: 1px 5px; }
+.traffic-caption { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 18px; padding: 16px 0; font-size: var(--t-xs); color: var(--muted); }
+.traffic-pair-filter { margin-top: 14px; font-size: var(--t-sm); display: flex; flex-wrap: wrap; gap: 8px; }
+.traffic-warning { background: var(--you-wash); color: var(--you-text); padding: 12px; margin-bottom: 12px; font-size: var(--t-sm); }
+.audit-list, .audit-pairs { border-top: 1px solid var(--line); }
+.audit-entry { border-bottom: 1px solid var(--line); scroll-margin-top: 20px; }
+.audit-entry > summary { display: grid; grid-template-columns: 108px minmax(0,1fr) 80px 18px; align-items: start; gap: 18px; padding: 16px 8px; cursor: pointer; list-style: none; }
+.audit-entry > summary::-webkit-details-marker, .audit-pair > summary::-webkit-details-marker { display: none; }
+.audit-entry > summary:hover, .audit-entry[open] > summary { background: var(--bg-2); }
+.audit-entry time { color: var(--muted); font-size: var(--t-xs); font-variant-numeric: tabular-nums; padding-top: 2px; }
+.audit-message { min-width: 0; display: grid; grid-template-columns: minmax(150px, 190px) minmax(0,1fr); gap: 3px 20px; align-items: baseline; }
+.audit-route { display: flex; gap: 6px; align-items: center; color: var(--ink-2); font-size: var(--t-sm); overflow-wrap: anywhere; }
+.audit-route .i { width: 13px; height: 13px; color: var(--muted); }
+.audit-subject { color: var(--ink); font-size: var(--t-sm); font-weight: 600; overflow-wrap: anywhere; }
+.audit-preview { grid-column: 2; font-size: var(--t-sm); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.audit-state { justify-self: end; font-size: var(--t-xs); line-height: 1.6; font-weight: 550; padding: 1px 7px; border-radius: 4px; color: var(--muted); }
+.state-Denied { color: var(--st-failed-text); background: var(--st-failed-wash); }
+.state-Queued { color: var(--you-text); background: var(--you-wash); }
+.audit-expand { color: var(--muted); padding-top: 2px; }
+.audit-entry[open] > summary .audit-expand { transform: rotate(180deg); }
+.audit-entry.is-denied .audit-subject { color: var(--st-failed-text); }
+.audit-detail { display: grid; grid-template-columns: minmax(0,1.6fr) minmax(220px,1fr); gap: 32px; padding: 20px 26px 26px 134px; background: var(--bg-2); border-top: 1px solid var(--line); }
+.audit-detail > div { min-width: 0; max-width: 75ch; overflow-wrap: anywhere; }
+.audit-detail h3 { font-size: var(--t-md); margin-bottom: 8px; }
+.audit-detail p + p { margin-top: 10px; }
+.audit-actions { display: flex; flex-wrap: wrap; gap: 10px 20px; margin-top: 24px; font-size: var(--t-sm); }
+.audit-meta { display: grid; gap: 10px; font-size: var(--t-xs); align-content: start; }
+.audit-meta dt { color: var(--muted); }
+.audit-meta dd { overflow-wrap: anywhere; }
+.audit-pair { border-bottom: 1px solid var(--line); }
+.audit-pair > summary { display: flex; align-items: center; gap: 18px; padding: 18px 10px; cursor: pointer; list-style: none; }
+.audit-pair > summary strong { font-size: var(--t-md); font-weight: 550; }
+.audit-pair > summary span { margin-left: auto; color: var(--muted); font-size: var(--t-xs); }
+.audit-pair[open] { background: var(--bg-2); }
+.audit-pair-link { display: inline-flex; gap: 6px; align-items: center; margin: 0 10px 16px; font-size: var(--t-sm); }
+@media (max-width: 1100px) {
+ .audit-message { grid-template-columns: minmax(0,1fr); }
+ .audit-preview { grid-column: 1; }
+ .audit-detail { padding-left: 24px; }
+}
+@media (max-width: 600px) {
+ .traffic-page .page-head { align-items: start; gap: 16px; }
+ .traffic-page .page-head > .btn { min-height: 36px; }
+ .traffic-filters { gap: 12px 10px; padding: 16px 0; }
+ .traffic-filters label, .traffic-filters label:first-child { min-width: 0; width: calc(50% - 5px); }
+ .traffic-filters label:first-child { width: 100%; }
+ .traffic-filters .btn { min-width: 120px; }
+ .traffic-tools { align-items: stretch; flex-direction: column; gap: 0; }
+ .traffic-scopes { justify-content: space-between; gap: 10px; }
+ .traffic-modes { gap: 20px; }
+ .traffic-modes a { min-height: 40px; }
+ .traffic-caption { display: block; padding: 12px 0; line-height: 1.6; }
+ .audit-entry > summary { grid-template-columns: minmax(0,1fr) auto 16px; gap: 6px 10px; padding: 14px 0; }
+ .audit-entry time { grid-column: 1; grid-row: 1; }
+ .audit-message { grid-column: 1 / -1; grid-row: 2; gap: 5px; }
+ .audit-state { grid-column: 2; grid-row: 1; }
+ .audit-expand { grid-column: 3; grid-row: 1; }
+ .audit-route { font-size: var(--t-sm); }
+ .audit-subject { font-size: var(--t-md); }
+ .audit-preview { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+ .audit-detail { grid-template-columns: minmax(0,1fr); padding: 18px 12px; gap: 24px; }
+ .audit-meta { grid-template-columns: minmax(0,1fr); }
+ .audit-pair > summary { flex-wrap: wrap; gap: 6px 12px; padding: 16px 0; }
+ .audit-pair > summary span { margin-left: 0; flex-basis: 100%; order: 3; }
+ .audit-pair > summary .i { margin-left: auto; }
+}
+/* Keep the audit within the first phone viewport. */
+@media (max-width: 600px) {
+ .traffic-page .page-head { flex-wrap: nowrap; align-items: center; }
+ .traffic-page .page-sub { display: none; }
+ .traffic-page .page-head > .btn { white-space: nowrap; }
+}

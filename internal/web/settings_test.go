@@ -415,7 +415,7 @@ func TestEmailTestResult(t *testing.T) {
 		agent, addr string
 		want        []string
 	}{
-		{"ultron", "ultron@mail.example.com", []string{"etest is-ok", "logged in", "imap.migadu.com:993"}},
+		{"ultron", "ultron@mail.example.com", []string{"etest is-ok", "logged in", "imap.purelymail.com:993"}},
 		{"ledger", "ops@example.com", []string{`etest-v is-ok`, `etest-v is-bad`, "535 5.7.8 Authentication failed", "app password"}},
 		{"ultron", "nobody@example.com", []string{"is-skip", "not tried"}},
 	} {
@@ -430,6 +430,35 @@ func TestEmailTestResult(t *testing.T) {
 		}
 		if strings.Contains(body, strings.Repeat("u", 24)) || strings.Contains(body, "bad-ooo") {
 			t.Errorf("%s test shows the password", tc.addr)
+		}
+	}
+}
+
+func TestFilesWorkspace(t *testing.T) {
+	e := setupSettings(t)
+	for _, tc := range []struct {
+		route  string
+		want   []string
+		absent []string
+	}{
+		{"/agents/iris/settings/files", []string{`data-file-filter`, `26 hidden`, `file-folder`, `AGENTS.md`, `settings.local.json`, `Show everything`}, []string{`title=".codewhale-home/builtin-plugins/`}},
+		{"/agents/iris/settings/files?q=COMPUTER-use&all=1", []string{`file-folder" open`, `computer-use-3898`, `browser.md`, `24 files`}, []string{`href="/agents/iris/settings/files?path=CLAUDE.md`}},
+		{"/agents/iris/settings/files?q=no-such-file", []string{`No matching files`, `0 files`}, nil},
+		{"/agents/iris/settings/files?path=tools/notes/README.md", []string{`title="tools/notes/README.md"`, `file-folder" open`, `data-editor`, `Preview`}, nil},
+	} {
+		code, body := e.get(tc.route)
+		if code != 200 {
+			t.Fatalf("%s: %d", tc.route, code)
+		}
+		for _, want := range tc.want {
+			if !strings.Contains(body, want) {
+				t.Errorf("%s lacks %q", tc.route, want)
+			}
+		}
+		for _, absent := range tc.absent {
+			if strings.Contains(body, absent) {
+				t.Errorf("%s contains %q", tc.route, absent)
+			}
 		}
 	}
 }

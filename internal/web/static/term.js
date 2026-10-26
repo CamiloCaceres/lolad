@@ -175,3 +175,26 @@
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => init(document));
   else init(document);
 })();
+
+// Agent actions use native details, with familiar Escape/outside-click dismissal.
+// Keep a live status refresh from replacing the menu while the operator reads it.
+(() => {
+  const openMenus = () => document.querySelectorAll('.agent-action-menu[open]');
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    openMenus().forEach((menu) => {
+      menu.open = false;
+      menu.querySelector('summary').focus();
+    });
+  });
+  document.addEventListener('click', (event) => {
+    openMenus().forEach((menu) => {
+      if (!menu.contains(event.target)) menu.open = false;
+    });
+  });
+  document.addEventListener('htmx:beforeRequest', (event) => {
+    const source = event.detail.requestConfig?.triggeringEvent?.type || '';
+    if (!source.startsWith('lolad:')) return;
+    if (event.detail.elt?.querySelector('.agent-action-menu[open]')) event.preventDefault();
+  });
+})();

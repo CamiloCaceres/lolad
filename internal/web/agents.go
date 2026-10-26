@@ -8,19 +8,94 @@ import (
 	"fmt"
 	"maps"
 	"net/http"
+	"net/url"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/robfig/cron/v3"
 
 	"github.com/CamiloCaceres/lolad/internal/core"
 )
 
 type fleetView struct {
-	Agents []core.AgentStatus
-	Counts []stateCount
-	Teams  map[string]string // id -> name
+	Agents                []core.AgentStatus
+	Counts                []stateCount
+	Teams                 map[string]string // id -> name
+	Groups                []agentGroup
+	Total, NeedsAttention int
+	Query, Filter         string
+}
+
+// Fleet rows keep status and the next clock-based trigger together.
+type fleetAgent struct {
+	core.AgentStatus
+	NextTrigger time.Time
+}
+type agentGroup struct {
+	Name   string
+	Agents []fleetAgent
+}
+
+func agentNeedsAttention(a core.AgentStatus) bool {
+	return attention(a.State) || a.State == core.StateUnknown || a.PendingRestart
+}
+
+// nextAgentTrigger is a schedule preview, not a promise of delivery. Mail polls
+// have no last-poll timestamp in Service, so only cron has a knowable next run.
+func nextAgentTrigger(rt core.Runtime, now time.Time) time.Time {
+	var next time.Time
+	for _, trigger := range rt.Triggers {
+		if trigger.Cron == "" {
+			continue
+		}
+		schedule, err := cron.ParseStandard(trigger.Cron)
+		if err != nil {
+			continue
+		}
+		at := schedule.Next(now)
+		if !at.IsZero() && (next.IsZero() || at.Before(next)) {
+			next = at
+		}
+	}
+	return next
+}
+
+func (v *fleetView) filter(q, filter string) {
+	v.Query, v.Filter, v.Total = strings.TrimSpace(q), filter, len(v.Agents)
+	groups := map[string][]fleetAgent{}
+	for _, a := range v.Agents {
+		if agentNeedsAttention(a) {
+			v.NeedsAttention++
+		}
+		if filter == "attention" && !agentNeedsAttention(a) {
+			continue
+		}
+		text := strings.ToLower(strings.Join([]string{a.Name, a.Display, a.Role, a.Runtime.Model, v.Teams[a.Team]}, " "))
+		if !strings.Contains(text, strings.ToLower(v.Query)) {
+			continue
+		}
+		group := cmp.Or(v.Teams[a.Team], a.Team, "Independent")
+		if len(v.Teams) == 0 {
+			group = "All agents"
+		}
+		groups[group] = append(groups[group], fleetAgent{a, nextAgentTrigger(a.Runtime, time.Now())})
+	}
+	for _, name := range slices.Sorted(maps.Keys(groups)) {
+		agents := groups[name]
+		slices.SortStableFunc(agents, func(a, b fleetAgent) int {
+			aa, ba := agentNeedsAttention(a.AgentStatus), agentNeedsAttention(b.AgentStatus)
+			if aa != ba {
+				if aa {
+					return -1
+				}
+				return 1
+			}
+			return strings.Compare(a.Name, b.Name)
+		})
+		v.Groups = append(v.Groups, agentGroup{name, agents})
+	}
 }
 
 type stateCount struct {
@@ -63,6 +138,7 @@ func (s *server) fleet(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	v.filter(r.URL.Query().Get("q"), r.URL.Query().Get("status"))
 	s.page(w, r, http.StatusOK, "agents", layout{Title: "Agents", Data: v})
 }
 
@@ -72,16 +148,26 @@ func (s *server) fleetFragment(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	v.filter(r.FormValue("q"), r.FormValue("status"))
 	s.fragment(w, http.StatusOK, "fleet-body", v)
 }
 
 type agentView struct {
-	A        core.AgentStatus
-	TeamName string
-	Events   []core.Event
-	Mail     []core.Mail
-	Me       string
-	EnvKeys  []string
+	A                core.AgentStatus
+	TeamName         string
+	Events           []core.Event
+	Mail             []core.Mail
+	Me               string
+	EnvKeys          []string
+	Timeline         []activityItem
+	NextTrigger      time.Time
+	Emails           []string
+	EmailUnavailable bool
+}
+
+type activityItem struct {
+	At                  time.Time
+	Kind, Title, Detail string
 }
 
 func (s *server) agentData(ctx context.Context, name string) (agentView, error) {
@@ -89,7 +175,14 @@ func (s *server) agentData(ctx context.Context, name string) (agentView, error) 
 	if err != nil {
 		return agentView{}, err
 	}
-	v := agentView{A: a, Me: s.svc.Me().Name, EnvKeys: slices.Sorted(maps.Keys(a.Runtime.Env))}
+	v := agentView{A: a, Me: s.svc.Me().Name, EnvKeys: slices.Sorted(maps.Keys(a.Runtime.Env)), NextTrigger: nextAgentTrigger(a.Runtime, time.Now())}
+	if email, err := s.svc.Email(ctx, name); err == nil {
+		for _, account := range email.Accounts {
+			v.Emails = append(v.Emails, account.Address)
+		}
+	} else {
+		v.EmailUnavailable = true
+	}
 	if org, err := s.svc.Org(ctx); err == nil {
 		for _, t := range org.Teams {
 			if t.ID == a.Team {
@@ -128,6 +221,30 @@ func (s *server) agentData(ctx context.Context, name string) (agentView, error) 
 			}
 		}
 	}
+	// Mail becomes a first-class timeline entry in either direction. Suppress its
+	// corresponding lifecycle event to avoid showing the same delivery twice.
+	mailDetails := map[string]bool{}
+	for _, m := range v.Mail {
+		detail := fmt.Sprintf("%s → %s: %s", m.FromName, m.ToName, cmp.Or(subject(m), excerpt(m.Body, 80)))
+		mailDetails[detail] = true
+		mailDetails[fmt.Sprintf("%s → %s: %s", m.FromName, m.ToName, m.Subject)] = true
+		title := "Mail received from " + m.FromName
+		if m.FromName == name {
+			title = "Mail sent to " + m.ToName
+		}
+		v.Timeline = append(v.Timeline, activityItem{m.CreatedAt, "mail", title, cmp.Or(subject(m), excerpt(m.Body, 120))})
+	}
+	for _, e := range v.Events {
+		if e.Kind == "mail" && mailDetails[e.Detail] {
+			continue
+		}
+		title := map[string]string{"state": "Activity changed", "started": "Agent started", "crashed": "Agent crashed", "exited": "Process exited", "rotated": "Fresh conversation", "trigger": "Trigger fired", "notified": "Mail surfaced", "restarted": "Agent restarted", "error": "Error", "policy": "Messaging policy"}[e.Kind]
+		if title == "" {
+			title = e.Kind
+		}
+		v.Timeline = append(v.Timeline, activityItem{e.At, e.Kind, title, e.Detail})
+	}
+	slices.SortStableFunc(v.Timeline, func(a, b activityItem) int { return b.At.Compare(a.At) })
 	return v, nil
 }
 
@@ -188,7 +305,11 @@ func (s *server) control(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !isHX(r) {
-		http.Redirect(w, r, cmp.Or(r.FormValue("back"), "/agents/"+name), http.StatusSeeOther)
+		back := cmp.Or(r.FormValue("back"), "/agents/"+name)
+		if r.FormValue("from") == "fleet" {
+			back = "/agents?" + url.Values{"q": {r.FormValue("q")}, "status": {r.FormValue("status")}}.Encode()
+		}
+		http.Redirect(w, r, back, http.StatusSeeOther)
 		return
 	}
 	toast(w, "ok", verb+" "+name)
@@ -198,6 +319,7 @@ func (s *server) control(w http.ResponseWriter, r *http.Request) {
 			s.fail(w, r, err)
 			return
 		}
+		v.filter(r.FormValue("q"), r.FormValue("status"))
 		s.fragment(w, http.StatusOK, "fleet-body", v)
 		return
 	}
@@ -231,7 +353,9 @@ type termMsg struct {
 func (s *server) terminal(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	readOnly := r.URL.Query().Get("mode") != "control"
-	c, err := websocket.Accept(w, r, nil) // same-origin only (default OriginPatterns)
+	// Remote auth permits only the configured public HTTPS origin.
+	_ = http.NewResponseController(w).SetReadDeadline(time.Time{})
+	c, err := websocket.Accept(w, r, s.websocketOptions())
 	if err != nil {
 		return
 	}

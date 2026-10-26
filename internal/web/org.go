@@ -25,8 +25,9 @@ type participant struct {
 }
 
 type cell struct {
-	From, To string
-	Self     bool
+	From, To    string
+	Explanation string
+	Self        bool
 	core.Decision
 }
 
@@ -43,6 +44,10 @@ type orgView struct {
 	Patterns     []string
 	Error        string
 	Notice       string
+	Create       bool
+	Sender       string
+	Choices      []orgChoice
+	RuleViews    []orgRuleView
 	Test         *cell
 }
 
@@ -77,6 +82,9 @@ func (s *server) orgData(ctx context.Context) (orgView, error) {
 				continue
 			}
 			n := &teamNode{Team: t, Depth: depth, Head: agents[t.Head]}
+			if t.Head != "" && n.Head == nil {
+				n.Head = &core.AgentStatus{Agent: core.Agent{Name: t.Head, Display: t.Head}, State: core.StateUnknown}
+			}
 			v.Depth[t.ID] = depth + 1
 			v.Teams = append(v.Teams, t)
 			placed[t.Head] = true
@@ -129,6 +137,7 @@ func (s *server) orgData(ctx context.Context) (orgView, error) {
 			c := cell{From: from.Name, To: to.Name, Self: from.Name == to.Name}
 			if !c.Self {
 				c.Decision = s.svc.Check(ctx, from.Name, to.Name)
+				c.Explanation = orgExplanation(org, c.Decision)
 			}
 			row = append(row, c)
 		}
@@ -142,6 +151,22 @@ func (s *server) orgData(ctx context.Context) (orgView, error) {
 	for _, a := range list {
 		v.Patterns = append(v.Patterns, a.Name)
 	}
+	v.Sender = org.User.Name
+	v.Choices = []orgChoice{{"*", "Everyone"}, {"user", "You"}, {org.User.Name, "You (" + org.User.Name + ")"}}
+	for _, t := range v.Teams {
+		v.Choices = append(v.Choices, orgChoice{"team:" + t.ID, t.Name + " and its sub-teams"})
+	}
+	for _, a := range list {
+		v.Choices = append(v.Choices, orgChoice{a.Name, a.Display})
+	}
+	for _, rule := range org.Rules {
+		for _, value := range []string{rule.From, rule.To} {
+			if !slices.ContainsFunc(v.Choices, func(c orgChoice) bool { return c.Value == value }) {
+				v.Choices = append(v.Choices, orgChoice{value, value + " (not registered)"})
+			}
+		}
+		v.RuleViews = append(v.RuleViews, orgRuleView{Rule: rule, FromLabel: orgLabel(v.Choices, rule.From), ToLabel: orgLabel(v.Choices, rule.To)})
+	}
 	return v, nil
 }
 
@@ -150,6 +175,12 @@ func (s *server) orgPage(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.fail(w, r, err)
 		return
+	}
+	v.Create = r.URL.Query().Get("create") == "1"
+	for _, p := range v.People {
+		if p.Name == r.URL.Query().Get("sender") {
+			v.Sender = p.Name
+		}
 	}
 	s.page(w, r, http.StatusOK, "org", layout{Title: "Org", Data: v})
 }
@@ -294,7 +325,16 @@ func (s *server) orgRuleAdd(w http.ResponseWriter, r *http.Request) {
 		if rule.From == "" || rule.To == "" {
 			return fmt.Errorf("%w: a rule needs both from and to", core.ErrInvalid)
 		}
-		org.Rules = append(org.Rules, rule)
+		if r.FormValue("mode") == "protect" {
+			if rule.To == "*" || rule.To == "user" || strings.HasPrefix(rule.To, "team:") || rule.To == org.User.Name {
+				return fmt.Errorf("%w: choose one agent to protect", core.ErrInvalid)
+			}
+			org.Rules = append([]core.Rule{{From: "user", To: rule.To, Allow: true, Note: "Only you may message this agent"}, {From: "*", To: rule.To, Allow: false, Note: "Protected from other senders"}}, org.Rules...)
+		} else if r.FormValue("priority") == "first" {
+			org.Rules = append([]core.Rule{rule}, org.Rules...)
+		} else {
+			org.Rules = append(org.Rules, rule)
+		}
 		return nil
 	})
 }
@@ -307,6 +347,12 @@ func (s *server) orgRuleOp(w http.ResponseWriter, r *http.Request) {
 			return fmt.Errorf("%w: no rule %s", core.ErrInvalid, r.PathValue("i"))
 		}
 		switch op {
+		case "save":
+			from, to := strings.TrimSpace(r.FormValue("from")), strings.TrimSpace(r.FormValue("to"))
+			if from == "" || to == "" {
+				return fmt.Errorf("%w: choose a sender and recipient", core.ErrInvalid)
+			}
+			org.Rules[i] = core.Rule{From: from, To: to, Allow: r.FormValue("allow") != "deny", Both: r.FormValue("both") == "on", Note: strings.TrimSpace(r.FormValue("note"))}
 		case "delete":
 			org.Rules = slices.Delete(org.Rules, i, i+1)
 		case "up":
@@ -352,6 +398,12 @@ func (s *server) orgCheck(w http.ResponseWriter, r *http.Request) {
 	}
 	if !c.Self {
 		c.Decision = s.svc.Check(r.Context(), from, to)
+		org, err := s.svc.Org(r.Context())
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		c.Explanation = orgExplanation(org, c.Decision)
 	}
 	if !isHX(r) {
 		v, err := s.orgData(r.Context())
@@ -377,4 +429,55 @@ func slugify(s string) string {
 		}
 	}
 	return strings.Trim(b.String(), "-")
+}
+
+// Sentence labels keep policy patterns out of the editor's working vocabulary.
+type orgChoice struct{ Value, Label string }
+type orgRuleView struct {
+	core.Rule
+	FromLabel, ToLabel string
+}
+
+func orgLabel(choices []orgChoice, value string) string {
+	for _, c := range choices {
+		if c.Value == value {
+			return c.Label
+		}
+	}
+	return value
+}
+func orgExplanation(org core.Org, d core.Decision) string {
+	var n int
+	if _, err := fmt.Sscanf(d.Reason, "rule %d", &n); err == nil && n > 0 && n <= len(org.Rules) {
+		r := org.Rules[n-1]
+		if r.Note != "" {
+			return fmt.Sprintf("Exception %d: %s", n, r.Note)
+		}
+		return fmt.Sprintf("Exception %d is the first matching rule.", n)
+	}
+	switch {
+	case strings.HasPrefix(d.Reason, "system"):
+		return "The system may always send."
+	case strings.Contains(d.Reason, "user_to_agents"):
+		if d.Allow {
+			return "Your access to agents allows this."
+		}
+		return "Your access to agents excludes this recipient."
+	case strings.Contains(d.Reason, "agents_to_user"):
+		if d.Allow {
+			return "Agent access to you allows this."
+		}
+		return "Agent access to you excludes this sender."
+	case strings.HasPrefix(d.Reason, "vertical"):
+		return "Their head–member or direct reporting line allows this."
+	case strings.Contains(d.Reason, "open"):
+		return "Members of this open team may talk directly."
+	case strings.Contains(d.Reason, "independents"):
+		if d.Allow {
+			return "Independent agents may talk with everyone."
+		}
+		return "An agent is independent; agent access needs an exception."
+	default:
+		return "No direct reporting line, open team or exception connects them."
+	}
 }

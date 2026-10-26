@@ -128,3 +128,46 @@ private per-run overlay, preserving the source config. This was verified with
 real `lolad msg read` and `tell-user` execution in the TUI. See
 [the upstream 0.10.1 policy parser](https://github.com/codewhale-hq/CodeWhale/blob/v0.10.1/crates/execpolicy/src/approval_mode.rs)
 and [startup policy precedence](https://github.com/codewhale-hq/CodeWhale/blob/v0.10.1/crates/tui/src/tui/app/init.rs).
+
+## Dashboard creation flow (v3)
+
+The New agent screen leads with name and purpose. The purpose is queued as the
+first task mail and, unless custom `on_wake` instructions were supplied, is
+included in the runtime wake-up prompt for future fresh conversations. A role
+label remains a separate optional setup field. Claude Code, the harness default
+model, inherited skills, unattended permissions and immediate start are the UI
+defaults. Advanced options retain explicit slug, directory, operator, team/head
+and custom wake-up instructions.
+
+`CreateRequest.skills` accepts `inherit`, `barebones`, or empty (inherit).
+Creator validates it and writes it into runtime before identity/mission/start,
+so the first launch already uses the selected skill isolation. A creation with
+`start: false` writes both `autostart: false` and `wake_on_message: false`; its
+queued first mission must not silently wake it. The operator can start it from
+the conversation or change these settings later.
+
+`Service.CreateOptions(ctx)` returns `core.CreateOptions{DefaultDir, Candidates}`;
+`GET /api/create/options` exposes the same JSON shape behind the normal API auth
+boundary. The real service scans configured `agents_dirs` and `new_agents_dir`
+one level deep, plus explicit `agents` paths, deduplicates/sorts them, and reads
+only `lolabot.yaml`. Candidate fields are `dir`, `name`, `slug`, `harness`,
+`model`, `registered`, and optional `error`. It checks for `CLAUDE.md` without
+reading it. Malformed YAML errors are generic, since parser diagnostics can
+otherwise echo credential-bearing source lines. Registered directories appear
+under a collapsed disclosure; incomplete directories show the recovery needed.
+
+The page previews its destination, first message and generated files. Known slug
+and directory collisions are checked locally and again through the service
+before creation; the Creator still owns the final nonempty-directory check.
+Setup is synchronous: the page shows indeterminate progress for the outstanding
+request, without claiming individual stages have completed. Failure keeps every
+entered value and offers adoption of partially created files. A lost connection
+asks the operator to check Agents before retrying, since completion is uncertain.
+Successful creation opens `/inbox/<slug>?created=1`; adoption opens
+`/inbox/<slug>?adopted=1`, with optional Email and Org links in the arrival banner.
+Adoption stays stopped and does not send a new mission.
+
+Frontend verification uses only webdev's fake service on `127.0.0.1:4198`.
+Screenshots are named `internal/web/testdata/screenshots/v3-new-*.png` and
+`v3-new-adopt-*.png`. The in-memory fake exposes ready, incomplete and registered
+examples, and applies creation skills/autostart without touching agent files.

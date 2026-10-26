@@ -13,6 +13,11 @@ import (
 )
 
 func settingsCommand(ctx context.Context, base string, args []string, stdin io.Reader, out io.Writer) error {
+	if args[0] == "email" {
+		if handled, e := emailCommand(ctx, base, args[1:], stdin, out); handled {
+			return e
+		}
+	}
 	if len(args) < 2 {
 		return fmt.Errorf("usage: lolad %s <agent> (run lolad help)", args[0])
 	}

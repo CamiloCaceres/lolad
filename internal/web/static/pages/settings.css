@@ -1,0 +1,79 @@
+/* Settings is a workspace: one section switcher, then the task at full width. */
+.page-settings { max-width: 1440px; }
+.page-settings .set-layout { display: block; }
+.page-settings .set-nav { position: static; flex-direction: row; gap: 20px; overflow-x: auto; border-bottom: 1px solid var(--line); margin-bottom: 24px; padding: 0; border-radius: 0; scrollbar-width: thin; }
+.page-settings .set-nav a { min-height: 46px; padding: 0 2px; border-radius: 0; border-bottom: 2px solid transparent; }
+.page-settings .set-nav a[aria-current="page"] { background: transparent; border-color: var(--ink); }
+.page-settings .set-panel { max-width: 1040px; }
+.page-settings .set-panel.is-files { max-width: none; }
+.page-settings .set-head { margin-bottom: 16px; }
+.page-settings .set-section-title { margin-top: 24px; padding-bottom: 12px; font-size: var(--t-lg); }
+.page-settings .set-row { grid-template-columns: minmax(180px, 0.75fr) minmax(0, 2fr); gap: 24px; padding: 22px 0; }
+.page-settings .models { grid-template-columns: repeat(2, minmax(0, 1fr)); border: none; gap: 8px; overflow: visible; }
+.page-settings .model { border: 1px solid var(--line); border-radius: var(--r); grid-template-columns: 16px minmax(0, 1fr); align-content: start; min-height: 76px; }
+.page-settings .model-id { grid-column: 2; grid-row: auto; overflow-wrap: anywhere; }
+.page-settings .model:has(input:checked) { border-color: var(--ink-2); }
+.page-settings .model.is-custom { grid-column: 1 / -1; min-height: auto; }
+.page-settings .model.is-custom > input:not([type=radio]) { grid-column: 2; }
+.page-settings .set-count { font-size: var(--t-xs); color: var(--muted); font-weight: 400; }
+.page-settings .skill-filter { max-width: none; min-height: 40px; }
+.page-settings .skill { padding: 14px; }
+.page-settings .skill-desc { max-width: 65ch; }
+.page-settings .secret-add { background: transparent; border-top: 1px solid var(--line); padding: 24px 0; border-radius: 0; }
+.page-settings .files { grid-template-columns: 300px minmax(0, 1fr); gap: 20px; align-items: stretch; }
+.page-settings .file-list { position: static; max-height: max(460px, calc(100dvh - 290px)); overflow: auto; padding: 0 12px 12px 0; scrollbar-width: thin; border-right: 1px solid var(--line); }
+.page-settings .file-search { position: sticky; top: 0; z-index: 1; background: var(--bg); display: grid; gap: 8px; padding-bottom: 16px; }
+.page-settings .file-search > label:first-child { display: flex; align-items: center; justify-content: space-between; font-weight: 600; }
+.page-settings .file-search kbd { color: var(--muted); font-weight: 400; border: 1px solid var(--line); padding: 0 6px; border-radius: 4px; }
+.page-settings .file-search-row { display: flex; gap: 6px; }
+.page-settings .file-search-row input { min-width: 0; }
+.page-settings .file-show-all { font-size: var(--t-xs); }
+.page-settings .file-group { margin: 0 0 10px; }
+.page-settings .file-group-h { padding: 7px 6px; font-size: var(--t-sm); cursor: pointer; color: var(--ink-2); }
+.page-settings .file-group-h > span { float: right; font-size: var(--t-xs); color: var(--muted); }
+.page-settings .file-list a { min-height: 42px; align-items: center; padding: 7px 8px; }
+.page-settings .file-name { display: flex; flex-direction: column; min-width: 0; white-space: normal; overflow: visible; }
+.page-settings .file-basename { overflow-wrap: anywhere; }
+.page-settings .file-dir { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: ltr; text-align: left; max-width: 212px; }
+.page-settings .file-folder summary { cursor: pointer; padding: 8px 6px; font-size: var(--t-sm); overflow-wrap: anywhere; }
+.page-settings .file-folder ul { padding-left: 12px; border-left: 1px solid var(--line); margin-left: 8px; }
+.page-settings .file-none { min-height: 420px; align-content: center; border-style: solid; }
+.page-settings .editor { height: max(460px, calc(100dvh - 290px)); }
+.page-settings .editor-head { flex-wrap: wrap; }
+.page-settings .editor-title { flex-basis: 200px; }
+.page-settings .editor-path { white-space: normal; overflow-wrap: anywhere; }
+.page-settings textarea.editor-text { flex: 1; min-height: 160px; resize: none; }
+.page-settings .md-preview { flex: 1; min-height: 160px; max-width: none; overflow: auto; }
+.page-settings .pending { border-color: var(--you-line); background: var(--you-wash); }
+.page-settings .set-actions { background: var(--bg); }
+.page-settings :is(input, textarea) { caret-color: var(--ink); }
+.page-settings ::selection { background: var(--bg-4); color: var(--ink); }
+@media (max-width: 900px) {
+  .page-settings .files { grid-template-columns: 250px minmax(0, 1fr); gap: 12px; }
+  .page-settings .file-dir { max-width: 170px; }
+}
+@media (max-width: 640px) {
+  .page-settings .set-head-actions { display: none; }
+  .page-settings .set-nav { gap: 18px; margin-bottom: 20px; }
+  .page-settings .set-nav .i { display: none; }
+  .page-settings .set-row { grid-template-columns: minmax(0, 1fr); gap: 14px; padding: 20px 0; }
+  .page-settings .set-label p { max-width: none; }
+  .page-settings .models { grid-template-columns: minmax(0, 1fr); }
+  .page-settings .model { min-height: 64px; }
+  .page-settings .files { grid-template-columns: minmax(0, 1fr); }
+  .page-settings .file-list { border-right: 0; padding-right: 0; max-height: none; }
+  .page-settings .file-dir { max-width: 245px; }
+  .page-settings .is-files.has-file .file-list { display: none; }
+  .page-settings .is-files.has-file.is-browsing .file-list { display: block; }
+  .page-settings .is-files.is-browsing .file-pane { display: none; }
+  .page-settings .editor { height: calc(100dvh - 235px); min-height: 420px; }
+  .page-settings .editor-title { flex-basis: calc(100% - 70px); }
+  .page-settings .editor-head .file-back { display: inline-flex; }
+  .page-settings .editor-head .seg { margin-left: auto; }
+  .page-settings .skill { flex-wrap: wrap; gap: 10px; }
+  .page-settings .skill-ops { margin-left: auto; }
+  .page-settings .set-head .agent-role { flex-wrap: wrap; gap: 4px 12px; }
+  .page-settings .set-dir { max-width: 100%; }
+  .page-settings .set-actions { bottom: 0; flex-wrap: wrap; gap: 8px; }
+  .page-settings .set-actions .help { flex: 1 1 170px; }
+}

@@ -2,9 +2,13 @@
   <header class="page-head">
     <div>
       <h1 class="page-title">Agents</h1>
-      <p class="page-sub">Everyone on staff, what they're doing, and the controls to kick them.</p>
+      <p class="page-sub">Check current work, spot a problem, and get an agent moving again.</p>
     </div>
     {{if .Data.Agents}}<div class="page-actions"><a class="btn" href="/new">{{template "icon" "plus"}}<span>New agent</span></a></div>{{end}}
   </header>
-  {{template "fleet" .Data}}
+  {{if .Data.Agents}}<form id="fleet-filters" class="roster-filters" method="get" action="/agents" hx-get="/fragments/fleet" hx-target="#fleet" hx-swap="outerHTML" hx-trigger="submit, input changed delay:250ms from:input, change from:select">
+ <label for="agent-search">Find an agent<input id="agent-search" type="search" name="q" value="{{.Data.Query}}" placeholder="Name, role, model or team" autocomplete="off"></label>
+ <label for="agent-filter">Show<select id="agent-filter" name="status"><option value="">All agents</option><option value="attention"{{if eq .Data.Filter "attention"}} selected{{end}}>Needs attention</option></select></label><button class="btn" type="submit">Filter</button>
+ </form>{{end}}
+ {{template "fleet" .Data}}
 </div>{{end}}

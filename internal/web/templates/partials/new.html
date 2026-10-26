@@ -1,80 +1,63 @@
-{{define "new-body"}}{{$v := .}}<div id="new-body">
-  <div class="segmented" role="radiogroup" aria-label="How to add the agent">
-    <input type="radio" name="mode" id="mode-create" value="create"{{if not .Adopting}} checked{{end}}>
-    <label for="mode-create">Create new</label>
-    <input type="radio" name="mode" id="mode-adopt" value="adopt"{{if .Adopting}} checked{{end}}>
-    <label for="mode-adopt">Adopt existing directory</label>
+{{define "new-body"}}{{$v := .}}<div id="new-body" data-new-agent data-existing="{{.Existing}}" data-default-dir="{{.Options.DefaultDir}}">
+  <div class="segmented new-modes" role="radiogroup" aria-label="How to add the agent">
+    <input type="radio" name="mode" id="mode-create" value="create"{{if not .Adopting}} checked{{end}}><label for="mode-create">Create new</label>
+    <input type="radio" name="mode" id="mode-adopt" value="adopt"{{if .Adopting}} checked{{end}}><label for="mode-adopt">Adopt a directory</label>
   </div>
-
-  <form class="form new-form mode-create" method="post" action="/new" hx-post="/new" hx-target="#new-body" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]">
-    {{with .Error}}<p class="flash is-error" role="alert">{{template "icon" "x"}}<span>{{.}}</span></p>{{end}}
-    <fieldset class="section">
-      <legend>Identity</legend>
-      <div class="row2">
-        <label class="field"><span class="label">Name</span><input name="name" value="{{.Req.Name}}" required placeholder="Ultron" autocomplete="off"><span class="help">The display name, from <code>agent.name</code>.</span></label>
-        <label class="field"><span class="label">Slug <span class="opt">optional</span></span><input name="slug" value="{{.Req.Slug}}" placeholder="from the name" pattern="[a-z0-9][a-z0-9-]{0,62}" title="lowercase letters, digits and dashes" autocomplete="off" class="mono"><span class="help">tmux session, AMP name, URL. Lowercase.</span></label>
-      </div>
-      <label class="field"><span class="label">Role</span><input name="role" value="{{.Req.Role}}" placeholder="Personal Assistant"></label>
-    </fieldset>
-
-    <fieldset class="section">
-      <legend>Harness</legend>
-      <div class="choice">
-        <label class="choice-card"><input type="radio" name="harness" value="claude"{{if ne .Req.Harness "codewhale"}} checked{{end}}><span class="choice-body"><span class="choice-title">Claude Code</span><span class="choice-note">mods and plugins from the agent's <code>.claude/settings.json</code></span></span></label>
-        <label class="choice-card"><input type="radio" name="harness" value="codewhale"{{if eq .Req.Harness "codewhale"}} checked{{end}}><span class="choice-body"><span class="choice-title">Codewhale</span><span class="choice-note">plugins and <code>.codewhale-home</code>; mail arrives by notice</span></span></label>
-      </div>
-      <div class="row2">
-        <label class="field"><span class="label">Model <span class="opt">optional</span></span><input name="model" value="{{.Req.Model}}" placeholder="harness default" class="mono" autocomplete="off"></label>
-        <label class="field"><span class="label">Permissions</span><select name="permissions"><option value="bypass"{{if ne .Req.Permissions "default"}} selected{{end}}>bypass (unattended)</option><option value="default"{{if eq .Req.Permissions "default"}} selected{{end}}>default (asks before acting)</option></select><span class="help">An approval prompt nobody answers stalls the agent.</span></label>
-      </div>
-    </fieldset>
-
-    <fieldset class="section">
-      <legend>Purpose</legend>
-      <label class="field"><span class="label">Mission <span class="opt">optional</span></span><textarea name="mission" rows="3" placeholder="What this agent is for. Sent as its first mail from you.">{{.Req.Mission}}</textarea></label>
-      <label class="field"><span class="label">On wake <span class="opt">optional</span></span><textarea name="on_wake" rows="2" placeholder="First prompt of every fresh conversation. Default: read brain/ and memory/, then the inbox.">{{.Req.OnWake}}</textarea></label>
-    </fieldset>
-
-    <fieldset class="section">
-      <legend>Placement</legend>
-      <div class="row2">
-        <label class="field"><span class="label">Team</span><select name="team"><option value="">independent (no team)</option>{{range .Teams}}<option value="{{.ID}}"{{if eq .ID $v.Req.Team}} selected{{end}}>{{indent (index $v.Depth .ID)}}{{.Name}}</option>{{end}}</select></label>
-        <label class="check check-pad"><input type="checkbox" name="head"{{if .Req.Head}} checked{{end}}><span>Make it the team's head</span></label>
-      </div>
-      <details class="more">
-        <summary>Location and operator</summary>
+  {{range .Options.Candidates}}<span hidden data-known-dir="{{.Dir}}" data-known-registered="{{.Registered}}"></span>{{end}}
+  <datalist id="new-models-claude">{{range .ClaudeModels}}<option value="{{.ID}}">{{.Label}}</option>{{end}}</datalist>
+  <datalist id="new-models-codewhale">{{range .CodewhaleModels}}<option value="{{.ID}}">{{.Label}}</option>{{end}}</datalist>
+  <form class="new-form mode-create new-workspace" method="post" action="/new" hx-post="/new" hx-target="#new-body" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]" data-new-form>
+    <input type="hidden" name="flow" value="v3">
+    <div class="new-editor">
+      {{with .Error}}<div class="flash is-error new-error" role="alert" tabindex="-1"><strong>Agent setup needs attention</strong><p>{{.}}</p>{{if $v.RecoveryDir}}<p>Setup may have left files in <code>{{$v.RecoveryDir}}</code>. Inspect them or adopt this directory to finish; creating again will not overwrite them.</p><a href="{{$v.RecoveryURL}}">Recover by adopting this directory</a>{{end}}{{if $v.Partial}}<a href="/agents/{{$v.Partial}}/settings">Open the agent’s settings</a>{{end}}</div>{{end}}
+      <fieldset class="new-section new-identity"><legend>Who are you bringing on?</legend>
+        <label class="field"><span class="label">Name</span><input name="name" value="{{.Req.Name}}" required maxlength="100" placeholder="e.g. Maple" autocomplete="off" aria-describedby="new-name-error"{{if .Field "name"}} aria-invalid="true"{{end}}><span class="new-field-error" id="new-name-error">{{.Field "name"}}</span></label>
+        <label class="field"><span class="label">What is its job?</span><textarea name="mission" rows="4" required placeholder="e.g. Keep my projects moving. Track commitments, flag anything blocked, and help me decide what to work on next." aria-describedby="new-purpose-help new-mission-error"{{if .Field "mission"}} aria-invalid="true"{{end}}>{{.Req.Mission}}</textarea><span class="help" id="new-purpose-help">Its purpose becomes its wake-up instructions and your first message.</span><span class="new-field-error" id="new-mission-error">{{.Field "mission"}}</span></label>
+      </fieldset>
+      <fieldset class="new-section"><legend>How it works</legend>
         <div class="row2">
-          <label class="field"><span class="label">Directory <span class="opt">optional</span></span><input name="dir" value="{{.Req.Dir}}" placeholder="new_agents_dir/&lt;slug&gt;" class="mono" autocomplete="off"></label>
-          <label class="field"><span class="label">Operator name <span class="opt">optional</span></span><input name="user" value="{{.Req.User}}" placeholder="{{.Me.Display}}"></label>
+          <label class="field"><span class="label">Harness</span><select name="harness"><option value="claude"{{if ne .Req.Harness "codewhale"}} selected{{end}}>Claude Code</option><option value="codewhale"{{if eq .Req.Harness "codewhale"}} selected{{end}}>Codewhale</option></select></label>
+          <label class="field"><span class="label">Model</span><input name="model" value="{{.Req.Model}}" list="new-models-claude" placeholder="Harness default" autocomplete="off"><span class="help">Pick a suggestion or enter a model ID.</span></label>
+        </div>
+        <label class="field"><span class="label">Skills</span><select name="skills" aria-describedby="new-skills-help new-skills-error"><option value="inherit"{{if ne .Req.Skills "barebones"}} selected{{end}}>Inherit my skills</option><option value="barebones"{{if eq .Req.Skills "barebones"}} selected{{end}}>Barebones — agent skills only</option></select><span class="help" id="new-skills-help">Inherit your skills and enabled plugins, or start with only the agent’s own.</span><span class="new-field-error" id="new-skills-error">{{.Field "skills"}}</span></label>
+      </fieldset>
+      <details class="new-advanced"{{if or (.Field "slug") (.Field "dir") (.Field "role") (.Field "user") .Req.Team}} open{{end}}><summary>Location &amp; advanced options<span>Slug, permissions, team, wake-up instructions</span></summary>
+        <div class="new-advanced-body">
+          <label class="field"><span class="label">Slug</span><input name="slug" value="{{.Req.Slug}}" placeholder="From the name" pattern="[a-z0-9][a-z0-9-]{0,62}" autocomplete="off" class="mono" aria-describedby="new-slug-help new-slug-error"{{if .Field "slug"}} aria-invalid="true"{{end}}><span class="help" id="new-slug-help">Its permanent address and URL. Lowercase letters, numbers and dashes.</span><span class="new-field-error" id="new-slug-error">{{.Field "slug"}}</span></label>
+          <label class="field"><span class="label">Directory</span><input name="dir" value="{{.Req.Dir}}" placeholder="{{.DefaultPath}}" class="mono" autocomplete="off" aria-describedby="new-dir-help new-dir-error"{{if .Field "dir"}} aria-invalid="true"{{end}}><span class="help" id="new-dir-help">Default: <code data-new-default-path>{{.DefaultPath}}</code>. Must be empty or new.</span><span class="new-field-error" id="new-dir-error">{{.Field "dir"}}</span></label>
+          <label class="field"><span class="label">Permissions</span><select name="permissions"><option value="bypass"{{if ne .Req.Permissions "default"}} selected{{end}}>Work unattended</option><option value="default"{{if eq .Req.Permissions "default"}} selected{{end}}>Ask before acting</option></select><span class="help">“Ask before acting” can pause work until a permission prompt is resolved.</span></label>
+          <div class="row2"><label class="field"><span class="label">Role label <span class="opt">optional</span></span><input name="role" value="{{.Req.Role}}" placeholder="Personal Assistant"><span class="new-field-error">{{.Field "role"}}</span></label><label class="field"><span class="label">Operator</span><input name="user" value="{{.Req.User}}" placeholder="{{.Me.Display}}"><span class="new-field-error">{{.Field "user"}}</span></label></div>
+          <label class="field"><span class="label">Team <span class="opt">optional</span></span><select name="team"><option value="">Independent for now</option>{{range .Teams}}<option value="{{.ID}}"{{if eq .ID $v.Req.Team}} selected{{end}}>{{indent (index $v.Depth .ID)}}{{.Name}}</option>{{end}}</select></label>
+          <label class="check"><input type="checkbox" name="head"{{if .Req.Head}} checked{{end}}><span>Make it the team’s head</span></label>
+          <label class="field"><span class="label">Custom wake-up instructions <span class="opt">optional</span></span><textarea name="on_wake" rows="3" placeholder="Default: read its instructions, check the inbox and continue its purpose.">{{.Req.OnWake}}</textarea><span class="help">Replaces the default wake-up instructions on every fresh conversation.</span></label>
         </div>
       </details>
-    </fieldset>
-
-    <div class="form-actions form-actions-end">
-      <label class="check"><input type="checkbox" name="start"{{if .Req.Start}} checked{{end}}><span>Start it right away</span></label>
-      <button class="btn btn-primary" type="submit">{{template "icon" "plus"}}<span>Create agent</span></button>
     </div>
+    <aside class="new-preview" aria-label="Creation preview">
+      <h2>Before you create</h2>
+      <dl class="new-review"><div><dt>Agent</dt><dd><strong data-new-preview="name">{{if .Req.Name}}{{.Req.Name}}{{else}}Your new agent{{end}}</strong><span class="mono" data-new-preview="slug">{{if .Req.Slug}}{{.Req.Slug}}{{else}}Name sets the slug{{end}}</span></dd></div><div><dt>Lives in</dt><dd><code data-new-preview="dir">{{if .Req.Dir}}{{.Req.Dir}}{{else}}{{.DefaultPath}}{{end}}</code></dd></div><div><dt>Runs with</dt><dd data-new-preview="runtime">{{if eq .Req.Harness "codewhale"}}Codewhale{{else}}Claude Code{{end}} · {{if .Req.Model}}{{.Req.Model}}{{else}}harness default{{end}}</dd></div></dl>
+      <details class="new-files"><summary>Files &amp; setup</summary><p>Run the lolabot template’s <code>setup.sh</code>, write runtime settings to <code>lolabot.yaml</code>, and add messaging instructions to <code>CLAUDE.md</code>.</p><p data-new-preview="files">Claude Code settings and an AGENTS.md link. Template brain/, memory/ and tools/ files.</p><p>Register its messaging identity. Apply skills before its first launch.</p></details>
+      <div class="new-first-message"><h3>Your first message</h3><p data-new-preview="mission">{{if .Req.Mission}}{{.Req.Mission}}{{else}}Its job will appear here as you write.{{end}}</p></div>
+      <label class="check new-start"><input type="checkbox" name="start"{{if .Req.Start}} checked{{end}}><span><strong>Start now &amp; autostart</strong><small data-new-start-help>Keep it running, including after lolad restarts.</small></span></label>
+      <button class="btn btn-primary new-submit" type="submit">{{template "icon" "plus"}}<span>Create agent</span></button>
+      <p class="help new-after">Then you’ll open its conversation. You can <a href="/email">give it an email</a> or <a href="/org">add it to a team</a> afterward.</p>
+      <div class="new-progress" role="status" aria-live="polite"><strong>Setting up your agent…</strong><p>Running setup.sh, preparing instructions and registering its identity. This can take a minute. Keep this page open.</p><progress aria-label="Agent setup in progress"></progress></div>
+    </aside>
   </form>
 
-  <form class="form new-form mode-adopt" method="post" action="/adopt" hx-post="/adopt" hx-target="#new-body" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]">
-    {{with .AError}}<p class="flash is-error" role="alert">{{template "icon" "x"}}<span>{{.}}</span></p>{{end}}
-    <p class="lede">For a lolabot instance that already exists (for example <code>jugui</code> or <code>dsh-lola</code>). lolad adds the <code>runtime:</code> block to its lolabot.yaml and leaves the rest of the file as it is.</p>
-    <fieldset class="section">
-      <legend>Directory</legend>
-      <label class="field"><span class="label">Path</span><input name="dir" value="{{.Adopt.Dir}}" required placeholder="/Users/you/agents/jugui" class="mono" autocomplete="off"></label>
-      <label class="field"><span class="label">Slug <span class="opt">optional</span></span><input name="slug" value="{{.Adopt.Slug}}" placeholder="the directory name" class="mono" autocomplete="off"></label>
-    </fieldset>
-    <fieldset class="section">
-      <legend>Harness</legend>
-      <div class="choice">
-        <label class="choice-card"><input type="radio" name="harness" value="claude"{{if ne .Adopt.Runtime.Harness "codewhale"}} checked{{end}}><span class="choice-body"><span class="choice-title">Claude Code</span></span></label>
-        <label class="choice-card"><input type="radio" name="harness" value="codewhale"{{if eq .Adopt.Runtime.Harness "codewhale"}} checked{{end}}><span class="choice-body"><span class="choice-title">Codewhale</span></span></label>
-      </div>
-      <div class="row2">
-        <label class="field"><span class="label">Model <span class="opt">optional</span></span><input name="model" value="{{.Adopt.Runtime.Model}}" placeholder="harness default" class="mono"></label>
-        <label class="field"><span class="label">Permissions</span><select name="permissions"><option value="bypass">bypass (unattended)</option><option value="default"{{if eq .Adopt.Runtime.Permissions "default"}} selected{{end}}>default (asks before acting)</option></select></label>
-      </div>
-    </fieldset>
-    <div class="form-actions form-actions-end"><button class="btn btn-primary" type="submit">Adopt directory</button></div>
+  <form class="new-form mode-adopt new-workspace" method="post" action="/adopt" hx-post="/adopt" hx-target="#new-body" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]" data-adopt-form>
+    <div class="new-editor">
+      {{with .AError}}<div class="flash is-error new-error" role="alert" tabindex="-1"><strong>Couldn’t adopt this directory</strong><p>{{.}}</p><p>Your entries are kept below. Fix the problem and try again.</p>{{if $v.Partial}}<a href="/agents/{{$v.Partial}}/settings">Open the registered agent’s settings</a>{{end}}</div>{{end}}
+      <h2 class="new-section-title">Bring an existing agent into lolad</h2><p class="new-intro">Keep its files, memory and instructions. Connect its messaging and manage it here.</p>
+      <section class="new-discovered" aria-labelledby="new-discovered-title"><h3 id="new-discovered-title">Discovered directories</h3><p class="help">lolabot instances found in your configured agent directories.</p>
+        {{range .AvailableCandidates}}<div class="new-candidate"><div><strong>{{if .Name}}{{.Name}}{{else}}{{.Slug}}{{end}}</strong><code>{{.Dir}}</code><span class="help">{{if .Registered}}Already in lolad{{else if .Error}}{{.Error}}{{else}}{{if eq .Harness "codewhale"}}Codewhale{{else}}Claude Code{{end}}{{with .Model}} · {{.}}{{end}} · Ready to adopt{{end}}</span></div>{{if .Registered}}<a class="btn btn-sm" href="/agents/{{.Slug}}">Open agent</a>{{else if not .Error}}<button class="btn btn-sm" type="button" data-adopt-dir="{{.Dir}}" data-adopt-slug="{{.Slug}}" data-adopt-harness="{{.Harness}}" data-adopt-model="{{.Model}}">Use directory</button>{{end}}</div>{{else}}<p class="new-empty">No lolabot directories found. Enter the full path below if yours lives elsewhere.</p>{{end}}
+      {{if .RegisteredCandidates}}<details class="new-registered"><summary>Already in lolad · {{len .RegisteredCandidates}}</summary>{{range .RegisteredCandidates}}<div class="new-candidate"><div><strong>{{.Name}}</strong><code>{{.Dir}}</code><span class="help">Already in lolad</span></div><a class="btn btn-sm" href="/agents/{{.Slug}}">Open agent</a></div>{{end}}</details>{{end}}
+      </section>
+      <fieldset class="new-section"><legend>Directory to adopt</legend><label class="field"><span class="label">Full directory path</span><input name="dir" value="{{.Adopt.Dir}}" required placeholder="/path/to/existing-agent" class="mono" autocomplete="off" aria-describedby="adopt-dir-error"><span id="adopt-dir-error" class="new-field-error">{{.Field "adopt-dir"}}</span></label>
+        <div class="row2"><label class="field"><span class="label">Harness</span><select name="harness"><option value="claude"{{if ne .Adopt.Runtime.Harness "codewhale"}} selected{{end}}>Claude Code</option><option value="codewhale"{{if eq .Adopt.Runtime.Harness "codewhale"}} selected{{end}}>Codewhale</option></select></label><label class="field"><span class="label">Model</span><input name="model" value="{{.Adopt.Runtime.Model}}" list="new-models-claude" placeholder="Harness default"></label></div>
+      </fieldset>
+      <details class="new-advanced"><summary>Adoption options<span>Slug and permissions</span></summary><div class="new-advanced-body"><label class="field"><span class="label">Slug <span class="opt">optional</span></span><input name="slug" value="{{.Adopt.Slug}}" placeholder="Keep its existing slug" pattern="[a-z0-9][a-z0-9-]{0,62}" class="mono"><span class="help">Keep runtime.slug, otherwise derive from its name or directory.</span></label><label class="field"><span class="label">Permissions</span><select name="permissions"><option value="bypass"{{if ne .Adopt.Runtime.Permissions "default"}} selected{{end}}>Work unattended</option><option value="default"{{if eq .Adopt.Runtime.Permissions "default"}} selected{{end}}>Ask before acting</option></select></label></div></details>
+    </div>
+    <aside class="new-preview" aria-label="Adoption preview"><h2>Before you adopt</h2><dl class="new-review"><div><dt>Directory</dt><dd><code data-adopt-preview>{{if .Adopt.Dir}}{{.Adopt.Dir}}{{else}}Choose or enter a directory{{end}}</code></dd></div></dl><div class="new-adopt-explainer"><h3>What lolad adds</h3><ul><li>Runtime settings in <code>lolabot.yaml</code>.</li><li>Messaging instructions in <code>CLAUDE.md</code> and a messaging identity.</li><li>Harness files, if missing.</li></ul><p>Existing brain, memory and custom harness files are preserved. Runtime choices above replace its runtime settings.</p><p>The agent stays stopped. Open its conversation, then start it when you’re ready.</p></div><button class="btn btn-primary new-submit" type="submit">Adopt directory</button><p class="help new-after">Next: its conversation, with optional email and team setup.</p><div class="new-progress" role="status" aria-live="polite"><strong>Connecting your agent…</strong><p>Preparing its runtime, messaging identity and instructions. Keep this page open.</p><progress aria-label="Agent adoption in progress"></progress></div></aside>
   </form>
 </div>{{end}}

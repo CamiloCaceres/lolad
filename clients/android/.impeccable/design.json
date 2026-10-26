@@ -1,0 +1,169 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-26T06:47:52.317556Z",
+  "title": "Design System: lolad Android",
+  "extensions": {
+    "colorMeta": {
+      "ink": {
+        "role": "primary",
+        "displayName": "Charcoal ink"
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Cool paper"
+      },
+      "backdrop": {
+        "role": "neutral",
+        "displayName": "Pearl gray"
+      },
+      "paper-dark": {
+        "role": "neutral",
+        "displayName": "Dark reading surface"
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Screen identity",
+        "purpose": "Native screen and identity headings."
+      },
+      "terminal": {
+        "displayName": "Terminal snapshot",
+        "purpose": "Read-only diagnostic output."
+      }
+    },
+    "nativePlatform": {
+      "platform": "android",
+      "toolkit": "Native Android Views with Material 3",
+      "themeParent": "Theme.Material3.DayNight.NoActionBar",
+      "fontFamily": "Android sans (native Roboto)",
+      "dimensions": "dp for layout; sp for scalable type",
+      "sources": [
+        "app/src/main/res/values/styles.xml",
+        "app/src/main/res/values-night/styles.xml",
+        "app/src/main/java/dev/caceres/lolad/MainActivity.java",
+        "app/src/main/java/dev/caceres/lolad/ActionRows.java"
+      ],
+      "previewPolicy": "Native component metadata only; HTML/CSS previews would misrepresent Android controls."
+    }
+  },
+  "narrative": {
+    "northStar": "Pearl-gray Operate",
+    "overview": "Inherit maestro-lite’s confirmed native Material 3 world: charcoal actions, paper reading surfaces, a cool gray backdrop and restrained hierarchy. Native Android conventions govern controls, keyboard handling, navigation and dialogs. Hue stays muted; status always includes readable text.",
+    "keyCharacteristics": [
+      "Conversation content leads; terminal output is a separate diagnostic view.",
+      "Light and dark palettes use corresponding Material color roles.",
+      "Selectable reading text, scalable sp typography and 48dp minimum actions."
+    ],
+    "dos": [
+      "Do inherit theme color roles for custom content and retain native control behavior.",
+      "Do keep updates quiet and questions actionable, with status readable without color.",
+      "Do preserve scroll and drafts during live refreshes.",
+      "Do wrap native action groups to the available width, including lifecycle and recovery controls."
+    ],
+    "donts": [
+      "Don't turn a terminal snapshot into an interactive terminal or a substitute for the conversation.",
+      "Don't introduce production data into demonstration screenshots."
+    ],
+    "rules": [
+      {
+        "name": "The Theme Roles Rule",
+        "body": "Custom content resolves its colors from the active native theme rather than choosing a separate light or dark palette.",
+        "section": "colors"
+      },
+      {
+        "name": "The Reading Type Rule",
+        "body": "Use native scalable text for conversation content and reserve monospace for terminal output.",
+        "section": "typography"
+      },
+      {
+        "name": "The Visible Actions Rule",
+        "body": "Action groups wrap at the available width so navigation and recovery controls remain discoverable without a horizontal gesture.",
+        "section": "layout"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary action",
+      "kind": "button",
+      "description": "Native filled MaterialButton for Pair device, Send and the first question option.",
+      "native": {
+        "class": "com.google.android.material.button.MaterialButton",
+        "minimumHeight": "48dp",
+        "states": "Native ripple, focus and disabled treatment."
+      }
+    },
+    {
+      "name": "Quiet action",
+      "kind": "button",
+      "description": "Native text action for navigation and secondary or lifecycle controls.",
+      "native": {
+        "class": "com.google.android.material.button.MaterialButton",
+        "styleAttribute": "materialButtonOutlinedStyle",
+        "background": "transparent",
+        "strokeWidth": 0,
+        "textColorRole": "colorOnSurface",
+        "minimumHeight": "48dp"
+      }
+    },
+    {
+      "name": "Wrapping action group",
+      "kind": "nav",
+      "description": "Fully visible navigation and recovery buttons wrap into rows at the available width.",
+      "native": {
+        "class": "dev.caceres.lolad.ActionRows",
+        "gap": "8dp",
+        "measurement": "Children measured AT_MOST the available width; next control wraps when it would overflow.",
+        "direction": "Respects native RTL layout direction.",
+        "horizontalScrolling": false
+      }
+    },
+    {
+      "name": "Connection field",
+      "kind": "input",
+      "description": "Persistent-label native outlined fields for pairing and token fallback.",
+      "native": {
+        "class": "com.google.android.material.textfield.TextInputLayout",
+        "child": "TextInputEditText",
+        "boxMode": "BOX_BACKGROUND_OUTLINE",
+        "minimumFieldHeight": "56dp",
+        "states": "Inherited native Material focus, selection and input behavior."
+      }
+    },
+    {
+      "name": "Reading container",
+      "kind": "card",
+      "description": "Flat paper containers for agent rows and message content; outgoing messages reverse ink and paper.",
+      "native": {
+        "background": "GradientDrawable",
+        "shapeToken": "rounded.content",
+        "listPaddingToken": "spacing.page",
+        "messagePadding": "16dp horizontal, 12dp vertical",
+        "elevation": "No custom shadow or stroke."
+      }
+    },
+    {
+      "name": "Conversation composer",
+      "kind": "input",
+      "description": "Fixed multiline native EditText with a labeled Send button outside the scrolling conversation.",
+      "native": {
+        "class": "android.widget.EditText",
+        "maximumVisibleLines": 5,
+        "minimumHeight": "52dp",
+        "shapeToken": "rounded.content",
+        "padding": "16dp horizontal, 12dp vertical",
+        "sendState": "Disabled for empty drafts or an in-flight send."
+      }
+    },
+    {
+      "name": "Terminal snapshot",
+      "kind": "custom",
+      "description": "Separate selectable, read-only diagnostic output preserving terminal line width.",
+      "native": {
+        "class": "android.widget.TextView",
+        "typeToken": "typography.terminal",
+        "scrolling": "Vertical ScrollView containing a HorizontalScrollView; action groups above still wrap."
+      }
+    }
+  ]
+}

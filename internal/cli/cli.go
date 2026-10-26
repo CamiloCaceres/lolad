@@ -8,29 +8,32 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
-	"github.com/CamiloCaceres/lolad/internal/api"
 	"github.com/CamiloCaceres/lolad/internal/app"
 	"github.com/CamiloCaceres/lolad/internal/core"
 	"github.com/CamiloCaceres/lolad/internal/hooks"
 	"github.com/CamiloCaceres/lolad/internal/msgcli"
 	"github.com/CamiloCaceres/lolad/internal/registry"
-	"github.com/CamiloCaceres/lolad/internal/web"
+	"github.com/CamiloCaceres/lolad/internal/tmux"
 )
 
-const Version = "0.1.0"
+var Version = "0.1.0"
+
 const help = `lolad — agent daemon and mail
-  serve                         run the loopback daemon
+  serve                         run the daemon
+  pair [--name device]           create a single-use pairing code
+  devices [ls|rm <id>]           list or revoke devices
+  doctor                        check daemon setup
   ls | status <agent>           inspect the fleet
   start|stop|interrupt <agent>  control an agent
   restart [--fresh] <agent>     restart/resume or start fresh
@@ -46,7 +49,8 @@ const help = `lolad — agent daemon and mail
   model <agent> [<model>]        inspect or set the model
   skills <agent> [mode inherit|barebones | add <id> | rm <id>]
   env <agent> [ls | set KEY | rm KEY]  set reads the value from stdin
-  email <agent> [show | test <address>]
+  email <agent> [show | test <address> | provision [address] | rotate | detach]
+  email ls | provider [set-token]  set-token reads the token from stdin
   reload | version
   msg ...                      agent-side signed AMP client
   hook <event>                 harness hook (JSON on stdin)
@@ -126,6 +130,11 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		}
 		return hooks.Run(ctx, args[1], stdin, stdout, os.Getenv)
 	}
+	if args[0] == "exec-env" {
+		e := tmux.ExecEnv(args[1:])
+		fmt.Fprintln(stderr, "lolad:", e)
+		return 127
+	}
 	if args[0] == "version" {
 		fmt.Fprintln(stdout, Version)
 		return 0
@@ -152,6 +161,8 @@ func command(ctx context.Context, args []string, stdin io.Reader, out io.Writer)
 		base = app.URL(c.Listen)
 	}
 	switch args[0] {
+	case "pair", "devices", "doctor":
+		return remoteCommand(ctx, base, c, args, out)
 	case "model", "skills", "env", "email":
 		return settingsCommand(ctx, base, args, stdin, out)
 	}
@@ -306,46 +317,59 @@ func serve(parent context.Context, log io.Writer) error {
 		return e
 	}
 	defer a.Close()
-	host, port, e := net.SplitHostPort(a.Config.Listen)
-	if e != nil {
+	if e = app.ValidateListeners(a.Config.Listen, a.Config.Remote.Listen, a.Config.Remote.PublicURL); e != nil {
 		return e
 	}
-	ip := net.ParseIP(host)
-	if host != "localhost" && (ip == nil || !ip.IsLoopback()) {
-		return fmt.Errorf("listen must be a loopback address")
+	logger := slog.New(slog.NewTextHandler(log, nil))
+	var servers []*http.Server
+	var listeners []net.Listener
+	for _, addr := range []string{a.Config.Listen, a.Config.Remote.Listen} {
+		if addr == "" {
+			continue
+		}
+		listener, err := net.Listen("tcp", addr)
+		if err != nil {
+			for _, l := range listeners {
+				l.Close()
+			}
+			return err
+		}
+		listeners = append(listeners, listener)
+		remote := len(servers) > 0
+		servers = append(servers, &http.Server{Handler: a.Handler(remote, Version, logger), BaseContext: func(net.Listener) context.Context { return ctx }, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, IdleTimeout: 90 * time.Second, MaxHeaderBytes: 64 << 10})
 	}
-	if _, e = strconv.Atoi(port); e != nil {
-		return e
-	}
-	listener, e := net.Listen("tcp", a.Config.Listen)
-	if e != nil {
-		return e
-	}
-	defer listener.Close()
-	mux := http.NewServeMux()
-	rest := api.New(a, api.Options{HookSink: a.Tracker, StateDir: a.Config.StateDir, Trigger: func(r *http.Request, ag, n, b string) error { return a.Trigger(r.Context(), ag, n, b) }})
-	mux.Handle("/api/", rest)
-	mux.Handle("/hook/", rest)
-	mux.Handle("/v1/", a.Provider)
-	mux.Handle("/", web.New(a, web.Options{}))
-	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 90 * time.Second}
 	runDone := make(chan error, 1)
 	go func() { runDone <- a.Run(ctx) }()
-	serveDone := make(chan error, 1)
-	go func() { serveDone <- srv.Serve(listener) }()
-	fmt.Fprintln(log, "lolad listening on", a.Config.Listen)
+	backupDone := make(chan struct{})
+	go func() { defer close(backupDone); a.Backups(ctx, logger) }()
+	serveDone := make(chan error, len(servers))
+	for i, srv := range servers {
+		go func() { serveDone <- srv.Serve(listeners[i]) }()
+		fmt.Fprintln(log, "lolad listening on", listeners[i].Addr())
+	}
 	select {
 	case <-ctx.Done():
 	case e = <-serveDone:
 		cancel()
+	case e = <-runDone:
+		cancel()
+		runDone <- e
 	}
+	cancel()
 	shutdown, stop := context.WithTimeout(context.Background(), 10*time.Second)
 	defer stop()
-	se := srv.Shutdown(shutdown)
-	if se != nil {
-		_ = srv.Close()
+	var se error
+	for _, srv := range servers {
+		if err := srv.Shutdown(shutdown); err != nil {
+			_ = srv.Close()
+			se = errors.Join(se, err)
+		}
 	}
 	<-runDone
+	<-backupDone
+	if ctx.Err() != nil && errors.Is(e, context.Canceled) {
+		e = nil
+	}
 	if e != nil && !errors.Is(e, http.ErrServerClosed) {
 		return e
 	}

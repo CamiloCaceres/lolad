@@ -15,7 +15,14 @@ import (
 	"github.com/creack/pty"
 )
 
-type Sessions struct{ Socket, Config, Binary string }
+type Sessions struct {
+	Socket, Config, Binary string
+	// Exec is the lolad binary used as `lolad exec-env` to hand agents their
+	// environment through a private file instead of argv. Empty (tests) passes
+	// the environment with tmux -e as before.
+	Exec   string
+	RunDir string // where the private env files go
+}
 
 var _ core.Sessions = (*Sessions)(nil)
 
@@ -31,7 +38,7 @@ func New(stateDir, socket string) (*Sessions, error) {
 	if err := os.WriteFile(path, []byte(conf), 0600); err != nil {
 		return nil, err
 	}
-	return &Sessions{Socket: socket, Config: path, Binary: "tmux"}, nil
+	return &Sessions{Socket: socket, Config: path, Binary: "tmux", RunDir: filepath.Join(stateDir, "run")}, nil
 }
 func (s *Sessions) command(ctx context.Context, args ...string) *exec.Cmd {
 	return exec.CommandContext(ctx, s.Binary, append([]string{"-L", s.Socket, "-f", s.Config}, args...)...)
@@ -69,6 +76,9 @@ func (s *Sessions) Start(name, dir string, env, argv []string, cols, rows int) e
 		rows = 50
 	}
 	args := []string{"new-session", "-d", "-s", name, "-c", dir, "-x", strconv.Itoa(cols), "-y", strconv.Itoa(rows)}
+	if s.Exec != "" {
+		return s.startPrivate(name, args, env, argv, cols, rows)
+	}
 	provided := make(map[string]bool)
 	for _, v := range env {
 		k, _, _ := strings.Cut(v, "=")
@@ -102,15 +112,51 @@ func (s *Sessions) Start(name, dir string, env, argv []string, cols, rows int) e
 	if e != nil {
 		return fmt.Errorf("tmux new-session: %w: %s", e, out)
 	}
+	return s.size(name, cols, rows)
+}
+
+// startPrivate launches through `lolad exec-env` so no environment value
+// reaches argv or the tmux server. The env file is removed by the helper, or
+// here when tmux fails before running it.
+func (s *Sessions) startPrivate(name string, args, env, argv []string, cols, rows int) error {
+	file, err := writeEnvFile(s.RunDir, env)
+	if err != nil {
+		return fmt.Errorf("agent env: %w", err)
+	}
+	args = append(args, "--", s.Exec, "exec-env", file, "--")
+	args = append(args, argv...)
+	cmd := s.command(context.Background(), args...)
+	cmd.Env = baseEnv(os.Getenv)
+	if out, e := cmd.CombinedOutput(); e != nil {
+		os.Remove(file)
+		return fmt.Errorf("tmux new-session: %w: %s", e, out)
+	}
+	return s.size(name, cols, rows)
+}
+
+// baseEnv is the environment the tmux client (and so a newly started tmux
+// server) gets: enough to run, nothing secret.
+func baseEnv(getenv func(string) string) []string {
+	var out []string
+	for _, k := range []string{"HOME", "USER", "LOGNAME", "PATH", "SHELL", "LANG", "LC_ALL", "TMPDIR", "TMUX_TMPDIR"} {
+		if v := getenv(k); v != "" {
+			out = append(out, k+"="+v)
+		}
+	}
+	return out
+}
+
+func (s *Sessions) size(name string, cols, rows int) error {
 	// Keep detached windows independent of the last attached client's dimensions.
 	for _, option := range [][2]string{{"window-size", "manual"}, {"@lolad-cols", strconv.Itoa(cols)}, {"@lolad-rows", strconv.Itoa(rows)}} {
 		if _, err := s.run("set-option", "-w", "-t", target(name), option[0], option[1]); err != nil {
 			return err
 		}
 	}
-	_, e = s.run("resize-window", "-t", target(name), "-x", strconv.Itoa(cols), "-y", strconv.Itoa(rows))
+	_, e := s.run("resize-window", "-t", target(name), "-x", strconv.Itoa(cols), "-y", strconv.Itoa(rows))
 	return e
 }
+
 func (s *Sessions) PanePID(name string) (int, error) {
 	v, e := s.run("display-message", "-p", "-t", target(name), "#{pane_pid}")
 	if e != nil {

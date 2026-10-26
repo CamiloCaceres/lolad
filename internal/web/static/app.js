@@ -168,6 +168,28 @@
     });
   }
 
+  // v3 creation landing banner; dismissal survives live header refreshes.
+  document.addEventListener("click", (e) => {
+    const dismiss = e.target.closest && e.target.closest("[data-dismiss-arrival]");
+    if (dismiss) dismiss.closest(".arrival").remove();
+  });
+
+  // v3 inbox: copy the original Markdown, preserving links and code fences.
+  document.addEventListener("click", async (e) => {
+    const button = e.target.closest && e.target.closest("[data-copy-message]");
+    if (!button) return;
+    const source = button.parentElement.querySelector("[data-deliver-source]");
+    if (!source) return;
+    try {
+      await navigator.clipboard.writeText(source.value);
+      toast("Deliverable copied");
+    } catch {
+      source.hidden = false;
+      source.focus(); source.select();
+      toast("Select and copy the deliverable below", "error");
+    }
+  });
+
   // ------------------------------------------------------------ org matrix
   let tip;
   function showTip(cell) {
@@ -342,3 +364,10 @@
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
   else boot();
 })();
+
+// Traffic: keep an expanded audit record in place while agent/policy events arrive.
+document.addEventListener("htmx:beforeRequest", (event) => {
+  const target = event.detail.elt;
+  const trigger = event.detail.triggeringEvent;
+  if (target && target.id === "traffic" && trigger && trigger.type === "lolad:agent" && target.querySelector("details[open]")) event.preventDefault();
+});

@@ -1,127 +1,54 @@
-{{define "person"}}<a class="person" href="/agents/{{.Name}}">{{template "avatar" (dict "Display" .Display "State" .State "Size" "xs")}}<span>{{.Display}}</span><span class="sr-only"> ({{.State}})</span></a>{{end}}
-
-{{define "org-body"}}{{$v := .}}<div id="org-body" class="org">
-  {{template "flash" .}}
-  <div class="org-grid">
-    <section class="panel org-tree" aria-labelledby="h-teams">
-      <header class="panel-head"><h2 id="h-teams">Teams</h2><span class="panel-note">heads speak for their team upward</span></header>
-      <div class="tree-root">
-        <div class="tree-user">{{template "avatar" (dict "Display" .Org.User.Display "Size" "sm")}}<span><strong>{{.Org.User.Display}}</strong> <span class="muted mono">{{.Org.User.Name}}</span></span><span class="tag">operator</span></div>
-        {{if .Roots}}<ul class="tree" role="list">{{range .Roots}}{{template "team-node" (dict "N" . "V" $v)}}{{end}}</ul>
-        {{else if .Agents}}<p class="empty-inline">No teams yet, so every agent is independent and talks only to you. Add a team to give agents a head to report to.</p>
-        {{else}}<div class="org-empty"><p>No agents yet. Once you have some, group them into teams here: each team has a head who speaks for it upward.</p><div class="step-actions"><a class="btn btn-primary btn-sm" href="/new">{{template "icon" "plus"}}<span>New agent</span></a><a class="btn btn-sm" href="/new?mode=adopt">Adopt a directory</a></div></div>{{end}}
-      </div>
-      {{if .Independents}}
-      <div class="indep">
-        <h3 class="indep-title">Independent <span class="muted">· in no team; reach {{if eq .Org.Defaults.Independents "all"}}anyone{{else}}only you{{end}} unless a rule says otherwise</span></h3>
-        <div class="people">{{range .Independents}}{{template "person" .}}{{end}}</div>
-      </div>
-      {{end}}
-      <details class="add-team">
-        <summary class="btn btn-sm">{{template "icon" "plus"}}<span>Add team</span></summary>
-        <form class="form team-form" hx-post="/org/teams" hx-target="#org-body" hx-swap="outerHTML" method="post" action="/org/teams">
-          <div class="row2">
-            <label class="field"><span class="label">Name</span><input name="name" required placeholder="Research"></label>
-            <label class="field"><span class="label">Id <span class="opt">optional</span></span><input name="id" placeholder="from the name" pattern="[a-z0-9][a-z0-9-]*" title="lowercase letters, digits and dashes"></label>
-          </div>
-          {{template "team-fields" (dict "T" (dict "ID" "" "Parent" "" "Head" "" "Members" (list) "Open" false "Instructions" "") "V" $v)}}
-          <div class="form-actions"><button class="btn btn-primary" type="submit">Add team</button></div>
-        </form>
-      </details>
-    </section>
-
-    <div class="org-side">
-      <section class="panel" aria-labelledby="h-rules">
-        <header class="panel-head"><h2 id="h-rules">Rules</h2><span class="panel-note">checked in order before the defaults; first match wins</span></header>
-        {{if .Org.Rules}}
-        <ol class="rules" role="list">
-          {{range $i, $r := .Org.Rules}}
-          <li class="rule">
-            <span class="rule-n">{{add $i 1}}</span>
-            <span class="rule-edge"><code>{{.From}}</code>{{if .Both}}{{template "icon" "both"}}<span class="sr-only">both ways</span>{{else}}{{template "icon" "arrow"}}<span class="sr-only">to</span>{{end}}<code>{{.To}}</code></span>
-            <span class="verdict {{if .Allow}}is-allow{{else}}is-deny{{end}}"><i aria-hidden="true"></i>{{if .Allow}}allow{{else}}deny{{end}}</span>
-            <span class="rule-ops" hx-target="#org-body" hx-swap="outerHTML">
-              <button class="btn btn-icon btn-ghost" hx-post="/org/rules/{{$i}}/up" aria-label="Move rule {{add $i 1}} up"{{if eq $i 0}} disabled{{end}}>{{template "icon" "up"}}</button>
-              <button class="btn btn-icon btn-ghost" hx-post="/org/rules/{{$i}}/down" aria-label="Move rule {{add $i 1}} down"{{if eq (add $i 1) (len $v.Org.Rules)}} disabled{{end}}>{{template "icon" "down"}}</button>
-              <button class="btn btn-icon btn-ghost is-stop" hx-post="/org/rules/{{$i}}/delete" hx-confirm="Delete rule {{add $i 1}} ({{.From}} → {{.To}})?" aria-label="Delete rule {{add $i 1}}">{{template "icon" "trash"}}</button>
-            </span>
-            {{with .Note}}<span class="rule-note">{{.}}</span>{{end}}
-          </li>
-          {{end}}
-        </ol>
-        {{else}}<p class="empty-inline">No rules. The defaults decide everything.</p>{{end}}
-        <form class="form rule-add" hx-post="/org/rules" hx-target="#org-body" hx-swap="outerHTML" method="post" action="/org/rules">
-          <div class="rule-add-row">
-            <label class="field"><span class="label">From</span><input name="from" list="patterns" required placeholder="lola, user, team:eng, *" autocomplete="off"></label>
-            <label class="field"><span class="label">To</span><input name="to" list="patterns" required placeholder="name or pattern" autocomplete="off"></label>
-            <label class="field field-sm"><span class="label">Effect</span><select name="allow"><option value="allow">allow</option><option value="deny">deny</option></select></label>
-          </div>
-          <div class="rule-add-row">
-            <label class="field field-grow"><span class="label">Note <span class="opt">optional</span></span><input name="note" placeholder="why this rule exists"></label>
-            <label class="check"><input type="checkbox" name="both"><span>both ways</span></label>
-            <button class="btn" type="submit">{{template "icon" "plus"}}<span>Add rule</span></button>
-          </div>
-          <datalist id="patterns">{{range .Patterns}}<option value="{{.}}">{{end}}</datalist>
-        </form>
-      </section>
-
-      <section class="panel" aria-labelledby="h-defaults">
-        <header class="panel-head"><h2 id="h-defaults">Defaults</h2><span class="panel-note">for everything no rule matched</span></header>
-        <form class="form defaults" hx-post="/org/defaults" hx-target="#org-body" hx-swap="outerHTML" method="post" action="/org/defaults">
-          {{$d := .Org.Defaults}}
-          <label class="field-inline"><span>You → agents</span><select name="user_to_agents">{{range (list "all" "heads" "none")}}<option{{if eq . $d.UserToAgents}} selected{{end}}>{{.}}</option>{{end}}</select></label>
-          <label class="field-inline"><span>Agents → you</span><select name="agents_to_user">{{range (list "all" "heads" "none")}}<option{{if eq . $d.AgentsToUser}} selected{{end}}>{{.}}</option>{{end}}</select></label>
-          <label class="field-inline"><span>Independents reach</span><select name="independents"><option value="user-only"{{if ne $d.Independents "all"}} selected{{end}}>only you</option><option value="all"{{if eq $d.Independents "all"}} selected{{end}}>everyone</option></select></label>
-          <label class="check"><input type="checkbox" name="vertical"{{if $d.Vertical}} checked{{end}}><span>Vertical paths: a head ↔ its members, its parent team's head and its child teams' heads</span></label>
-          <div class="form-actions"><button class="btn" type="submit">Save defaults</button></div>
-        </form>
-      </section>
-    </div>
-  </div>
-
-  <section class="panel" aria-labelledby="h-matrix">
-    <header class="panel-head"><h2 id="h-matrix">Who can message whom</h2>{{if .Agents}}<span class="panel-note">row sends to column; hover or tap a cell for the reason</span>{{end}}</header>
-    {{if not .Agents}}<p class="empty-inline">With agents in place, this grid shows every sender and recipient pair, allowed or denied, with the reason. Until then the only participant is you.</p>{{else}}
-    <div class="matrix-layout">
-      <div class="matrix-scroll">
-        <table class="matrix">
-          <thead><tr><th scope="col" class="corner"><span>to →</span><span>from ↓</span></th>{{range .People}}<th scope="col" class="col-h"><span>{{.Name}}</span></th>{{end}}</tr></thead>
-          <tbody>
-          {{range $i, $row := .Matrix}}{{$p := index $v.People $i}}
-            <tr><th scope="row" class="row-h">{{$p.Name}}</th>
-            {{range $row}}<td>{{if .Self}}<span class="cell is-self"><span class="sr-only">{{.From}} itself</span></span>{{else}}<button class="cell {{if .Allow}}is-allow{{else}}is-deny{{end}}{{if hasPrefix .Reason "rule"}} by-rule{{end}}" type="button" data-cell data-from="{{.From}}" data-to="{{.To}}" data-reason="{{.Reason}}" aria-label="{{.From}} to {{.To}}: {{if .Allow}}allowed{{else}}denied{{end}}. {{.Reason}}"><i aria-hidden="true"></i></button>{{end}}</td>{{end}}
-            </tr>
-          {{end}}
-          </tbody>
-        </table>
-        <p class="legend"><span><i class="cell-key is-allow"></i>allowed</span><span><i class="cell-key is-deny"></i>denied</span><span><i class="cell-key is-allow by-rule"></i>by an explicit rule</span></p>
-      </div>
-      <form class="form test-box" id="test-box" hx-post="/org/check" hx-target="#test-result" method="post" action="/org/check">
-        <h3 class="test-title">Test a message</h3>
-        <label class="field"><span class="label">From</span><select name="from" data-test-from>{{range .People}}<option value="{{.Name}}">{{.Display}} ({{.Name}})</option>{{end}}<option value="lolad">lolad (system)</option></select></label>
-        <label class="field"><span class="label">To</span><select name="to" data-test-to>{{range $i, $p := .People}}<option value="{{.Name}}"{{if eq $i 1}} selected{{end}}>{{.Display}} ({{.Name}})</option>{{end}}</select></label>
-        <button class="btn" type="submit">Check</button>
-        <div id="test-result" class="test-result-slot" aria-live="polite">{{with .Test}}{{template "org-test-result" .}}{{end}}</div>
-      </form>
-    </div>
-    {{end}}
-  </section>
+{{define "org-body"}}{{$v := .}}<div id="org-body" class="org-workspace">
+{{if .Error}}<div class="flash is-error" role="alert">{{.Error}}</div>{{end}}
+{{if .Notice}}<div class="flash" role="status">{{.Notice}}</div>{{end}}
+<nav class="org-jump" aria-label="On this page"><a href="#org-chart">Structure</a><a href="#org-access">Message access</a><a href="#org-exceptions">Exceptions <span>{{len .Org.Rules}}</span></a><a href="#org-defaults">Defaults</a></nav>
+<section id="org-chart" class="org-section" aria-labelledby="org-chart-title">
+<header class="org-section-head"><div><h2 id="org-chart-title">Your organization</h2><p>Heads connect teams. Members report to their head.</p></div><a class="btn" href="/org?create=1#org-add-team">{{template "icon" "plus"}} Create a team</a></header>
+<div class="org-chart">
+<div class="org-operator">{{template "avatar" (dict "Display" .Org.User.Display "Size" "sm")}}<div><strong>{{.Org.User.Display}}</strong><span>You · operator</span></div></div>
+{{if .Roots}}<ul class="org-branches">{{range .Roots}}{{template "team-node" (dict "N" . "V" $v)}}{{end}}</ul>{{else}}<div class="org-empty"><h3>A team starts with a head.</h3><p>Create a team, choose who leads it, then tap the agents who belong to it.</p>{{if not .Agents}}<a class="btn" href="/new">Create your first agent</a>{{end}}</div>{{end}}
+</div>
+{{if .Independents}}<div class="org-independent"><div><h3>Independent agents</h3><p>No team or reporting line. Message access follows your defaults and exceptions.</p></div><div class="people">{{range .Independents}}{{template "org-person" .}}{{end}}</div></div>{{end}}
+<details id="org-add-team" class="org-disclosure"{{if .Create}} open{{end}}><summary>Create a team</summary><form class="form" hx-post="/org/teams" hx-target="#org-body" hx-swap="outerHTML" method="post" action="/org/teams"><label class="field"><span class="label">Team name</span><input name="name" required placeholder="Operations"></label>{{template "team-fields" (dict "T" (dict "ID" "" "Parent" "" "Head" "" "Members" (list) "Open" false "Instructions" "") "V" $v)}}<button class="btn btn-primary" type="submit">Create team</button></form></details>
+</section>
+<section id="org-access" class="org-section" aria-labelledby="org-access-title">
+<header class="org-section-head"><div><h2 id="org-access-title">Who can message whom?</h2><p>Choose a sender. Select an answer to change access, in one direction or both.</p></div></header>
+{{if .Agents}}
+<form class="org-sender" method="get" action="/org#org-access" hx-get="/org" hx-select="#org-body" hx-target="#org-body" hx-swap="outerHTML" data-autosubmit><label for="org-sender">Messages from</label><select id="org-sender" name="sender">{{range .People}}<option value="{{.Name}}"{{if eq .Name $v.Sender}} selected{{end}}>{{if eq .Kind "user"}}You{{else}}{{.Display}}{{end}}</option>{{end}}</select><button class="btn" type="submit">Show access</button></form>
+<div id="org-pair" class="org-pair" aria-live="polite">{{if .Test}}{{template "org-test-result" .Test}}{{else}}<p>Select a recipient below to inspect or change the connection.</p>{{end}}</div>
+<div class="org-answers">{{range $i,$row := .Matrix}}{{if eq (index $v.People $i).Name $v.Sender}}{{range $j,$c := $row}}{{if not .Self}}{{$p := index $v.People $j}}<button class="org-answer {{if .Allow}}org-allowed{{else}}org-denied{{end}}" hx-post="/org/check" hx-vals='{"from":"{{.From}}","to":"{{.To}}"}' hx-target="#org-pair" hx-swap="innerHTML show:#org-pair:top" aria-label="{{.From}} to {{.To}}: {{if .Allow}}allowed{{else}}denied{{end}}. {{.Explanation}}"><span class="org-answer-top"><strong>{{if eq $p.Kind "user"}}You{{else}}{{$p.Display}}{{end}}</strong><span>{{if .Allow}}Allowed{{else}}Denied{{end}}</span></span><span>{{.Explanation}}</span></button>{{end}}{{end}}{{end}}{{end}}</div>
+<details class="org-disclosure org-full-matrix"><summary>Compare all senders in the matrix</summary><p>Rows send to columns. Every answer opens the same connection editor. Scroll sideways to see more recipients.</p><div class="org-matrix-scroll" tabindex="0" role="region" aria-label="All message permissions"><table class="org-matrix"><caption class="sr-only">Message access: row sends to column</caption><thead><tr><th scope="col">From ↓ / To →</th>{{range .People}}<th scope="col">{{if eq .Kind "user"}}You{{else}}{{.Display}}{{end}}</th>{{end}}</tr></thead><tbody>{{range $i,$row := .Matrix}}<tr><th scope="row">{{(index $v.People $i).Display}}</th>{{range $row}}<td>{{if .Self}}<span class="org-self">Same person</span>{{else}}<button class="org-matrix-cell {{if .Allow}}org-allowed{{else}}org-denied{{end}}" data-from="{{.From}}" data-to="{{.To}}" data-reason="{{.Reason}}" hx-post="/org/check" hx-vals='{"from":"{{.From}}","to":"{{.To}}"}' hx-target="#org-pair" hx-swap="innerHTML show:#org-pair:top"><strong>{{if .Allow}}Allowed{{else}}Denied{{end}}</strong><span>{{.Explanation}}</span></button>{{end}}</td>{{end}}</tr>{{end}}</tbody></table></div></details>
+{{else}}<p class="org-empty">Your message access will appear here when you add agents.</p>{{end}}</section>
+<section id="org-exceptions" class="org-section" aria-labelledby="org-rules-title"><header class="org-section-head"><div><h2 id="org-rules-title">Exceptions</h2><p>Read from top to bottom. The first matching exception decides, before any default.</p></div></header>
+<ol class="org-rules">{{range $i,$r := .RuleViews}}<li id="org-rule-{{add $i 1}}"><span class="org-rule-order">{{add $i 1}}</span><div class="org-rule-content"><p><strong>{{.FromLabel}}</strong> {{if .Allow}}may{{else}}may not{{end}} message <strong>{{.ToLabel}}</strong>{{if .Both}} · both ways{{end}}.</p>{{with .Note}}<p class="muted">{{.}}</p>{{end}}<details class="org-rule-edit"><summary>Edit exception {{add $i 1}}</summary><form class="form" hx-post="/org/rules/{{$i}}/save" hx-target="#org-body" hx-swap="outerHTML" method="post" action="/org/rules/{{$i}}/save">{{template "org-rule-fields" (dict "R" $r "V" $v)}}<button class="btn" type="submit">Save exception</button></form></details></div><div class="org-rule-ops" hx-target="#org-body" hx-swap="outerHTML"><button class="btn btn-icon btn-ghost" hx-post="/org/rules/{{$i}}/up" aria-label="Move exception {{add $i 1}} up"{{if eq $i 0}} disabled{{end}}>{{template "icon" "up"}}</button><button class="btn btn-icon btn-ghost" hx-post="/org/rules/{{$i}}/down" aria-label="Move exception {{add $i 1}} down"{{if eq (add $i 1) (len $v.Org.Rules)}} disabled{{end}}>{{template "icon" "down"}}</button><button class="btn btn-icon btn-ghost" hx-post="/org/rules/{{$i}}/delete" hx-confirm="Delete this exception? Defaults or a later exception will decide access." aria-label="Delete exception {{add $i 1}}">{{template "icon" "trash"}}</button></div></li>{{else}}<li>No exceptions yet. Your structure and defaults decide access.</li>{{end}}</ol>
+<details class="org-disclosure"><summary>Add an exception</summary><form class="form" hx-post="/org/rules" hx-target="#org-body" hx-swap="outerHTML" method="post" action="/org/rules"><input type="hidden" name="priority" value="first">{{template "org-rule-fields" (dict "R" (dict "From" "" "To" "" "Allow" true "Both" false "Note" "") "V" $v)}}<p class="muted">Added at the top so this exception takes priority.</p><button class="btn btn-primary" type="submit">Add exception</button></form></details>
+<details class="org-disclosure"><summary>Only I may message an agent</summary><form class="form" hx-post="/org/rules" hx-target="#org-body" hx-swap="outerHTML" method="post" action="/org/rules"><input type="hidden" name="mode" value="protect"><input type="hidden" name="from" value="*"><label class="field"><span class="label">Protect this agent</span><select name="to" required><option value="">Choose an agent</option>{{range .Agents}}<option value="{{.Name}}">{{.Display}}</option>{{end}}</select></label><p>Allows your messages first, then denies every other sender. Creates two exceptions at the top. The system can always send.</p><button class="btn" type="submit">Limit messages to me</button></form></details>
+</section>
+<section id="org-defaults" class="org-section" aria-labelledby="org-defaults-title"><header class="org-section-head"><div><h2 id="org-defaults-title">When no exception matches</h2><p>These defaults apply across the organization. Everything else is denied.</p></div></header>{{$d := .Org.Defaults}}<form class="form org-defaults" hx-post="/org/defaults" hx-target="#org-body" hx-swap="outerHTML" method="post" action="/org/defaults">
+<label>I may message <select name="user_to_agents" aria-label="Agents you may message"><option value="all"{{if eq $d.UserToAgents "all"}} selected{{end}}>every agent</option><option value="heads"{{if eq $d.UserToAgents "heads"}} selected{{end}}>team heads only</option><option value="none"{{if eq $d.UserToAgents "none"}} selected{{end}}>no agents</option></select>.</label>
+<label><select name="agents_to_user" aria-label="Agents who may message you"><option value="all"{{if eq $d.AgentsToUser "all"}} selected{{end}}>Every agent</option><option value="heads"{{if eq $d.AgentsToUser "heads"}} selected{{end}}>Team heads only</option><option value="none"{{if eq $d.AgentsToUser "none"}} selected{{end}}>No agents</option></select> may message me.</label>
+<label>Direct reporting lines <select name="vertical" aria-label="Reporting line access"><option value="on"{{if $d.Vertical}} selected{{end}}>allow messages both ways</option><option value="off"{{if not $d.Vertical}} selected{{end}}>grant no message access</option></select>.<small>Heads and members; heads of directly related parent and child teams.</small></label>
+<label>When either agent is independent, <select name="independents" aria-label="Independent agent access"><option value="user-only"{{if ne $d.Independents "all"}} selected{{end}}>agent messages need an exception</option><option value="all"{{if eq $d.Independents "all"}} selected{{end}}>agent messages are allowed</option></select>.<small>Messages to and from you follow the choices above.</small></label><button class="btn" type="submit">Save defaults</button></form></section>
 </div>{{end}}
 
-{{define "team-node"}}{{$n := .N}}{{$v := .V}}<li class="team">
-  <div class="team-box">
-    <div class="team-head">
+{{define "org-rule-fields"}}{{$r := .R}}{{$v := .V}}<div class="org-rule-sentence"><label class="field"><span class="label">Who</span><select name="from" required><option value="">Choose a sender</option>{{range $v.Choices}}<option value="{{.Value}}"{{if eq .Value $r.From}} selected{{end}}>{{.Label}}</option>{{end}}</select></label><label class="field"><span class="label">May</span><select name="allow"><option value="allow"{{if $r.Allow}} selected{{end}}>may message</option><option value="deny"{{if not $r.Allow}} selected{{end}}>may not message</option></select></label><label class="field"><span class="label">Whom</span><select name="to" required><option value="">Choose a recipient</option>{{range $v.Choices}}<option value="{{.Value}}"{{if eq .Value $r.To}} selected{{end}}>{{.Label}}</option>{{end}}</select></label></div><label class="check"><input type="checkbox" name="both"{{if $r.Both}} checked{{end}}>Both ways</label><label class="field"><span class="label">Why? <span class="opt">optional</span></span><input name="note" value="{{$r.Note}}" placeholder="For release coordination"></label>{{end}}
+
+{{define "org-test-result"}}<div class="org-connection"><div><h3>{{.From}} → {{.To}} · {{if .Self}}same participant{{else if .Allow}}allowed{{else}}denied{{end}}</h3><p>{{.Explanation}}</p><details><summary>Policy detail</summary><p>{{.Reason}}</p></details></div>{{if not .Self}}<form class="form" hx-post="/org/rules" hx-target="#org-body" hx-swap="outerHTML" method="post" action="/org/rules"><input type="hidden" name="from" value="{{.From}}"><input type="hidden" name="to" value="{{.To}}"><input type="hidden" name="priority" value="first"><div class="org-pair-actions"><label>Set access <select name="allow"><option value="allow"{{if not .Allow}} selected{{end}}>Allow</option><option value="deny"{{if .Allow}} selected{{end}}>Deny</option></select></label><label class="check"><input type="checkbox" name="both">Both ways</label><button class="btn btn-primary" type="submit">Save exception</button></div><p class="muted">Creates the first exception, ahead of existing rules and defaults.</p></form>{{end}}</div>{{end}}
+
+{{define "team-node"}}{{$n := .N}}{{$v := .V}}<li class="org-team">
+  <div class="org-team-box">
+    <div class="org-team-head">
       <h3 class="team-name">{{$n.Name}}</h3>
-      <span class="team-id mono">{{$n.ID}}</span>
-      <span class="tag" title="{{if $n.Open}}members may message each other freely{{else}}members go through the head{{end}}">{{if $n.Open}}open{{else}}closed{{end}}</span>
+
+      <span class="tag" title="{{if $n.Open}}members may message each other freely{{else}}members go through the head{{end}}">{{if $n.Open}}Members talk directly{{else}}Through the head{{end}}</span>
     </div>
-    <dl class="team-people">
-      <div><dt>Head</dt><dd>{{with $n.Head}}{{template "person" .}}{{else}}<span class="muted">none</span>{{end}}</dd></div>
-      <div><dt>Members</dt><dd class="people">{{range $n.Members}}{{template "person" .}}{{else}}<span class="muted">none</span>{{end}}</dd></div>
+    <dl class="org-team-people">
+      <div><dt>Head</dt><dd>{{with $n.Head}}{{template "org-person" .}}{{else}}<span class="muted">none</span>{{end}}</dd></div>
+      <div><dt>Members</dt><dd class="people">{{range $n.Members}}{{template "org-person" .}}{{else}}<span class="muted">none</span>{{end}}</dd></div>
     </dl>
     {{with $n.Instructions}}<p class="team-instr">{{.}}</p>{{end}}
     <details class="team-edit">
-      <summary class="btn btn-sm btn-ghost" aria-label="Edit team {{$n.Name}}">{{template "icon" "edit"}}<span>Edit</span></summary>
+      <summary class="btn btn-sm btn-ghost" aria-label="Edit team {{$n.Name}}">{{template "icon" "edit"}}<span>Edit team & members</span></summary>
       <form class="form team-form" hx-post="/org/teams/{{$n.ID}}" hx-target="#org-body" hx-swap="outerHTML" method="post" action="/org/teams/{{$n.ID}}">
         <label class="field"><span class="label">Name</span><input name="name" value="{{$n.Name}}" required></label>
         {{template "team-fields" (dict "T" $n.Team "V" $v)}}
@@ -132,7 +59,7 @@
       </form>
     </details>
   </div>
-  {{if $n.Children}}<ul class="tree" role="list">{{range $n.Children}}{{template "team-node" (dict "N" . "V" $v)}}{{end}}</ul>{{end}}
+  {{if $n.Children}}<ul class="org-branches" role="list">{{range $n.Children}}{{template "team-node" (dict "N" . "V" $v)}}{{end}}</ul>{{end}}
 </li>{{end}}
 
 {{define "team-fields"}}{{$t := .T}}{{$v := .V}}
@@ -148,8 +75,5 @@
 <label class="field"><span class="label">Instructions <span class="opt">optional, shown to the team's agents</span></span><textarea name="instructions" rows="2">{{$t.Instructions}}</textarea></label>
 {{end}}
 
-{{define "org-test-result"}}<p class="test-result {{if .Self}}is-self{{else if .Allow}}is-allow{{else}}is-deny{{end}}">
-  <span class="verdict {{if .Allow}}is-allow{{else}}is-deny{{end}}"><i aria-hidden="true"></i>{{if .Self}}same participant{{else if .Allow}}allowed{{else}}denied{{end}}</span>
-  <span class="test-edge"><code>{{.From}}</code>{{template "icon" "arrow"}}<code>{{.To}}</code></span>
-  {{if not .Self}}<span class="test-reason">{{.Reason}}</span>{{end}}
-</p>{{end}}
+
+{{define "org-person"}}<a class="org-person" href="/agents/{{.Name}}">{{template "avatar" (dict "Display" .Display "Size" "sm")}}<span>{{.Display}}</span></a>{{end}}
