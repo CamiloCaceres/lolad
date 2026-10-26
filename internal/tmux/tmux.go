@@ -102,7 +102,14 @@ func (s *Sessions) Start(name, dir string, env, argv []string, cols, rows int) e
 	if e != nil {
 		return fmt.Errorf("tmux new-session: %w: %s", e, out)
 	}
-	return nil
+	// Keep detached windows independent of the last attached client's dimensions.
+	for _, option := range [][2]string{{"window-size", "manual"}, {"@lolad-cols", strconv.Itoa(cols)}, {"@lolad-rows", strconv.Itoa(rows)}} {
+		if _, err := s.run("set-option", "-w", "-t", target(name), option[0], option[1]); err != nil {
+			return err
+		}
+	}
+	_, e = s.run("resize-window", "-t", target(name), "-x", strconv.Itoa(cols), "-y", strconv.Itoa(rows))
+	return e
 }
 func (s *Sessions) PanePID(name string) (int, error) {
 	v, e := s.run("display-message", "-p", "-t", target(name), "#{pane_pid}")
@@ -157,13 +164,20 @@ type terminal struct {
 	once     sync.Once
 	err      error
 	readOnly bool
+	sessions *Sessions
+	name     string
+	done     chan struct{}
 }
 
 func (t *terminal) Resize(cols, rows uint16) error {
 	if t.readOnly {
 		return nil
 	}
-	return pty.Setsize(t.File, &pty.Winsize{Cols: cols, Rows: rows})
+	if err := pty.Setsize(t.File, &pty.Winsize{Cols: cols, Rows: rows}); err != nil {
+		return err
+	}
+	_, err := t.sessions.run("resize-window", "-t", target(t.name), "-x", strconv.Itoa(int(cols)), "-y", strconv.Itoa(int(rows)))
+	return err
 }
 func (t *terminal) Close() error {
 	t.once.Do(func() {
@@ -171,7 +185,7 @@ func (t *terminal) Close() error {
 		if t.cmd.Process != nil {
 			_ = t.cmd.Process.Kill()
 		}
-		_ = t.cmd.Wait()
+		<-t.done
 	})
 	return t.err
 }
@@ -187,5 +201,21 @@ func (s *Sessions) Attach(ctx context.Context, name string, readOnly bool) (core
 	if e != nil {
 		return nil, e
 	}
-	return &terminal{File: f, cmd: cmd, readOnly: readOnly}, nil
+	t := &terminal{File: f, cmd: cmd, readOnly: readOnly, sessions: s, name: name, done: make(chan struct{})}
+	go func() {
+		defer close(t.done)
+		_ = cmd.Wait()
+		if !readOnly {
+			cols, rows := "220", "50"
+			if v, err := s.run("show-option", "-wqv", "-t", target(name), "@lolad-cols"); err == nil && strings.TrimSpace(v) != "" {
+				cols = strings.TrimSpace(v)
+			}
+			if v, err := s.run("show-option", "-wqv", "-t", target(name), "@lolad-rows"); err == nil && strings.TrimSpace(v) != "" {
+				rows = strings.TrimSpace(v)
+			}
+			_, _ = s.run("set-option", "-w", "-t", target(name), "window-size", "manual")
+			_, _ = s.run("resize-window", "-t", target(name), "-x", cols, "-y", rows)
+		}
+	}()
+	return t, nil
 }

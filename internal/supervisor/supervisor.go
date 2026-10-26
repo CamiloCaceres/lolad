@@ -93,6 +93,7 @@ func New(o Options) (*Supervisor, error) {
 			return nil, e
 		}
 	}
+	adopted := 0
 	for _, a := range o.Agents {
 		r := &record{Status: core.AgentStatus{Agent: a, State: core.StateStopped, Desired: "down"}}
 		if a.Runtime.AutostartEnabled() {
@@ -129,12 +130,15 @@ func New(o Options) (*Supervisor, error) {
 				r.StartupDialogs = nil
 				r.Status.NextRestart = time.Time{}
 				r.Status.PID, _ = o.Sessions.PanePID(a.Name)
-				s.event(a.Name, "adopted", "adopted existing session")
+				adopted++
 			}
 		}
 		if e := s.persist(r); e != nil {
 			return nil, e
 		}
+	}
+	if adopted > 0 {
+		s.event("", "adopted", fmt.Sprintf("adopted %d sessions", adopted))
 	}
 	if e := s.configureTriggers(); e != nil {
 		return nil, e
@@ -284,12 +288,13 @@ func (s *Supervisor) reconcileAgent(ctx context.Context, r *record, now time.Tim
 	if r.Restarting {
 		return s.beginStop(r)
 	}
-	if r.Status.State == core.StateStarting {
+	startupFallback := r.Status.State == core.StateStarting || strings.HasPrefix(r.Status.Detail, "startup blocked:") || strings.HasPrefix(r.Status.Detail, "no hook signal")
+	if startupFallback {
 		if err := s.checkStartup(r, now); err != nil {
 			return err
 		}
 	}
-	if r.Status.State != core.StateStarting && !strings.HasPrefix(r.Status.Detail, "startup blocked:") && now.Sub(r.Status.LastActivity) > 15*time.Minute {
+	if !startupFallback && now.Sub(r.Status.LastActivity) > 15*time.Minute {
 		pane, e := s.opts.Sessions.Capture(name, 40, false)
 		if e != nil {
 			return e

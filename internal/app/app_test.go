@@ -57,7 +57,9 @@ func TestCompositionAndHTTP(t *testing.T) {
 		}
 		return data
 	}
-	call("GET", "/api/agents", nil, 200)
+	if data := call("GET", "/api/agents", nil, 200); bytes.Contains(data, []byte("0001-01-01")) {
+		t.Fatalf("zero timestamp: %s", data)
+	}
 	ids, e := a.Provider.Identities(t.Context())
 	if e != nil || len(ids) != 3 {
 		t.Fatalf("identities: %v %v", ids, e)
@@ -76,7 +78,9 @@ func TestCompositionAndHTTP(t *testing.T) {
 		t.Fatalf("conversations: %+v %v", c, e)
 	}
 	call("POST", "/api/mail/"+c[0].Last.ID+"/read", nil, 200)
-	call("GET", "/api/mail/conversation/head", nil, 200)
+	if data := call("GET", "/api/mail/conversation/head", nil, 200); bytes.Contains(data, []byte("0001-01-01")) {
+		t.Fatalf("zero mail timestamp: %s", data)
+	}
 	call("POST", "/api/agents/missing/start", nil, 404)
 	call("POST", "/api/mail/send", map[string]string{"to": "missing", "body": "test"}, 404)
 	org, _ := a.Org(t.Context())

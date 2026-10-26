@@ -434,7 +434,7 @@ func (c *client) run(args []string) error {
 		}
 		return nil
 	case "tell-user":
-		pos, opts, e := parseOptions(args[1:], map[string]bool{"option": true})
+		pos, opts, e := parseOptions(args[1:], map[string]bool{"option": true, "subject": true})
 		if e != nil {
 			return e
 		}
@@ -471,8 +471,18 @@ func (c *client) run(args []string) error {
 		if kind == "update" {
 			typ = "update"
 		}
-		return c.send(to, kind, pos[1], typ, "normal", "", map[string]any{"userchat": core.UserChat{Kind: kind, Options: opts["option"]}})
+		return c.send(to, option(opts, "subject", subjectFromText(pos[1])), pos[1], typ, "normal", "", map[string]any{"userchat": core.UserChat{Kind: kind, Options: opts["option"]}})
 	default:
 		return fmt.Errorf("unknown msg command %q; use lolad msg help", args[0])
 	}
+}
+
+// subjectFromText uses a readable first line without splitting Unicode characters.
+func subjectFromText(text string) string {
+	line, _, _ := strings.Cut(strings.TrimSpace(text), "\n")
+	runes := []rune(strings.TrimSpace(line))
+	if len(runes) > 80 {
+		runes = runes[:80]
+	}
+	return string(runes)
 }

@@ -124,3 +124,31 @@ func TestLoneExecutableWithSpaces(t *testing.T) {
 	s.SendKeys("lone", "Enter")
 	until(t, func() bool { p, _ := s.Capture("lone", 40, false); return strings.Count(p, "direct") >= 2 })
 }
+
+func TestWritableAttachRestoresLaunchSize(t *testing.T) {
+	s := testSessions(t)
+	if err := s.Start("live", t.TempDir(), os.Environ(), []string{"/bin/cat"}, 220, 50); err != nil {
+		t.Fatal(err)
+	}
+	term, err := s.Attach(t.Context(), "live", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer term.Close()
+	until(t, func() bool {
+		clients, _ := s.run("list-clients", "-F", "#{client_pid}")
+		return strings.TrimSpace(clients) != ""
+	})
+	if err := term.Resize(90, 28); err != nil {
+		t.Fatal(err)
+	}
+	size := func() string {
+		v, _ := s.run("display-message", "-p", "-t", target("live"), "#{window_width}x#{window_height}")
+		return strings.TrimSpace(v)
+	}
+	until(t, func() bool { return size() == "90x28" })
+	if err := term.Close(); err != nil {
+		t.Fatal(err)
+	}
+	until(t, func() bool { return size() == "220x50" })
+}

@@ -32,7 +32,7 @@ func TestHTTPCommands(t *testing.T) {
 		case "/api/mail/send":
 			var o core.Outgoing
 			json.NewDecoder(r.Body).Decode(&o)
-			if o.To != "worker" || o.Body != "hello" || o.Context["userchat"] == nil {
+			if o.To != "worker" || o.Body != "hello" || o.Subject != "hello" || o.Context["userchat"] == nil {
 				t.Errorf("send: %+v", o)
 			}
 		default:
@@ -65,5 +65,32 @@ func TestDaemonDown(t *testing.T) {
 	var out, err bytes.Buffer
 	if Run(t.Context(), []string{"ls"}, strings.NewReader(""), &out, &err) != 1 || !strings.Contains(err.String(), "lolad serve") {
 		t.Fatalf("missing helpful failure: %s", &err)
+	}
+}
+
+func TestSubjectFromText(t *testing.T) {
+	for _, tc := range []struct{ text, want string }{{"  First line  \nSecond", "First line"}, {strings.Repeat("界", 90), strings.Repeat("界", 80)}} {
+		if got := subjectFromText(tc.text); got != tc.want {
+			t.Fatalf("%q != %q", got, tc.want)
+		}
+	}
+}
+func TestSendExplicitSubject(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var got core.Outgoing
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Error(err)
+		}
+		if got.Subject != "Explicit" {
+			t.Error(got.Subject)
+		}
+		w.Write([]byte(`{}`))
+	}))
+	defer server.Close()
+	t.Setenv("LOLAD_URL", server.URL)
+	t.Setenv("LOLAD_CONFIG", filepath.Join(t.TempDir(), "config.yaml"))
+	var out, err bytes.Buffer
+	if code := Run(t.Context(), []string{"send", "worker", "first\nsecond", "--subject", "Explicit"}, strings.NewReader(""), &out, &err); code != 0 {
+		t.Fatal(err.String())
 	}
 }

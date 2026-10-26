@@ -222,12 +222,15 @@ fallback accepts only its specific working-agreement heading and explanation.
 Provider, authentication and tool approval dialogs are never automatically
 confirmed. The supervisor inspects starting panes on its two-second tick,
 accepts each recognized dialog at most once per launch, and records a `dialog`
-event. At two minutes, a non-ready startup becomes waiting with a bounded first
-content line in Detail and an event. Busy turns leave startup detection; a
+event. At two minutes, a non-ready startup becomes unknown with a bounded diagnostic
+Detail unless the pane indicates a blocking dialog (recognized agreements or
+provider/authentication/confirmation prompts), in which case it becomes waiting
+with a bounded first content line and a dialog event. Busy turns leave startup detection; a
 session_start hook alone does not hide a blocker. Ready-composer fallback can
 update displayed state, while mail delivery still requires its independent idle
 hook tracker. Adopted sessions get the same startup inspection. Blocked Detail
-survives the ordinary stale-hook fallback until another hook or restart.
+survives the ordinary stale-hook fallback until a ready composer, another hook
+or restart.
 
 The isolated real `lolad new` verification and cleanup are recorded in
 [docs/e2e.md](../../docs/e2e.md#unattended-first-run-dialogs--2026-10-25).

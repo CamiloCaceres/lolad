@@ -100,7 +100,21 @@ func TestEndToEnd(t *testing.T) {
 		t.Fatal(chat, e)
 	}
 	for _, kind := range []string{"say", "update", "deliver"} {
-		success("a", "tell-user", kind, "text")
+		id := strings.TrimSpace(success("a", "tell-user", kind, "  First line  \nBody"))
+		m, err := p.Get(t.Context(), id)
+		if err != nil || m.Subject != "First line" {
+			t.Fatal(m, err)
+		}
+	}
+	id := strings.TrimSpace(success("a", "tell-user", "say", strings.Repeat("界", 90)))
+	m, err := p.Get(t.Context(), id)
+	if err != nil || m.Subject != strings.Repeat("界", 80) {
+		t.Fatal(m, err)
+	}
+	id = strings.TrimSpace(success("a", "tell-user", "ask", "Question", "--subject", "Explicit"))
+	m, err = p.Get(t.Context(), id)
+	if err != nil || m.Subject != "Explicit" {
+		t.Fatal(m, err)
 	}
 	who := success("a", "who")
 	if !strings.Contains(who, "b@home.lolad.local") || strings.Contains(who, "blocked@home.lolad.local") {

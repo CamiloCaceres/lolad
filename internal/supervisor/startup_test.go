@@ -1,7 +1,9 @@
 package supervisor
 
 import (
+	"context"
 	"database/sql"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -112,5 +114,77 @@ func TestAdoptionKeepsPersistedActiveTurn(t *testing.T) {
 	f.tick(t)
 	if f.state(t).State != core.StateBusy {
 		t.Fatal("active turn treated as startup")
+	}
+}
+
+func TestStartupWithoutSignalFallsBackToUnknown(t *testing.T) {
+	f := setup(t, nil)
+	f.tick(t)
+	f.sessions.pane = "Loading runtime..."
+	f.c.advance(119 * time.Second)
+	f.tick(t)
+	if f.state(t).State != core.StateStarting {
+		t.Fatal(f.state(t))
+	}
+	f.c.advance(time.Second)
+	f.tick(t)
+	if got := f.state(t); got.State != core.StateUnknown || !strings.Contains(got.Detail, "no hook signal") {
+		t.Fatal(got)
+	}
+	f.c.advance(20 * time.Minute)
+	f.tick(t)
+	if !strings.Contains(f.state(t).Detail, "no hook signal") {
+		t.Fatal("lost detail")
+	}
+	f.sessions.pane = "ready"
+	f.tick(t)
+	if f.state(t).State != core.StateIdle {
+		t.Fatal(f.state(t))
+	}
+}
+
+func TestReloadHonorsNewAgentAutostart(t *testing.T) {
+	for _, enabled := range []bool{false, true} {
+		t.Run(fmt.Sprint(enabled), func(t *testing.T) {
+			f := setup(t, func(o *Options) { o.Agents = nil })
+			f.s.opts.ReloadAgents = func(context.Context) ([]core.Agent, error) {
+				return []core.Agent{{Name: "new", Runtime: core.Runtime{Harness: core.HarnessClaude, Autostart: &enabled}}}, nil
+			}
+			if err := f.s.Reload(ctx); err != nil {
+				t.Fatal(err)
+			}
+			got, err := f.s.Get(ctx, "new")
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := "down"
+			if enabled {
+				want = "up"
+			}
+			if got.Desired != want {
+				t.Fatal(got)
+			}
+			f.tick(t)
+			if (f.sessions.starts > 0) != enabled {
+				t.Fatal("autostart ignored after reload")
+			}
+		})
+	}
+}
+
+func TestAdoptionEmitsSystemSummary(t *testing.T) {
+	f := setup(t, nil)
+	f.tick(t)
+	s, err := New(f.o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	events, _ := s.Events(ctx, "", 100)
+	if len(events) != 1 || events[0].Agent != "" || events[0].Detail != "adopted 1 sessions" {
+		t.Fatal(events)
+	}
+	events, _ = s.Events(ctx, "agent", 100)
+	if len(events) != 0 {
+		t.Fatal(events)
 	}
 }

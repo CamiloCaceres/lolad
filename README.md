@@ -113,6 +113,11 @@ lolad new --name Researcher --harness claude --role "Research assistant" \
 lolad new --name Analyst --harness codewhale --role "Operations analyst"
 ```
 
+Without `--start`, creation and adoption write `autostart: false` and leave
+the agent stopped, including after registry reload and daemon restart. Mail
+can still start it later: `wake_on_message` defaults to true, so a mission
+or subsequent message wakes it unless `runtime.wake_on_message: false` is set.
+
 The agent's slug comes from its name (for example `researcher`) unless an
 explicit slug is supplied. Creation always pins it in `runtime.slug`, so a
 later display-name change cannot change the identity. The creator refuses an

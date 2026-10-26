@@ -101,11 +101,11 @@ type AgentStatus struct {
 	State        State     `json:"state"`
 	Desired      string    `json:"desired"` // "up" | "down"
 	PID          int       `json:"pid,omitempty"`
-	StartedAt    time.Time `json:"started_at,omitempty"`    // current process
-	SessionSince time.Time `json:"session_since,omitempty"` // current conversation (reset by fresh/rotate)
-	LastActivity time.Time `json:"last_activity,omitempty"`
+	StartedAt    time.Time `json:"started_at,omitzero"`    // current process
+	SessionSince time.Time `json:"session_since,omitzero"` // current conversation (reset by fresh/rotate)
+	LastActivity time.Time `json:"last_activity,omitzero"`
 	Restarts     int       `json:"restarts"` // crash restarts in the last 24h
-	NextRestart  time.Time `json:"next_restart,omitempty"`
+	NextRestart  time.Time `json:"next_restart,omitzero"`
 	Unread       int       `json:"unread"` // mail addressed to it, not yet read by it
 	LastError    string    `json:"last_error,omitempty"`
 	Detail       string    `json:"detail,omitempty"` // from the last hook, e.g. the tool waiting for approval
@@ -153,8 +153,8 @@ type Mail struct {
 	Verified   bool           `json:"verified"`
 	CreatedAt  time.Time      `json:"created_at"`
 	Status     MailStatus     `json:"status"`
-	NotifiedAt time.Time      `json:"notified_at,omitempty"`
-	ReadAt     time.Time      `json:"read_at,omitempty"`
+	NotifiedAt time.Time      `json:"notified_at,omitzero"`
+	ReadAt     time.Time      `json:"read_at,omitzero"`
 	Attempts   int            `json:"attempts"` // notification attempts
 }
 

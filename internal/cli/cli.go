@@ -205,7 +205,7 @@ func command(ctx context.Context, args []string, stdin io.Reader, out io.Writer)
 		}
 		subject := o["subject"]
 		if subject == "" {
-			subject = "Message"
+			subject = subjectFromText(p[1])
 		}
 		body = core.Outgoing{To: p[0], Body: p[1], Subject: subject, Priority: o["priority"], Type: o["type"], InReplyTo: o["in-reply-to"], Context: context}
 	case "new":
@@ -221,7 +221,8 @@ func command(ctx context.Context, args []string, stdin io.Reader, out io.Writer)
 		}
 		method = "POST"
 		path = "/api/adopt"
-		body = core.AdoptRequest{Dir: p[0], Slug: o["slug"], Runtime: core.Runtime{Harness: core.Harness(o["harness"]), Model: o["model"], Permissions: core.Permissions(o["permissions"]), OnWake: o["on-wake"]}}
+		autostart := o["start"] == "true"
+		body = core.AdoptRequest{Dir: p[0], Slug: o["slug"], Runtime: core.Runtime{Autostart: &autostart, Harness: core.Harness(o["harness"]), Model: o["model"], Permissions: core.Permissions(o["permissions"]), OnWake: o["on-wake"]}}
 	case "reload":
 		if e = need(0); e != nil {
 			return e
@@ -321,4 +322,14 @@ func serve(parent context.Context, log io.Writer) error {
 		return e
 	}
 	return se
+}
+
+// subjectFromText uses a readable first line without splitting Unicode characters.
+func subjectFromText(text string) string {
+	line, _, _ := strings.Cut(strings.TrimSpace(text), "\n")
+	runes := []rune(strings.TrimSpace(line))
+	if len(runes) > 80 {
+		runes = runes[:80]
+	}
+	return string(runes)
 }

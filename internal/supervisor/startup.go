@@ -63,7 +63,24 @@ func (s *Supervisor) checkStartup(r *record, now time.Time) error {
 	if len(runes) > 240 {
 		first = string(runes[:240]) + "…"
 	}
+	// Non-interactive output alone is not evidence of a blocking dialog.
+	blocked := false
+	if dialogs, ok := launcher.(startupDialogs); ok {
+		name, _ := dialogs.StartupDialog(pane)
+		blocked = name != ""
+	}
+	lower := strings.ToLower(pane)
+	for _, marker := range []string{"login required", "sign in", "authenticate", "choose", "select", "enter to", "press enter", "confirm", "permission", "trust", "api key", "yes/no", "[y/n]"} {
+		blocked = blocked || strings.Contains(lower, marker)
+	}
+	if !blocked {
+		s.setState(r, core.StateUnknown, "no hook signal or ready prompt after startup window: "+first)
+		return nil
+	}
 	detail := "startup blocked: " + first
+	if r.Status.State == core.StateWaiting && r.Status.Detail == detail {
+		return nil
+	}
 	s.setState(r, core.StateWaiting, detail)
 	s.event(r.Status.Name, "dialog", detail)
 	return nil

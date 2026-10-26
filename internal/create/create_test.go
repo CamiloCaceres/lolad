@@ -451,3 +451,46 @@ func TestAdoptSlugDerivationAndPersistence(t *testing.T) {
 		})
 	}
 }
+
+func TestCreateAndAdoptAutostart(t *testing.T) {
+	template := t.TempDir()
+	script := `#!/bin/sh
+for dir; do :; done
+printf 'agent:\n  name: Worker\n' > "$dir/lolabot.yaml"
+printf '# Worker\n' > "$dir/CLAUDE.md"
+`
+	if err := os.WriteFile(filepath.Join(template, "setup.sh"), []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+	for _, start := range []bool{false, true} {
+		t.Run(fmt.Sprint(start), func(t *testing.T) {
+			c, svc := newTestCreator(t, template)
+			got, err := c.Create(t.Context(), core.CreateRequest{Name: "Worker", Harness: core.HarnessClaude, Start: start})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Runtime.AutostartEnabled() != start {
+				t.Fatal(got.Runtime)
+			}
+			var doc struct {
+				Runtime core.Runtime `yaml:"runtime"`
+			}
+			if err := yaml.Unmarshal(mustRead(t, filepath.Join(got.Dir, "lolabot.yaml")), &doc); err != nil {
+				t.Fatal(err)
+			}
+			if doc.Runtime.AutostartEnabled() != start {
+				t.Fatal("runtime not persisted")
+			}
+			if strings.Contains(strings.Join(svc.calls, ","), "start") != start {
+				t.Fatal(svc.calls)
+			}
+			got, err = c.Adopt(t.Context(), core.AdoptRequest{Dir: got.Dir, Runtime: core.Runtime{Harness: core.HarnessClaude}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Runtime.Autostart == nil || *got.Runtime.Autostart {
+				t.Fatal("adopt must default to stopped")
+			}
+		})
+	}
+}

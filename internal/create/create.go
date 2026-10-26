@@ -115,6 +115,10 @@ func (c *Creator) Create(ctx context.Context, req core.CreateRequest) (core.Agen
 	if err != nil {
 		return zero, err
 	}
+	if !req.Start {
+		no := false
+		r.Autostart = &no
+	}
 	org, err := c.deps.Org.Org(ctx)
 	if err != nil {
 		return zero, err
@@ -189,6 +193,10 @@ func (c *Creator) Adopt(ctx context.Context, req core.AdoptRequest) (core.AgentS
 	r, err := runtimeDefaults(req.Runtime)
 	if err != nil {
 		return zero, err
+	}
+	if r.Autostart == nil {
+		no := false
+		r.Autostart = &no
 	}
 	data, err := os.ReadFile(filepath.Join(dir, "lolabot.yaml"))
 	if err != nil {
