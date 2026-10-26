@@ -180,3 +180,54 @@ idle hook. The supervisor now supplies a brief inbox-check turn while retaining
 Read-only tmux attachments use `attach -r -f ignore-size` and ignore Resize,
 so a dashboard viewer cannot shrink the supervised terminal. Write attachments
 retain PTY resizing.
+
+
+## Unattended startup dialogs (2026-10-25)
+
+Claude Code 2.1.310 was checked with a throwaway HOME and explicit
+CLAUDE_CONFIG_DIR, with onboarding metadata seeded solely to reach trust.
+Accepting the real workspace screen wrote
+`projects[<canonical absolute workspace>].hasTrustDialogAccepted = true`.
+No supported workspace-trust acceptance flag is advertised by `--help`.
+The adapter merges only that key before every managed launch, covering new,
+adopted, wake, rotation and crash-resume paths. Default location is
+`$HOME/.claude.json`; an explicit CLAUDE_CONFIG_DIR uses
+`$CLAUDE_CONFIG_DIR/.claude.json`. It resolves workspace symlinks as Claude does.
+This is deliberately an exception to the normal per-agent-overlay-only rule:
+project trust lives outside settings overlays. Unknown JSON values and sibling
+projects are retained, malformed JSON and symlinked config files are refused,
+and writes use a private temporary file plus atomic rename. A sibling
+`.lolad-lock` serializes lolad writers across processes; external Claude writers
+do not participate in that lock, so it does not promise transactional updates
+against simultaneous external config edits. Already trusted entries are not
+rewritten. The user's global settings.json is never changed.
+
+Codewhale 0.10.1 stores its working-agreement decision in
+`$CODEWHALE_HOME/setup_state.json`: schema_version 1,
+constitution_choice `bundled`, constitution_checkpoint_completed_for `0.9.4`.
+The checkpoint lane differs from the binary version. Verified against its
+[versioned setup state source](https://github.com/codewhale-hq/CodeWhale/blob/v0.10.1/crates/config/src/setup_state.rs)
+and [checkpoint implementation](https://github.com/codewhale-hq/CodeWhale/blob/v0.10.1/crates/tui/src/tui/setup/mod.rs).
+Creation and adoption seed only absent/unset choices in the private agent home;
+launch preparation also covers existing registered agents and managed fallback
+homes. Existing custom choices, checkpoint versions and constitution files
+remain intact. Provider onboarding is intentionally still visible when a key is
+missing; `.onboarded` and `--skip-onboarding` are not set by lolad.
+
+Adapter.StartupDialog is an optional Launcher capability; no shared core change
+was needed. Real pane fixtures are claude-trust.txt (No selected by default)
+and cw-working-agreement.txt (Enter use recommended). Claude fallback checks
+which row is selected and sends Down/Enter or Enter accordingly. Codewhale
+fallback accepts only its specific working-agreement heading and explanation.
+Provider, authentication and tool approval dialogs are never automatically
+confirmed. The supervisor inspects starting panes on its two-second tick,
+accepts each recognized dialog at most once per launch, and records a `dialog`
+event. At two minutes, a non-ready startup becomes waiting with a bounded first
+content line in Detail and an event. Busy turns leave startup detection; a
+session_start hook alone does not hide a blocker. Ready-composer fallback can
+update displayed state, while mail delivery still requires its independent idle
+hook tracker. Adopted sessions get the same startup inspection. Blocked Detail
+survives the ordinary stale-hook fallback until another hook or restart.
+
+The isolated real `lolad new` verification and cleanup are recorded in
+[docs/e2e.md](../../docs/e2e.md#unattended-first-run-dialogs--2026-10-25).

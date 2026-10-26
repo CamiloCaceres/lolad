@@ -212,8 +212,8 @@ func TestAdoptAndPersistStopStart(t *testing.T) {
 	}
 	defer db.Close()
 	f := setup(t, func(o *Options) { o.DB = db; o.Sessions.(*fakeSessions).exists = true })
-	if f.state(t).State != core.StateUnknown {
-		t.Fatal("not adopted")
+	if f.state(t).State != core.StateStarting {
+		t.Fatal("not adopted into startup watch")
 	}
 	f.tick(t)
 	if f.sessions.starts != 0 {

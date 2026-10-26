@@ -255,6 +255,21 @@ Attach is for diagnosis; detach with tmux's `Ctrl-b d`. lolad uses a private
 adopt surviving sessions rather than killing them. PM2's `pm2 logs lolad`
 shows daemon output; agent lifecycle and policy events appear in `lolad logs`.
 
+For registered agent launches, lolad pre-accepts Claude workspace trust for that
+exact directory in `.claude.json` and records the bundled Codewhale working
+agreement in the private agent home. Existing Claude config and custom
+Codewhale agreements are preserved. The global `.claude/settings.json` is
+excluded from launches.
+
+During startup, lolad checks the pane every two seconds and accepts only known
+workspace-trust or working-agreement screens, recording `dialog` events. After
+two minutes without a ready composer or an active-turn hook, an unrecognized
+screen becomes `waiting` with `startup blocked: <first pane line>`. Check
+`lolad logs <agent>` and the terminal for missing provider credentials, login,
+or a changed TUI. Supply credentials through the agent environment or resolve
+the displayed setup step; a subsequent hook updates its state. Restart after
+changing configuration. Mail remains queued until hook-confirmed idle.
+
 `waiting` means the harness needs permission or input. `unknown` means state
 signals are missing; inspect the terminal and hook events. Mail waits for a
 confirmed idle prompt, so it is never typed into an active turn or permission

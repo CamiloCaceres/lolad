@@ -278,3 +278,94 @@ outside integration ownership (in addition to registry, harness, supervisor).
 The final Codewhale recipe and resume behavior are also recorded in
 `internal/harness/NOTES.md`. The second daemon and its temporary directory were
 removed after this smoke test.
+
+## Unattended first-run dialogs — 2026-10-25
+
+PASS with Claude Code 2.1.310 and Codewhale 0.10.1. This follow-up used a new
+`lolad-dialogs-*` temporary root, loopback `127.0.0.1:4197`, and the private
+`lolad-test-dialogs-e2e` tmux socket. TUI discovery used a separate
+`lolad-dialogs-probe` socket, throwaway HOME directories and workspaces.
+Port 4100, socket `lolad`, AI Maestro, PM2, the jugui/dsh-lola instances, and the
+user's global `.claude/settings.json` were untouched. One short Haiku turn
+(`Reply only READY.`) was used; Codewhale made no model call and was given no
+provider credentials. A private `uv` stub skipped optional setup downloads.
+
+The discovery probe accepted Claude's real trust screen in a throwaway HOME,
+then inspected only its project trust metadata. The installed version writes
+`projects[<canonical absolute directory>].hasTrustDialogAccepted = true`.
+An explicit `CLAUDE_CONFIG_DIR` relocates `.claude.json` inside that directory;
+otherwise the file is `$HOME/.claude.json`. The new launcher atomically merges
+only the trust key for the registered agent directory, preserving sibling
+projects, MCP entries, authentication metadata, unknown values and numbers.
+It refuses malformed JSON and symlinked config files. These writes happen
+before every managed launch, including wake, rotation and crash resume.
+Global settings remain excluded by `--setting-sources project,local`.
+
+A separate real Codewhale `/setup constitution` screen was captured, then its
+recommended agreement was accepted in the probe. The resulting state contained
+`schema_version: 1`, `constitution_choice: "bundled"`, and
+`constitution_checkpoint_completed_for: "0.9.4"`. That matches the
+[versioned state schema](https://github.com/codewhale-hq/CodeWhale/blob/v0.10.1/crates/config/src/setup_state.rs)
+and [checkpoint lane](https://github.com/codewhale-hq/CodeWhale/blob/v0.10.1/crates/tui/src/tui/setup/mod.rs).
+The same fields were present in the newly created agent's private
+`.codewhale-home/setup_state.json`. Creation/adoption and launch preparation
+seed missing acceptance without replacing existing custom choices or
+constitution files. No global Codewhale state is changed, and lolad does not
+mark provider onboarding complete or use `--skip-onboarding`.
+
+Actual unattended creation commands, where `$D` is the temporary root:
+
+```sh
+# $D/config.yaml: listen 127.0.0.1:4197, tmux_socket lolad-test-dialogs-e2e,
+# agents_dirs [$D/agents], new_agents_dir $D/agents.
+LOLAD_CONFIG="$D/config.yaml" LOLAD_STATE="$D/state" /tmp/lolad-dialogs-probe/lolad serve
+export LOLAD_URL=http://127.0.0.1:4197
+/tmp/lolad-dialogs-probe/lolad new Dialogsclaude --slug dialogs-claude \
+  --harness claude --model haiku --on-wake 'Reply only READY.' --start
+/tmp/lolad-dialogs-probe/lolad new Dialogscodewhale --slug dialogs-codewhale \
+  --harness codewhale --on-wake 'Reply only READY.' --start
+```
+
+Neither new agent received any manual keystroke. The new Claude agent used its
+normal existing authentication and only its own temporary project trust entry
+was added to the user's `.claude.json`; that entry was removed during cleanup.
+The separate throwaway-HOME probe needed no authentication or model turn.
+
+| Observation | Persisted evidence (America/Bogota) |
+| --- | --- |
+| Claude starts without trust screen and reaches hook-confirmed idle | Event 6 `started fresh=true`, 21:05:14.779; event 10 `session_start`, 21:05:15.936; event 12 `prompt_submit`, 21:05:16.037; event 13 `idle` and event 14 `stop`, 21:05:17.347. Actual pane displayed `READY`. |
+| Codewhale has accepted working-agreement state and reaches provider setup | Event 8 `started fresh=true`, 21:05:14.804; event 9 `session_start`, 21:05:15.095. Actual pane showed `Choose your model provider`, DeepSeek `needs key`. |
+| Missing provider credentials become visible instead of hanging | Event 16 `waiting` and event 17 `dialog`, 21:07:16.635. Status Detail: `startup blocked: ┌ Choose your model provider ─…┐`. PID remained 77950, desired stayed up, restarts stayed zero. |
+
+The optional `StartupDialog` Launcher capability handles only positively
+identified workspace-trust and working-agreement screens. Claude's real screen
+selected `No, exit` by default, so fallback sends Down then Enter; if Yes is
+already selected it sends only Enter. Codewhale's specific working-agreement
+screen uses Enter. Each acceptance records a `dialog` event and is attempted at
+most once per launch. Every two-second reconciliation checks starting panes;
+after two minutes a non-ready pane becomes waiting with its first content line
+in Detail. SessionStart alone does not mask a blocker, active turns are not
+subject to the startup deadline, and ordinary stale-state fallback preserves
+startup-blocked details. Hook-confirmed idle remains required for mail typing.
+Existing sessions adopted on daemon boot also receive startup inspection,
+while a persisted busy turn retains its busy state.
+
+Real captured fixtures are `internal/harness/testdata/claude-trust.txt`,
+`cw-working-agreement.txt`, and `cw-provider-chooser.txt`. Regression coverage
+checks their exact recognition and key sequences, refusal of provider/tool
+prompts, one acceptance per launch, timeout timing, recovery by hook,
+ready-composer fallback, busy turns, JSON preservation and concurrent lolad
+merges. Full repository validation passed:
+
+```sh
+go build ./...
+go vet ./...
+go test ./...
+```
+
+Cleanup stopped both isolated agents, terminated only the test daemon, killed
+both private test tmux servers, removed temporary probe/E2E files, and removed
+only this run's temporary project entries from `.claude.json` with an atomic
+merge. The private `.claude.json.lolad-lock` sidecar is retained for future
+lolad writers. No requested behavior remains failed; Codewhale correctly waits
+for credentials rather than silently treating provider setup as an idle prompt.

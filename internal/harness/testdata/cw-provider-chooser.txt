@@ -1,0 +1,50 @@
+
+                                                  ┌ Choose your model provider ──────────────────────────────────────────────────────────────────────────────────────────┐
+                                                  │ ▸ DeepSeek *  needs key                                                                                              │
+                                                  │   AICraft    needs key                                                                                               │
+                                                  │   Alibaba Cloud Model Studio    needs key                                                                            │
+                                                  │   Alibaba Model Studio (DashScope)    needs key                                                                      │
+                                                  │   Anthropic    needs key                                                                                             │
+                                                  │   Arcee AI    needs key                                                                                              │
+                                                  │   AtlasCloud    needs key                                                                                            │
+                                                  │   Baidu Qianfan    needs key                                                                                         │
+                                                  │   Baseten    needs key                                                                                               │
+                                                  │   Cerebras    needs key                                                                                              │
+                                                  │   Cheaper Inference    needs key                                                                                     │
+                                                  │   Codewhale    needs key                                                                                             │
+                                                  │   Command Code    needs key                                                                                          │
+                                                  │   Concentrate    needs key                                                                                           │
+                                                  │   CSDN    needs key                                                                                                  │
+                                                  │   Custom (OpenAI-compatible)    needs endpoint                                                                       │
+                                                  │   DeepInfra    needs key                                                                                             │
+                                                  │   Eden AI    needs key                                                                                               │
+                                                  │   Fireworks AI    needs key                                                                                          │
+                                                  │   Google Gemini    needs key                                                                                         │
+                                                  │   Groq    needs key                                                                                                  │
+                                                  │   Hugging Face    needs key                                                                                          │
+                                                  │   Meituan LongCat    needs key                                                                                       │
+                                                  │   Meta Model API    needs key                                                                                        │
+                                                  │   MiniMax    needs key                                                                                               │
+                                                  │   Mistral AI    needs key                                                                                            │
+                                                  │   ModelScope    needs key                                                                                            │
+                                                  │   Moonshot/Kimi    needs key                                                                                         │
+                                                  │   Novita AI    needs key                                                                                             │
+                                                  │   NVIDIA NIM    needs key                                                                                            │
+                                                  │   Ollama    local · not checked · default-only                                                                       │
+                                                  │   Ollama Cloud    needs key                                                                                          │
+                                                  │   OpenAI Codex (ChatGPT)    needs sign-in                                                                            │
+                                                  │   OpenAI-compatible    needs key                                                                                     │
+                                                  │   OpenCode Go    needs key                                                                                           │
+                                                  │   OpenCode Zen    needs key                                                                                          │
+                                                  │   OpenModel    needs key                                                                                             │
+                                                  │   OpenRouter    needs key                                                                                            │
+                                                  │   OrcaRouter    needs key                                                                                            │
+                                                  │   Sakana AI (Fugu)    needs key                                                                                      │
+                                                  │   SenseNova    needs key                                                                                             │
+                                                  │   SGLang    local · not checked · 2 bundled                                                                          │
+                                                  │   SiliconFlow    needs key                                                                                           │
+                                                  │   SiliconFlow (China)    needs key                                                                                   │
+                                                  │   StepFun / StepFlash    needs key                                                                                   │
+                                                  │ ↑↓ move  Enter set key  Ctrl+O explore offline  Esc back                                                             │
+                                                  └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+

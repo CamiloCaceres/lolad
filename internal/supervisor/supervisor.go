@@ -39,18 +39,20 @@ type Options struct {
 	MailWatch    MailWatch
 }
 type record struct {
-	Status       core.AgentStatus
-	EverStarted  bool
-	Fresh        bool
-	Crashes      []time.Time
-	RestartTimes []time.Time
-	Seq          int64
-	HookSession  string
-	LastHook     string
-	StopAt       time.Time
-	Restarting   bool
-	RotationDue  time.Time
-	RotatedDay   string
+	Status         core.AgentStatus
+	EverStarted    bool
+	Fresh          bool
+	Crashes        []time.Time
+	RestartTimes   []time.Time
+	Seq            int64
+	HookSession    string
+	LastHook       string
+	StopAt         time.Time
+	Restarting     bool
+	RotationDue    time.Time
+	StartupAt      time.Time
+	StartupDialogs map[string]bool
+	RotatedDay     string
 }
 type pending struct {
 	Mail          core.Mail
@@ -118,7 +120,13 @@ func New(o Options) (*Supervisor, error) {
 			if !dead {
 				r.EverStarted = true
 				r.StopAt = time.Time{}
-				r.Status.State = core.StateUnknown
+				// A surviving active turn is not a first-run blocker. Keep its
+				// persisted busy signal; inspect other adopted panes promptly.
+				if r.Status.State != core.StateBusy {
+					r.Status.State = core.StateStarting
+				}
+				r.StartupAt = o.Clock.Now()
+				r.StartupDialogs = nil
 				r.Status.NextRestart = time.Time{}
 				r.Status.PID, _ = o.Sessions.PanePID(a.Name)
 				s.event(a.Name, "adopted", "adopted existing session")
@@ -276,7 +284,12 @@ func (s *Supervisor) reconcileAgent(ctx context.Context, r *record, now time.Tim
 	if r.Restarting {
 		return s.beginStop(r)
 	}
-	if now.Sub(r.Status.LastActivity) > 15*time.Minute {
+	if r.Status.State == core.StateStarting {
+		if err := s.checkStartup(r, now); err != nil {
+			return err
+		}
+	}
+	if r.Status.State != core.StateStarting && !strings.HasPrefix(r.Status.Detail, "startup blocked:") && now.Sub(r.Status.LastActivity) > 15*time.Minute {
 		pane, e := s.opts.Sessions.Capture(name, 40, false)
 		if e != nil {
 			return e
@@ -374,6 +387,8 @@ func (s *Supervisor) launch(r *record) error {
 	r.Seq = 0
 	r.HookSession = ""
 	r.LastHook = ""
+	r.StartupAt = now
+	r.StartupDialogs = nil
 	r.Status.StartedAt = now
 	r.Status.LastActivity = now
 	if opts.Fresh {

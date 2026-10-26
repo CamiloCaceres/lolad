@@ -10,6 +10,8 @@ import (
 )
 
 func TestPrepare(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
 	for _, kind := range []core.Harness{core.HarnessClaude, core.HarnessCodewhale} {
 		t.Run(string(kind), func(t *testing.T) {
 			dir := t.TempDir()

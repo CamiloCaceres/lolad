@@ -130,6 +130,9 @@ func (a *Adapter) Prepare(agent core.Agent, o core.LaunchOpts) (core.LaunchSpec,
 	dir := filepath.Join(o.StateDir, "agents", agent.Name)
 	switch a.Kind {
 	case core.HarnessClaude:
+		if err := trustClaude(agent.Dir, env); err != nil {
+			return spec, fmt.Errorf("prepare Claude trust: %w", err)
+		}
 		if agent.Runtime.Permissions == core.PermBypass || agent.Runtime.Permissions == "" {
 			args = append(args, "--permission-mode", "bypassPermissions")
 		}
@@ -155,6 +158,9 @@ func (a *Adapter) Prepare(agent core.Agent, o core.LaunchOpts) (core.LaunchSpec,
 			if e := os.MkdirAll(home, 0700); e != nil {
 				return spec, e
 			}
+		}
+		if err := AcceptCodewhaleAgreement(home); err != nil {
+			return spec, err
 		}
 		env["CODEWHALE_HOME"] = home
 		if _, e := os.Stat(filepath.Join(home, "prompts", "constitution.md")); e == nil {
@@ -243,7 +249,7 @@ func InputLine(pane string) int {
 func (a *Adapter) PromptReady(pane string) bool {
 	p := Plain(pane)
 	lower := strings.ToLower(p)
-	for _, bad := range []string{"enter to confirm", "do you trust", "yes, i trust", "allow once", "allow this", "esc to cancel", "waiting for approval", "approve this", "esc to interrupt", "escape to interrupt"} {
+	for _, bad := range []string{"working agreement", "choose your model provider", "enter to confirm", "do you trust", "yes, i trust", "allow once", "allow this", "esc to cancel", "waiting for approval", "approve this", "esc to interrupt", "escape to interrupt"} {
 		if strings.Contains(lower, bad) {
 			return false
 		}

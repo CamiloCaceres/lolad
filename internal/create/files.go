@@ -15,6 +15,7 @@ import (
 
 	"github.com/CamiloCaceres/lolad/docs"
 	"github.com/CamiloCaceres/lolad/internal/core"
+	"github.com/CamiloCaceres/lolad/internal/harness"
 )
 
 func setupCompatibility(env []string) ([]string, func(), error) {
@@ -88,6 +89,9 @@ func writeHarness(a core.Agent) error {
 	}
 	home := filepath.Join(a.Dir, ".codewhale-home")
 	if err := os.MkdirAll(home, 0700); err != nil {
+		return err
+	}
+	if err := harness.AcceptCodewhaleAgreement(home); err != nil {
 		return err
 	}
 	config := filepath.Join(home, "config.toml")
