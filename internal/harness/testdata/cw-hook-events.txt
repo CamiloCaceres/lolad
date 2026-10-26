@@ -1,0 +1,60 @@
+Note Update available: v0.10.1 -> v0.10.2
+▏    Release notes: https://github.com/codewhale-hq/CodeWhale/releases/tag/v0.10.2
+▏    Run /update install here (preview it with a bare /update), or codewhale update in a shell, then restart Codewhale.
+
+Note Available hook events (use one of these as event = "..." in your [[hooks.hooks]] entry).
+▏    Hooks are a TUI runtime feature: codewhale exec, the CLI dispatcher, the app-server,
+▏    and the workflow tool do not fire them.
+▏
+▏    - session_start — fires once when the TUI launches
+▏    - session_end — fires once on graceful shutdown
+▏    - turn_end — fires after a turn completes (observer-only)
+▏    - message_submit — fires before model dispatch; can transform or block submitted text
+▏    - tool_call_before — fires before each tool call; can allow/deny/ask, rewrite input, add context
+▏    - tool_call_after — fires after each tool call (observer-only)
+▏    - mode_change — fires on Plan/Act/Operate transitions
+▏    - on_error — fires on transport / capacity / tool errors
+▏    - subagent_spawn — fires when a sub-agent starts (observer-only)
+▏    - subagent_complete — fires when a sub-agent completes, fails, or is cancelled (observer-only)
+▏    - shell_env — fires before each exec_shell; stdout KEY=VALUE lines are merged into its environment
+▏    - session_idle — fires when the session settles back to idle after a turn or a wait (observer-only)
+▏    - session_error — fires when a turn ends in a terminal failure; absorbed tool failures never fire it (observer-only)
+▏    - waiting_for_user — fires when an approval prompt opens, a question is presented, or a goal continuation parks (observer-only)
+▏    - session_busy — idle / waiting → in_progress
+▏
+▏    Only message_submit, tool_call_before, and shell_env can steer a turn.
+▏    Observer-only means the result is ignored — the command still runs
+▏    and can have any external side effect.
+▏
+▏    Full contract: docs/HOOKS.md
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│❯ Type a message…                                                                                                                         │
+│                                                                                                                                      [·] │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+ ● ask  Shift+Tab to change   work (Tab)   Work bar (Ctrl+])                                                   Model set to: deepseek-flash
+ model not connected   context 0%

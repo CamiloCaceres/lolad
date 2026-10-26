@@ -1,0 +1,40 @@
+Note Update available: v0.10.1 -> v0.10.2
+▏    Release notes: https://github.com/codewhale-hq/CodeWhale/releases/tag/v0.10.2
+▏    Run /update install here (preview it with a bare /update), or codewhale update in a shell, then restart Codewhale.
+
+Note Usage reporting is on by default. Share aggregate version/platform, session, feature and error counts with Codewhale and PostHog
+▏    (processor). No content or IP. docs/TELEMETRY.md Turn off: codewhale config set telemetry false
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│❯ /hooks list-events                                                                                                                      │
+│                                                                                                                                      [↵] │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+ ● ask  Shift+Tab to change   work (Tab)   Work bar (Ctrl+])
+ model not connected   context 0%

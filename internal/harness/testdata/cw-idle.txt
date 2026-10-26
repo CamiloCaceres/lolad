@@ -1,0 +1,40 @@
+Note Update available: v0.10.1 -> v0.10.2
+▏    Release notes: https://github.com/codewhale-hq/CodeWhale/releases/tag/v0.10.2
+▏    Run /update install here (preview it with a bare /update), or codewhale update in a shell, then restart Codewhale.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│❯ Type a message…                                                                                                                         │
+│                                                                                                                                      [·] │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+ ● ask  Shift+Tab to change   work (Tab)   Work bar (Ctrl+])                         v0.10.2 available - run `codewhale update` and restart
+ model not connected   context 0%

@@ -1,0 +1,40 @@
+ ▐▛███▛█   Claude Code v2.1.310
+▝▜██████▀  Haiku 5.5 · Claude Max
+ ▝▝   ▝▝   /private/var/folders/mz/ytnt7729609fr06vdcpffptr0000gn/T/lolad-probe-_xe168mg
+
+▎ Debug mode enabled · logging to /var/folders/mz/ytnt7729609fr06vdcpffptr0000gn/T/lolad-probe-_xe168mg/plugin-debug.log
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ Try "how does <filepath> work?"
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← 3 agents
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

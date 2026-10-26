@@ -1,0 +1,40 @@
+
+  Getting started · 1/2 ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  Choose your model provider
+
+  Pick where your model runs. Hosted providers need a key; local ones don't.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+   Enter choose a provider  Ctrl+O explore offline  Esc back
+ ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+

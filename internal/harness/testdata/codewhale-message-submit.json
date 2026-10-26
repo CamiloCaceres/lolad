@@ -1,0 +1,12 @@
+{
+  "event": "message_submit",
+  "text": "Reply only OK",
+  "text_bytes": 13,
+  "text_original_bytes": 13,
+  "text_truncated": false,
+  "session_id": "sess_83cbef41",
+  "workspace": "$TEMP",
+  "mode": "ACT",
+  "model": "deepseek-flash",
+  "total_tokens": 0
+}

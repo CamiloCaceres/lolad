@@ -1,0 +1,4 @@
+2026-10-26T01:11:49.174Z [DEBUG] Loaded 1 skills from plugin skill-creator default directory
+2026-10-26T01:11:50.206Z [DEBUG] Loaded plugins - Enabled: 5, Disabled: 1, Commands: 0, Agents: 0, Errors: 0
+SessionStart overlay marker: overlay-fired
+overlay-fired
