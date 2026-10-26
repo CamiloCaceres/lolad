@@ -54,7 +54,7 @@ func (s *Service) seed() {
 		{"patch", "Patch", "Backend Engineer", core.Runtime{Harness: core.HarnessCodewhale, Permissions: core.PermBypass, Args: []string{"--profile", "backend"}},
 			core.StateBusy, "apply_patch internal/billing/invoice.go", 1, "", 3 * time.Hour},
 		{"relay", "Relay", "Frontend Engineer", core.Runtime{Harness: core.HarnessClaude, Model: "claude-sonnet-5-5", Permissions: core.PermDefault},
-			core.StateWaiting, "Permission: Bash(rm -rf node_modules)", 0, "", 5 * time.Hour},
+			core.StateWaiting, "Permission: Bash(rm -rf node_modules && npm ci --prefer-offline --no-audit --loglevel=error)", 0, "", 5 * time.Hour},
 		{"juno", "Juno", "Head of Growth", core.Runtime{Harness: core.HarnessCodewhale, Model: "deepseek-v4", Permissions: core.PermBypass, Rotate: "05:00"},
 			core.StateIdle, "", 0, "", 20 * time.Hour},
 		{"quill", "Quill", "Writer", core.Runtime{Harness: core.HarnessClaude, Model: "claude-haiku-5-5", Permissions: core.PermBypass},

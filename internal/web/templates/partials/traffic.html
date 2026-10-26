@@ -7,7 +7,7 @@
       <summary class="trow">
         <time class="t-when" datetime="{{stamp .CreatedAt}}" title="{{long .CreatedAt}}">{{evtime .CreatedAt}}</time>
         <span class="t-route"><span class="t-p{{if eq .FromName $v.Me}} is-user{{end}}">{{.FromName}}</span>{{template "icon" "arrow"}}<span class="t-p{{if eq .ToName $v.Me}} is-user{{end}}">{{.ToName}}</span></span>
-        <span class="t-msg"><span class="t-subj">{{.Subject}}</span> <span class="t-prev">{{excerpt .Body 160}}</span></span>
+        <span class="t-msg">{{with subject .}}<span class="t-subj">{{.}}</span> {{end}}<span class="t-prev">{{excerpt .Body 160}}</span></span>
         <span class="t-type"><span class="tag">{{.Type}}</span>{{$t := .Type}}{{with (chat .).Kind}}{{if ne . $t}} <span class="tag">{{.}}</span>{{end}}{{end}}</span>
         <span class="t-status"><span class="mstatus ms-{{.Status}}">{{.Status}}</span></span>
       </summary>
@@ -34,6 +34,6 @@
     {{if not .Next.IsZero}}<a class="btn btn-sm" href="/traffic?{{with .Peer}}peer={{.}}&amp;{{end}}before={{stampNano .Next}}"><span>Older</span>{{template "icon" "down"}}</a>{{end}}
   </nav>
   {{else}}
-  <div class="empty"><p class="empty-title">No mail{{with .Peer}} to or from {{.}}{{end}} yet</p><p>Every message between agents, you and lolad lands here as it is sent.</p></div>
+  <div class="empty"><p class="empty-title">No mail{{with .Peer}} to or from {{.}}{{end}} yet</p><p>Every message between agents, you and lolad lands here as it is sent: the audit log of who said what to whom.</p>{{if not .HasAgents}}<p class="step-actions"><a class="btn btn-primary" href="/new">{{template "icon" "plus"}}<span>New agent</span></a><a class="btn" href="/new?mode=adopt">Adopt a directory</a></p>{{end}}</div>
   {{end}}
 </div>{{end}}

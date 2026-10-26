@@ -37,6 +37,7 @@ func funcs(s *server) template.FuncMap {
 		"add":       func(a, b int) int { return a + b },
 		"dict":      dict,
 		"chat":      userChat,
+		"subject":   subject,
 		"json":      func(v any) (string, error) { b, err := json.Marshal(v); return string(b), err },
 		"harness":   harnessLabel,
 		"list":      func(v ...string) []string { return v },
@@ -187,6 +188,21 @@ func running(st core.State) bool {
 		return false
 	}
 	return true
+}
+
+// placeholderSubjects are what senders put in the subject when they have no
+// real one: `lolad msg tell-user` uses the message kind, `lolad send` uses
+// "Message".
+var placeholderSubjects = map[string]bool{"message": true, "say": true, "update": true, "deliver": true, "ask": true, "reply": true, "decision": true, "(no subject)": true}
+
+// subject is the message's subject when it says something, "" when it is a
+// placeholder.
+func subject(m core.Mail) string {
+	s := baseSubject(m.Subject)
+	if placeholderSubjects[strings.ToLower(s)] || strings.EqualFold(s, userChat(m).Kind) {
+		return ""
+	}
+	return s
 }
 
 // userChat reads payload.context.userchat whatever shape it arrived in (a

@@ -14,6 +14,7 @@
 {{define "state-detail"}}{{if eq .State "crashed"}}{{if future .NextRestart}}restart in {{until .NextRestart}}{{else}}restart due{{end}}{{with .LastError}} · {{.}}{{end}}{{else if eq .State "failed"}}{{.LastError}}{{else if eq .State "stopped"}}{{if eq .Desired "down"}}stays down until started{{end}}{{else}}{{.Detail}}{{end}}{{end}}
 
 {{define "fleet"}}<div id="fleet" class="fleet-wrap" hx-get="/fragments/fleet" hx-trigger="lolad:agent from:body delay:500ms, lolad:mail from:body delay:900ms" hx-swap="outerHTML">
+  {{if not .Agents}}{{template "first-run" (dict "Title" "No agents yet")}}{{else}}
   <p class="summary">{{range $i, $c := .Counts}}{{if $i}}<span class="summary-sep" aria-hidden="true">·</span>{{end}}<span class="summary-item st-{{.State}}"><i aria-hidden="true"></i>{{.N}} {{.State}}</span>{{end}}</p>
   <div class="table-scroll">
   <table class="fleet">
@@ -34,12 +35,11 @@
       <td class="c-when">{{if .LastActivity.IsZero}}<span class="muted">never</span>{{else}}<time datetime="{{stamp .LastActivity}}" title="{{long .LastActivity}}" data-ago>{{ago .LastActivity}}</time>{{end}}</td>
       <td class="c-actions">{{template "controls" (dict "A" . "From" "fleet")}}</td>
     </tr>
-    {{else}}
-    <tr><td colspan="8"><div class="empty"><p class="empty-title">No agents yet</p><p>Create one, or adopt an existing lolabot directory.</p><a class="btn btn-primary" href="/new">{{template "icon" "plus"}}New agent</a></div></td></tr>
     {{end}}
     </tbody>
   </table>
   </div>
+  {{end}}
 </div>{{end}}
 
 {{define "fleet-body"}}{{template "fleet" .}}{{end}}
@@ -86,7 +86,7 @@
     <li>
       <span class="dir" title="{{if $out}}sent{{else}}received{{end}}">{{if $out}}to{{else}}from{{end}}</span>
       <span class="peer">{{if $out}}{{.ToName}}{{else}}{{.FromName}}{{end}}</span>
-      <span class="subj" title="{{excerpt .Body 300}}">{{.Subject}}</span>
+      <span class="subj" title="{{excerpt .Body 300}}">{{with subject .}}{{.}}{{else}}{{excerpt .Body 80}}{{end}}</span>
       <span class="mstatus ms-{{.Status}}">{{.Status}}</span>
       <time datetime="{{stamp .CreatedAt}}" title="{{long .CreatedAt}}" data-when>{{when .CreatedAt}}</time>
     </li>

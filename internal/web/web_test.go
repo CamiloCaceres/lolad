@@ -137,6 +137,41 @@ func TestPages(t *testing.T) {
 	}
 }
 
+// A fresh install has no agents: every page says what lolad is and points to
+// creating or adopting one, instead of empty tables.
+func TestFirstRun(t *testing.T) {
+	f := fake.New(fake.Options{Empty: true})
+	defer f.Close()
+	srv := httptest.NewServer(web.New(f, web.Options{Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}))
+	defer srv.Close()
+	e := &env{t: t, svc: &spy{Service: f}, srv: srv}
+	for _, tc := range []struct {
+		path      string
+		want, not []string
+	}{
+		{"/", []string{"Welcome to lolad", `href="/new"`, `href="/new?mode=adopt"`}, []string{"caught up", "popovertarget=\"new-message\""}},
+		{"/agents", []string{"No agents yet", `href="/new?mode=adopt"`}, []string{"<table"}},
+		{"/org", []string{"No agents yet", "Add team"}, []string{`class="matrix"`, "Test a message"}},
+		{"/traffic", []string{"No mail yet", `href="/new"`}, []string{`id="peer-filter"`}},
+		{"/new?mode=adopt", []string{`id="mode-adopt" value="adopt" checked`}, nil},
+	} {
+		code, body := e.get(tc.path)
+		if code != 200 {
+			t.Errorf("GET %s = %d", tc.path, code)
+		}
+		for _, w := range tc.want {
+			if !strings.Contains(body, w) {
+				t.Errorf("GET %s: missing %q", tc.path, w)
+			}
+		}
+		for _, n := range tc.not {
+			if strings.Contains(body, n) {
+				t.Errorf("GET %s: should not contain %q", tc.path, n)
+			}
+		}
+	}
+}
+
 func TestPagesDoNotClaimIntegratorPrefixes(t *testing.T) {
 	e := setup(t)
 	for _, p := range []string{"/api/agents", "/v1/health", "/hook/lola/x"} {
@@ -262,6 +297,36 @@ func TestDecisionButtons(t *testing.T) {
 	}
 	if n := len(e.svc.Sent()); n != 1 {
 		t.Errorf("UserSend called %d times, want 1", n)
+	}
+}
+
+// lolad msg tell-user puts the message kind in the subject; that must not show
+// as a heading, and answers still need a real (non-empty) subject.
+func TestPlaceholderSubjects(t *testing.T) {
+	f := fake.New(fake.Options{})
+	defer f.Close()
+	sp := &spy{Service: f}
+	srv := httptest.NewServer(web.New(sp, web.Options{Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}))
+	defer srv.Close()
+	e := &env{t: t, svc: sp, srv: srv}
+	ask, err := f.AgentSend(context.Background(), "ultron", core.Outgoing{To: "milo", Subject: "ask", Body: "Coffee or tea?",
+		Context: map[string]any{"userchat": map[string]any{"kind": "ask", "options": []string{"Coffee", "Tea"}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, page := e.get("/inbox/ultron")
+	if strings.Contains(page, `<p class="bubble-subj">ask</p>`) || !strings.Contains(page, "Coffee or tea?") {
+		t.Error("placeholder subject rendered as a heading")
+	}
+	if _, home := e.get("/"); !strings.Contains(home, "Coffee or tea?") {
+		t.Error("home should list the open question by its text")
+	}
+	resp, body := e.do("POST", "/inbox/ultron/decide", url.Values{"id": {ask.ID}, "option": {"Tea"}}, true)
+	if resp.StatusCode != 200 {
+		t.Fatalf("decide: %d %s", resp.StatusCode, body)
+	}
+	if got := sp.Sent()[0].Subject; got != "Re: Coffee or tea?" {
+		t.Errorf("decision subject %q", got)
 	}
 }
 

@@ -1,6 +1,7 @@
 package web
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -224,7 +225,7 @@ func shape(msgs []msgView, me string) {
 			m.Day = dayLabel(m.CreatedAt)
 			lastDay = day
 		}
-		subj := baseSubject(m.Subject)
+		subj := subject(m.Mail)
 		m.ShowSubj = !m.Mine && subj != "" && (subj != lastSubject || m.Kind == "ask" || m.Kind == "deliver")
 		lastSubject = subj
 		if i > 0 && m.Day == "" && !m.New {
@@ -347,14 +348,21 @@ func (s *server) navFragment(w http.ResponseWriter, r *http.Request) {
 	s.fragment(w, http.StatusOK, "nav-badges", s.badges(r))
 }
 
-// subjectFor makes a subject for a typed message: the replied-to subject, or
-// the first line of the body.
+// subjectFor makes a subject for a message from the user: "Re: " and the
+// replied-to subject, or the replied-to text when its subject was a
+// placeholder, or the first line of the body. Never empty (the provider
+// requires 1-256 characters).
 func subjectFor(body string, parent *core.Mail) string {
-	if parent != nil && parent.Subject != "" {
-		return "Re: " + baseSubject(parent.Subject)
+	firstLine := func(s string) string {
+		line, _, _ := strings.Cut(strings.TrimSpace(s), "\n")
+		return excerpt(line, 80)
 	}
-	line, _, _ := strings.Cut(strings.TrimSpace(body), "\n")
-	return excerpt(line, 60)
+	if parent != nil {
+		if s := cmp.Or(subject(*parent), firstLine(parent.Body)); s != "" {
+			return excerpt("Re: "+s, 120)
+		}
+	}
+	return cmp.Or(firstLine(body), "Message")
 }
 
 func findMail(msgs []core.Mail, id string) *core.Mail {

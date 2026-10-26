@@ -3,6 +3,7 @@
 //
 //	go run ./internal/web/cmd/webdev            # http://127.0.0.1:4199
 //	go run ./internal/web/cmd/webdev -live      # re-read templates and assets from disk
+//	go run ./internal/web/cmd/webdev -empty     # first-run state
 package main
 
 import (
@@ -21,10 +22,11 @@ func main() {
 	addr := flag.String("addr", "127.0.0.1:4199", "listen address")
 	live := flag.Bool("live", false, "serve templates and static files from the source tree, re-read on every request")
 	quiet := flag.Bool("still", false, "don't simulate activity (no state changes or incoming mail)")
+	empty := flag.Bool("empty", false, "start like a fresh install: no agents, no mail")
 	flag.Parse()
 
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	svc := fake.New(fake.Options{Simulate: !*quiet})
+	svc := fake.New(fake.Options{Simulate: !*quiet, Empty: *empty})
 	defer svc.Close()
 
 	opts := web.Options{Logger: log}

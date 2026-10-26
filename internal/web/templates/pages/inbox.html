@@ -1,8 +1,8 @@
-{{define "content"}}<div class="inbox">
+{{define "content"}}<div class="inbox{{if not .Data.Convs}} is-empty{{if not .Data.Agents}} is-first-run{{end}}{{end}}">
   <aside class="inbox-list" aria-label="Conversations">
     <header class="pane-head">
       <h1 class="pane-title">Inbox</h1>
-      {{template "new-message" .Data.Agents}}
+      {{if .Data.Agents}}{{template "new-message" .Data.Agents}}{{end}}
     </header>
     {{template "conv-list" .Data}}
   </aside>

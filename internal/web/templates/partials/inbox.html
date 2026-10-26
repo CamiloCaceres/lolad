@@ -10,7 +10,7 @@
           <time class="conv-time" datetime="{{stamp .LastAt}}" title="{{long .LastAt}}" data-when>{{when .LastAt}}</time>
         </span>
         <span class="conv-bottom">
-          <span class="conv-preview">{{if .Pending}}<span class="tag is-you">Asks</span> {{(index .Asks (add (len .Asks) -1)).Subject}}{{else}}{{if .Mine}}<span class="conv-you">You:</span> {{end}}{{excerpt .Last.Body 110}}{{end}}</span>
+          <span class="conv-preview">{{if .Pending}}<span class="tag is-you">Asks</span> {{with index .Asks (add (len .Asks) -1)}}{{with subject .Mail}}{{.}}{{else}}{{excerpt .Body 90}}{{end}}{{end}}{{else}}{{if .Mine}}<span class="conv-you">You:</span> {{end}}{{excerpt .Last.Body 110}}{{end}}</span>
           {{if .Unread}}<span class="count{{if .Pending}} is-you{{end}}"><span class="sr-only">Unread: </span>{{.Unread}}</span>{{end}}
         </span>
       </span>
@@ -20,7 +20,7 @@
   {{else}}
   <div class="empty empty-list">
     <p class="empty-title">No conversations yet</p>
-    <p>Agents write to you with <code>lolad msg tell-user</code>. Start one with <strong>New message</strong>.</p>
+    <p>{{if .Agents}}Your threads with agents will be listed here.{{else}}Once you have agents, your threads with them are listed here.{{end}}</p>
   </div>
   {{end}}
 </div>{{end}}
@@ -65,12 +65,12 @@
   {{if .New}}<li class="sep is-new" role="separator" id="new"><span>New</span></li>{{end}}
   {{if eq .Kind "system"}}
   <li class="msg is-system" id="m-{{short .ID}}">
-    <p>{{template "icon" "pulse"}}<span><strong>{{.Subject}}</strong> · {{excerpt .Body 220}}</span><time datetime="{{stamp .CreatedAt}}" title="{{long .CreatedAt}}">{{clock .CreatedAt}}</time></p>
+    <p>{{template "icon" "pulse"}}<span>{{with subject .Mail}}<strong>{{.}}</strong> · {{end}}{{excerpt .Body 220}}</span><time datetime="{{stamp .CreatedAt}}" title="{{long .CreatedAt}}">{{clock .CreatedAt}}</time></p>
   </li>
   {{else if and (eq .Kind "update") (not .Mine)}}
   <li class="msg is-update" id="m-{{short .ID}}">
     <div class="note">
-      <p class="note-head">{{template "icon" "pulse"}}<span class="note-subj">{{.Subject}}</span><time datetime="{{stamp .CreatedAt}}" title="{{long .CreatedAt}}">{{clock .CreatedAt}}</time></p>
+      <p class="note-head">{{template "icon" "pulse"}}<span class="note-subj">{{with subject .Mail}}{{.}}{{else}}Update{{end}}</span><time datetime="{{stamp .CreatedAt}}" title="{{long .CreatedAt}}">{{clock .CreatedAt}}</time></p>
       <div class="note-body rich">{{rich .Body}}</div>
     </div>
   </li>
@@ -80,7 +80,7 @@
     <div class="bubble">
       {{if eq .Kind "deliver"}}<p class="bubble-kind">{{template "icon" "file"}}Delivered</p>{{end}}
       {{if eq .Kind "ask"}}<p class="bubble-kind">{{template "icon" "ask"}}{{if .Answered}}Question{{else}}Waiting on you{{end}}</p>{{end}}
-      {{if .ShowSubj}}<p class="bubble-subj">{{.Subject}}</p>{{end}}
+      {{if .ShowSubj}}<p class="bubble-subj">{{subject .Mail}}</p>{{end}}
       {{if eq .Kind "decision"}}<p class="decision">{{template "icon" "check"}}<span>{{.Chat.Decision}}</span></p>
       {{else}}<div class="rich">{{rich .Body}}</div>{{end}}
     </div>
@@ -131,7 +131,7 @@
     {{range .Asks}}{{$c := .Conv}}
       <li class="ask-card">
         <a class="ask-who" href="/inbox/{{$c.Peer}}">{{template "avatar" (dict "Display" $c.Display "State" $c.State "Size" "sm")}}<span>{{$c.Display}}</span><time datetime="{{stamp .Ask.CreatedAt}}" title="{{long .Ask.CreatedAt}}" data-when>{{when .Ask.CreatedAt}}</time></a>
-        <p class="ask-subj">{{.Ask.Subject}}</p>
+        {{with subject .Ask.Mail}}<p class="ask-subj">{{.}}</p>{{end}}
         <div class="ask-body rich">{{rich .Ask.Body}}</div>
         <form class="options" method="post" action="/inbox/{{$c.Peer}}/decide">
           <input type="hidden" name="id" value="{{.Ask.ID}}">
@@ -150,7 +150,9 @@
     {{end}}
     </ul>
   {{end}}
-  {{if and (not .Asks) (not .Unread)}}
+  {{if not .Agents}}{{if not .Convs}}{{template "first-run" (dict "Title" "Welcome to lolad")}}{{end}}
+  {{else if not .Convs}}{{template "start-chat" .Agents}}
+  {{else if and (not .Asks) (not .Unread)}}
     <div class="empty empty-home">
       {{template "icon" "check"}}
       <p class="empty-title">You're caught up</p>

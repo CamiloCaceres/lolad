@@ -17,6 +17,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/CamiloCaceres/lolad/internal/core"
 )
@@ -24,6 +25,7 @@ import (
 // Options configure the fake.
 type Options struct {
 	Simulate bool             // background activity; off for deterministic tests
+	Empty    bool             // a fresh install: just the operator, no agents, no mail
 	Now      func() time.Time // default time.Now
 }
 
@@ -57,7 +59,12 @@ func New(opts Options) *Service {
 		subs:     map[chan core.Event]struct{}{},
 		stop:     make(chan struct{}),
 	}
-	s.seed()
+	if opts.Empty {
+		s.org = core.Org{Tenant: "home", User: core.User{Name: "milo", Display: "Camilo Caceres"},
+			Defaults: core.Defaults{UserToAgents: "all", AgentsToUser: "all", Vertical: true, Independents: "user-only"}}
+	} else {
+		s.seed()
+	}
 	if s.simulate {
 		go s.run()
 	}
@@ -516,11 +523,26 @@ func (s *Service) UserSend(ctx context.Context, out core.Outgoing) (core.Mail, e
 	if strings.TrimSpace(out.Body) == "" {
 		return core.Mail{}, fmt.Errorf("%w: empty message", core.ErrInvalid)
 	}
+	// Same limit as the real provider.
+	if n := utf8.RuneCountInString(out.Subject); n < 1 || n > 256 {
+		return core.Mail{}, fmt.Errorf("%w: Subject must have 1–256 characters", core.ErrInvalid)
+	}
 	m, err := s.deliver(s.org.User.Name, to, out)
 	if err == nil && s.simulate {
 		s.scheduleReply(to, m)
 	}
 	return m, err
+}
+
+// AgentSend sends mail as an agent, the way `lolad msg` does, subject to the
+// policy. For tests and demos.
+func (s *Service) AgentSend(ctx context.Context, from string, out core.Outgoing) (core.Mail, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.find(from) == nil {
+		return core.Mail{}, fmt.Errorf("agent %q: %w", from, core.ErrNotFound)
+	}
+	return s.deliver(from, strings.ToLower(out.To), out)
 }
 
 func (s *Service) MarkRead(ctx context.Context, id string) error {

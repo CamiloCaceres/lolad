@@ -8,7 +8,8 @@
       <div class="tree-root">
         <div class="tree-user">{{template "avatar" (dict "Display" .Org.User.Display "Size" "sm")}}<span><strong>{{.Org.User.Display}}</strong> <span class="muted mono">{{.Org.User.Name}}</span></span><span class="tag">operator</span></div>
         {{if .Roots}}<ul class="tree" role="list">{{range .Roots}}{{template "team-node" (dict "N" . "V" $v)}}{{end}}</ul>
-        {{else}}<p class="empty-inline">No teams yet. Every agent is independent.</p>{{end}}
+        {{else if .Agents}}<p class="empty-inline">No teams yet, so every agent is independent and talks only to you. Add a team to give agents a head to report to.</p>
+        {{else}}<div class="org-empty"><p>No agents yet. Once you have some, group them into teams here: each team has a head who speaks for it upward.</p><div class="step-actions"><a class="btn btn-primary btn-sm" href="/new">{{template "icon" "plus"}}<span>New agent</span></a><a class="btn btn-sm" href="/new?mode=adopt">Adopt a directory</a></div></div>{{end}}
       </div>
       {{if .Independents}}
       <div class="indep">
@@ -79,7 +80,8 @@
   </div>
 
   <section class="panel" aria-labelledby="h-matrix">
-    <header class="panel-head"><h2 id="h-matrix">Who can message whom</h2><span class="panel-note">row sends to column; hover or tap a cell for the reason</span></header>
+    <header class="panel-head"><h2 id="h-matrix">Who can message whom</h2>{{if .Agents}}<span class="panel-note">row sends to column; hover or tap a cell for the reason</span>{{end}}</header>
+    {{if not .Agents}}<p class="empty-inline">With agents in place, this grid shows every sender and recipient pair, allowed or denied, with the reason. Until then the only participant is you.</p>{{else}}
     <div class="matrix-layout">
       <div class="matrix-scroll">
         <table class="matrix">
@@ -102,6 +104,7 @@
         <div id="test-result" class="test-result-slot" aria-live="polite">{{with .Test}}{{template "org-test-result" .}}{{end}}</div>
       </form>
     </div>
+    {{end}}
   </section>
 </div>{{end}}
 

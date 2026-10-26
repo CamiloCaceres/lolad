@@ -1,8 +1,8 @@
 {{define "new-body"}}{{$v := .}}<div id="new-body">
   <div class="segmented" role="radiogroup" aria-label="How to add the agent">
-    <input type="radio" name="mode" id="mode-create" value="create"{{if not .AError}} checked{{end}}>
+    <input type="radio" name="mode" id="mode-create" value="create"{{if not .Adopting}} checked{{end}}>
     <label for="mode-create">Create new</label>
-    <input type="radio" name="mode" id="mode-adopt" value="adopt"{{if .AError}} checked{{end}}>
+    <input type="radio" name="mode" id="mode-adopt" value="adopt"{{if .Adopting}} checked{{end}}>
     <label for="mode-adopt">Adopt existing directory</label>
   </div>
 

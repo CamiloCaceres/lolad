@@ -37,6 +37,11 @@
     };
   }
 
+  // A read-only viewer never resizes the agent's window (tmux attach -r -f
+  // ignore-size), so its stream has the attach pty's default size. Draw
+  // exactly that grid and scale the font to the panel instead of re-wrapping.
+  const WATCH_COLS = 80, WATCH_ROWS = 24;
+
   const sessions = new Map(); // panel -> session
 
   function session(panel) {
@@ -57,6 +62,21 @@
       toggle.querySelector("use").setAttribute("href", s.control ? "#i-lock" : "#i-unlock");
       toggle.setAttribute("aria-pressed", String(s.control));
       if (s.term) s.term.options.disableStdin = !s.control;
+    }
+    // layout sizes the terminal: fitted to the panel when in control (the
+    // session follows), a fixed scaled grid when watching.
+    function layout() {
+      if (!s.term) return;
+      if (s.control) {
+        s.term.options.fontSize = 12.5;
+        try { s.fit.fit(); } catch { /* hidden */ }
+        return;
+      }
+      const width = host.clientWidth - 8;
+      if (width <= 0) return;
+      // ~0.6em per monospace cell; stay legible, let the panel scroll below 7px.
+      s.term.options.fontSize = Math.max(7, Math.min(14, Math.floor((width / WATCH_COLS / 0.6) * 10) / 10));
+      if (s.term.cols !== WATCH_COLS || s.term.rows !== WATCH_ROWS) s.term.resize(WATCH_COLS, WATCH_ROWS);
     }
     function sendSize() {
       if (!s.ws || s.ws.readyState !== WebSocket.OPEN || !s.term) return;
@@ -108,10 +128,10 @@
           s.term.onData((d) => {
             if (s.control && s.ws && s.ws.readyState === WebSocket.OPEN) s.ws.send(JSON.stringify({ type: "input", data: d }));
           });
-          s.ro = new ResizeObserver(() => { try { s.fit.fit(); } catch { /* hidden */ } sendSize(); });
+          s.ro = new ResizeObserver(() => { layout(); sendSize(); });
           s.ro.observe(host);
         }
-        s.fit.fit();
+        layout();
         paint();
         connect();
       }, (err) => say(err.message));
@@ -126,6 +146,7 @@
       if (!s.control && !confirm("Take control of " + agent + "'s session? Your keystrokes go straight into it; the agent may be mid-turn.")) return;
       s.control = !s.control;
       paint();
+      layout();
       if (panel.open && s.term) connect();
     });
     again.addEventListener("click", () => { if (s.term) connect(); });

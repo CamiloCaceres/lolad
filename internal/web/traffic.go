@@ -10,12 +10,13 @@ import (
 )
 
 type trafficView struct {
-	Mail   []core.Mail
-	Peer   string        // filter: only mail from or to this participant
-	People []participant // filter options
-	Before time.Time     // this page starts before
-	Next   time.Time     // cursor for the next (older) page; zero = no more
-	Me     string
+	Mail      []core.Mail
+	Peer      string        // filter: only mail from or to this participant
+	People    []participant // filter options
+	Before    time.Time     // this page starts before
+	Next      time.Time     // cursor for the next (older) page; zero = no more
+	Me        string
+	HasAgents bool
 }
 
 const trafficPage = 60
@@ -53,6 +54,7 @@ func (s *server) traffic(w http.ResponseWriter, r *http.Request) {
 	v.People = []participant{{Name: me.Name, Display: me.Display, Kind: "user"}}
 	if list, err := s.svc.List(ctx); err == nil {
 		slices.SortFunc(list, func(a, b core.AgentStatus) int { return strings.Compare(a.Name, b.Name) })
+		v.HasAgents = len(list) > 0
 		for _, a := range list {
 			v.People = append(v.People, participant{Name: a.Name, Display: a.Display, Kind: "agent", State: a.State})
 		}

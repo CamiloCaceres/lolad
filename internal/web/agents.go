@@ -100,10 +100,25 @@ func (s *server) agentData(ctx context.Context, name string) (agentView, error) 
 	if v.Events, err = s.svc.Events(ctx, name, 80); err != nil {
 		return v, err
 	}
-	slices.SortStableFunc(v.Events, func(a, b core.Event) int { return b.At.Compare(a.At) })
+	slices.SortStableFunc(v.Events, func(a, b core.Event) int {
+		if c := b.At.Compare(a.At); c != 0 {
+			return c
+		}
+		return cmp.Compare(b.ID, a.ID)
+	})
 	traffic, err := s.svc.Traffic(ctx, 400, time.Time{})
 	if err != nil {
 		return v, err
+	}
+	// The daemon's mail events carry only the message id; say what it was.
+	byID := make(map[string]core.Mail, len(traffic))
+	for _, m := range traffic {
+		byID[m.ID] = m
+	}
+	for i, e := range v.Events {
+		if m, ok := byID[e.Detail]; ok && e.Kind == "mail" {
+			v.Events[i].Detail = fmt.Sprintf("%s → %s: %s", m.FromName, m.ToName, cmp.Or(subject(m), excerpt(m.Body, 80)))
+		}
 	}
 	for _, m := range traffic {
 		if m.FromName == name || m.ToName == name {

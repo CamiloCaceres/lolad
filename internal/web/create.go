@@ -9,13 +9,14 @@ import (
 )
 
 type newView struct {
-	Teams  []core.Team
-	Depth  map[string]int
-	Me     core.User
-	Req    core.CreateRequest // echoed back after an error
-	Adopt  core.AdoptRequest
-	Error  string // create form
-	AError string // adopt form
+	Teams    []core.Team
+	Depth    map[string]int
+	Me       core.User
+	Req      core.CreateRequest // echoed back after an error
+	Adopt    core.AdoptRequest
+	Error    string // create form
+	AError   string // adopt form
+	Adopting bool   // show the adopt form
 }
 
 func (s *server) newData(r *http.Request) (newView, error) {
@@ -38,6 +39,7 @@ func (s *server) newPage(w http.ResponseWriter, r *http.Request) {
 	if t := r.URL.Query().Get("team"); t != "" {
 		v.Req.Team = t
 	}
+	v.Adopting = r.URL.Query().Get("mode") == "adopt"
 	s.page(w, r, http.StatusOK, "new", layout{Title: "New agent", Data: v})
 }
 
@@ -64,7 +66,7 @@ func (s *server) adopt(w http.ResponseWriter, r *http.Request) {
 	}}
 	st, err := s.svc.Adopt(r.Context(), req)
 	if err != nil {
-		s.newFailed(w, r, err, func(v *newView) { v.Adopt, v.AError = req, humanize(err, "Set a different slug.") })
+		s.newFailed(w, r, err, func(v *newView) { v.Adopt, v.AError, v.Adopting = req, humanize(err, "Set a different slug."), true })
 		return
 	}
 	s.redirect(w, r, "/agents/"+st.Name)

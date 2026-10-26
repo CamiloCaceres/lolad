@@ -4,14 +4,14 @@
       <h1 class="page-title">Traffic</h1>
       <p class="page-sub">Every message through lolad, newest first.</p>
     </div>
-    <form class="filter" method="get" action="/traffic" data-autosubmit>
+    {{if or .Data.HasAgents .Data.Mail .Data.Peer}}<form class="filter" method="get" action="/traffic" data-autosubmit>
       <label for="peer-filter">Participant</label>
       <select id="peer-filter" name="peer">
         <option value="">Everyone</option>
         {{range .Data.People}}<option value="{{.Name}}"{{if eq .Name $.Data.Peer}} selected{{end}}>{{.Display}}{{if ne .Name .Display}} ({{.Name}}){{end}}</option>{{end}}
       </select>
       <noscript><button class="btn btn-sm" type="submit">Filter</button></noscript>
-    </form>
+    </form>{{end}}
   </header>
   {{template "traffic-rows" .Data}}
 </div>{{end}}

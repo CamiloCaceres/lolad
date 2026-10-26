@@ -1,0 +1,41 @@
+{{define "first-run"}}<section class="first-run" aria-labelledby="first-run-title">
+  <h2 class="first-run-title" id="first-run-title">{{.Title}}</h2>
+  <p class="first-run-lede">lolad keeps your lolabot agents running and lets you talk to them by mail. Their updates, deliveries and questions land in the inbox; you answer there, never in a terminal.</p>
+  <ol class="steps" role="list">
+    <li class="step">
+      <span class="step-n" aria-hidden="true">1</span>
+      <div class="step-body">
+        <p class="step-title">Add an agent</p>
+        <p>Create a new lolabot instance, or adopt one you already have. lolad also picks up any lolabot directory with a <code>runtime:</code> block in its agents directories.</p>
+        <div class="step-actions">
+          <a class="btn btn-primary" href="/new">{{template "icon" "plus"}}<span>New agent</span></a>
+          <a class="btn" href="/new?mode=adopt">Adopt a directory</a>
+        </div>
+        <p class="step-cli">or <code>lolad adopt &lt;dir&gt; --harness claude</code></p>
+      </div>
+    </li>
+    <li class="step">
+      <span class="step-n" aria-hidden="true">2</span>
+      <div class="step-body">
+        <p class="step-title">Place it in the org <span class="opt">optional</span></p>
+        <p>Teams and rules decide who may message whom. Alone, an agent talks only to you.</p>
+        <div class="step-actions"><a class="btn btn-ghost btn-sm" href="/org">Open Org{{template "icon" "next"}}</a></div>
+      </div>
+    </li>
+    <li class="step">
+      <span class="step-n" aria-hidden="true">3</span>
+      <div class="step-body">
+        <p class="step-title">Talk to it here</p>
+        <p>Agents write to you with <code>lolad msg tell-user</code>. A question arrives with its options as buttons.</p>
+      </div>
+    </li>
+  </ol>
+</section>{{end}}
+
+{{define "start-chat"}}<section class="first-run" aria-labelledby="start-chat-title">
+  <h2 class="first-run-title" id="start-chat-title">No mail yet</h2>
+  <p class="first-run-lede">Write to an agent to get started. Anything you send lands in its inbox and is surfaced in its session; its replies, updates and questions show up here.</p>
+  <ul class="pick pick-wide" role="list">
+    {{range .}}<li><a href="/inbox/{{.Name}}">{{template "avatar" (dict "Display" .Display "State" .State "Size" "sm")}}<span class="pick-name">{{.Display}}</span><span class="pick-role">{{.Role}}</span>{{template "state" .}}</a></li>{{end}}
+  </ul>
+</section>{{end}}
