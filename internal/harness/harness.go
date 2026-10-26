@@ -95,38 +95,7 @@ func (a *Adapter) prepare(agent core.Agent, o core.LaunchOpts, sessionID string)
 			}
 			k = strings.TrimSpace(k)
 			v = strings.TrimSpace(v)
-			if len(v) > 0 && v[0] == '"' {
-				end := 1
-				for end < len(v) {
-					if v[end] == '\\' {
-						end += 2
-						continue
-					}
-					if v[end] == '"' {
-						break
-					}
-					end++
-				}
-				if end >= len(v) {
-					f.Close()
-					return spec, fmt.Errorf("invalid quoted env assignment")
-				}
-				decoded, err := strconv.Unquote(v[:end+1])
-				if err != nil {
-					f.Close()
-					return spec, fmt.Errorf("invalid quoted env assignment")
-				}
-				v = decoded
-			} else if len(v) > 0 && v[0] == '\'' {
-				end := strings.IndexByte(v[1:], '\'')
-				if end < 0 {
-					f.Close()
-					return spec, fmt.Errorf("invalid quoted env assignment")
-				}
-				v = v[1 : end+1]
-			} else if i := strings.Index(v, "#"); i >= 0 {
-				v = strings.TrimSpace(v[:i])
-			}
+			v = envValue(v)
 
 			env[k] = strings.ReplaceAll(v, "${LOLABOT_HOME}", agent.Dir)
 		}
@@ -315,4 +284,40 @@ func (a *Adapter) PromptReady(pane string) bool {
 		return strings.HasPrefix(strings.TrimSpace(lines[i]), "│❯") && strings.Contains(strings.Join(lines[i:], "\n"), "╰")
 	}
 	return i > 0 && strings.Contains(lines[i-1], "──") && i+1 < len(lines) && strings.Contains(strings.Join(lines[i+1:], "\n"), "──")
+}
+
+// envValue decodes one .env value. Balanced "…" (with escapes) or '…' quotes
+// are removed; an unquoted value loses a trailing " # comment". A value whose
+// quotes don't balance is kept literally, like dotenv tools do: a password may
+// simply start with a quote character.
+func envValue(v string) string {
+	if len(v) > 0 && v[0] == '"' {
+		end := 1
+		for end < len(v) {
+			if v[end] == '\\' {
+				end += 2
+				continue
+			}
+			if v[end] == '"' {
+				break
+			}
+			end++
+		}
+		if end < len(v) {
+			if decoded, err := strconv.Unquote(v[:end+1]); err == nil {
+				return decoded
+			}
+		}
+		return v
+	}
+	if len(v) > 0 && v[0] == '\'' {
+		if end := strings.IndexByte(v[1:], '\''); end >= 0 {
+			return v[1 : end+1]
+		}
+		return v
+	}
+	if i := strings.Index(v, " #"); i >= 0 {
+		return strings.TrimSpace(v[:i])
+	}
+	return v
 }
