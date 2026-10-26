@@ -43,11 +43,31 @@ type Runtime struct {
 	EnvFile       string            `yaml:"env_file,omitempty" json:"env_file,omitempty"`               // relative to the agent dir; default ".env" if present
 	Env           map[string]string `yaml:"env,omitempty" json:"env,omitempty"`                         // ${LOLABOT_HOME} is expanded
 	Args          []string          `yaml:"args,omitempty" json:"args,omitempty"`                       // extra harness argv
+	Skills        SkillsMode        `yaml:"skills,omitempty" json:"skills,omitempty"`                   // "" = inherit
 	Triggers      []Trigger         `yaml:"triggers,omitempty" json:"triggers,omitempty"`
 }
 
 func (r Runtime) AutostartEnabled() bool     { return r.Autostart == nil || *r.Autostart }
 func (r Runtime) WakeOnMessageEnabled() bool { return r.WakeOnMessage == nil || *r.WakeOnMessage }
+
+// SkillsMode decides which skills (and user-level plugins) an agent sees.
+type SkillsMode string
+
+const (
+	// SkillsInherit: the agent sees everything in the user's own Claude Code /
+	// Codewhale space (~/.claude/skills, user plugins) plus its own.
+	SkillsInherit SkillsMode = "inherit"
+	// SkillsBarebones: only the agent's own skills (inside its dir); whoever
+	// manages the agent adds skills to it explicitly.
+	SkillsBarebones SkillsMode = "barebones"
+)
+
+func (r Runtime) SkillsMode() SkillsMode {
+	if r.Skills == SkillsBarebones {
+		return SkillsBarebones
+	}
+	return SkillsInherit
+}
 
 // Trigger turns something outside the agent into mail from the system
 // identity. Exactly one of Cron, Mail, Webhook is set.
@@ -111,6 +131,10 @@ type AgentStatus struct {
 	Detail       string    `json:"detail,omitempty"` // from the last hook, e.g. the tool waiting for approval
 	Team         string    `json:"team,omitempty"`   // team id it belongs to, if any
 	IsHead       bool      `json:"is_head,omitempty"`
+	// PendingRestart: the agent's configuration (runtime block, .env, skills,
+	// email) changed since its process started; a restart applies it.
+	PendingRestart bool   `json:"pending_restart,omitempty"`
+	PendingReason  string `json:"pending_reason,omitempty"` // e.g. "model changed, .env changed"
 }
 
 // Event is one line in an agent's history: lifecycle, state change, trigger, delivery.
@@ -349,6 +373,22 @@ type Service interface {
 	Org(ctx context.Context) (Org, error)
 	SaveOrg(ctx context.Context, org Org) error // validated, written to org.yaml, policy reloaded
 	Check(ctx context.Context, from, to string) Decision
+
+	// per-agent settings (see settings.go)
+	UpdateRuntime(ctx context.Context, name string, rt Runtime) (AgentStatus, error) // replaces the runtime block; slug and harness are immutable here
+	Models(harness Harness) []ModelOption
+	Skills(ctx context.Context, name string) ([]Skill, error)
+	AddSkill(ctx context.Context, name, from string) (Skill, error) // from = a library skill's ID (Skill.ID with Source "user"/"plugin")
+	RemoveSkill(ctx context.Context, name, skillID string) error    // only Source "agent"
+	Env(ctx context.Context, name string) ([]EnvVar, error)
+	SetEnv(ctx context.Context, name, key, value string) error
+	DeleteEnv(ctx context.Context, name, key string) error
+	Files(ctx context.Context, name string) ([]FileInfo, error)
+	ReadFile(ctx context.Context, name, path string) (FileContent, error)
+	WriteFile(ctx context.Context, name, path, content, baseHash string) (FileContent, error) // ErrConflict when baseHash is stale
+	Email(ctx context.Context, name string) (EmailSettings, error)
+	SaveEmail(ctx context.Context, name string, s EmailSettings) (EmailSettings, error)
+	TestEmail(ctx context.Context, name, address string) (EmailTest, error)
 }
 
 var (
@@ -357,4 +397,5 @@ var (
 	ErrNotRunning = errors.New("agent is not running")
 	ErrInvalid    = errors.New("invalid request")
 	ErrDenied     = errors.New("denied by policy")
+	ErrConflict   = errors.New("changed since it was loaded")
 )

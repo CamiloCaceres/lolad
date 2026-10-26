@@ -299,3 +299,92 @@ Muted, desaturated palette; hue only as a state/scanning anchor. Light and dark.
 - Log with `log/slog`.
 - Don't edit packages you don't own; if you need something from one, put the
   interface in your package or ask the coordinator.
+
+## Agent settings (v2)
+
+The dashboard manages each agent's model, skills, `.env` secrets, config
+files and email. Everything is stored in the agent's own directory (lolabot
+files), never in lolad's DB. Types: `internal/core/settings.go`; Service
+methods at the end of `core.Service`.
+
+**Security model.** The dashboard is loopback-only, with no auth (same as
+Control); it relies on `http.CrossOriginProtection`. Secrets are
+**write-only** through every lolad surface (UI, API, CLI): you can set,
+replace or delete an env var and see whether it is set and its length, but no
+endpoint returns a value. Env files are written atomically with mode 0600.
+If the agent dir has a `.gitignore` (or is a git repo), lolad ensures the env
+file is ignored. The agent itself does see its env values (lolad exports the
+env file into its process, and its tools read `.env`); that is the point —
+it is how tokens are shared with the agent. Values are never logged, never put
+in events, and never sent in mail.
+
+**Pending restart.** Changes to the runtime block, the env file, skills or
+email take effect at the next launch. lolad fingerprints these at launch;
+`AgentStatus.PendingRestart`/`PendingReason` show the drift, and the UI offers
+"Restart to apply" (a resume restart, not a fresh conversation).
+
+### `internal/agentcfg` (new): one agent dir's settings
+```go
+type Options struct{ UserHome string } // default os.UserHomeDir(); tests point it at a temp dir
+func New(agentDir string, h core.Harness, o Options) *Dir
+func (d *Dir) Env(envFile string) ([]core.EnvVar, error) // envFile "" = ".env"; relative to agent dir or absolute
+func (d *Dir) SetEnv(envFile, key, value string) error   // key ^[A-Za-z_][A-Za-z0-9_]*$; preserve order/comments; quote when needed
+func (d *Dir) DeleteEnv(envFile, key string) error
+func (d *Dir) Files() ([]core.FileInfo, error)
+func (d *Dir) ReadFile(rel string) (core.FileContent, error)
+func (d *Dir) WriteFile(rel, content, baseHash string) (core.FileContent, error) // core.ErrConflict on stale hash
+func (d *Dir) Email(envFile string) (core.EmailSettings, error) // Watch filled with "mod" when detected, else "none"; the app overlays "lolad" from runtime triggers
+func (d *Dir) SaveEmail(envFile string, s core.EmailSettings) (core.EmailSettings, error)
+func TestEmail(ctx context.Context, a core.EmailAccount, password string) core.EmailTest
+func (d *Dir) EmailPassword(envFile, address string) (string, error) // for TestEmail only
+func (d *Dir) Skills(mode core.SkillsMode) ([]core.Skill, error)
+func (d *Dir) AddSkill(fromID string) (core.Skill, error)
+func (d *Dir) RemoveSkill(id string) error
+func (d *Dir) Fingerprint(envFile string, rt core.Runtime) (sum string, parts map[string]string) // parts: "runtime","env","skills","email" -> hash
+```
+- **Files**: text files the dashboard may edit — `*.md`, `*.yaml`/`*.yml`,
+  `*.toml`, `*.json`, `*.txt` — up to 1 MB, inside the agent dir. Never: env
+  files (`.env*`), `.git`, `.venv`, `node_modules`, `emails/`, `indexes/`,
+  `outbox/`, `__pycache__`, `.lolad-backup-*`, symlinks that resolve outside
+  the dir, binary content. Writes are atomic, keep the file mode, and check
+  `baseHash`. Groups and notes: CLAUDE.md/AGENTS.md "instructions" (note:
+  the lolad section between its markers is regenerated); lolabot.yaml "config"
+  (note: the runtime block is managed by lolad — edits to it are validated by
+  reload); `.claude/settings.json`, `.codewhale-home/config.toml` "config";
+  `brain/**`, `memory/**`, `skills/**`, `.claude/skills/**` by folder.
+- **Email**: lolabot's layout. Accounts in `lolabot.yaml` `email.accounts[]`
+  (`address, config_key, imap_server, imap_port, smtp_server, smtp_port`) and
+  `email.operator_emails`; the login in `brain/credentials.yaml`
+  `email_accounts.<config_key>` (`username`, `password_secret: <ENV NAME>`);
+  the password in the env file under that name. Edit lolabot.yaml surgically
+  (replace only the `email:` block; every other byte stays). If the agent's
+  `tools/email.sh` is the stock lolabot one that only knows `aim-secret`
+  (AI Maestro's vault), upgrade it to read the named secrets from `.env`
+  exactly as `/Users/you/agents/jugui/tools/email.sh` does
+  (and add `tools/env_secret.py` from jugui), keeping a `.lolad-orig` copy.
+  TestEmail does its own TLS IMAP LOGIN/LOGOUT and SMTP AUTH/QUIT in Go with a
+  10 s timeout (never sends mail) and reports each server separately.
+  Mod detection: a plugin enabled in the agent's `.claude/settings.json`
+  whose name contains "mail" means `Watch: "mod"`.
+- **Skills**: sources — `agent` (`<dir>/.claude/skills/*/SKILL.md` for
+  claude; the codewhale agent's skills dir for codewhale), `user`
+  (`~/.claude/skills/*` for claude, plus codewhale's user skill dirs),
+  `plugin:<name>` (skills inside installed plugins from
+  `~/.claude/plugins/` that the user has enabled). `Active` reflects the
+  mode: barebones → only `agent`. AddSkill copies the skill directory into the
+  agent (dereferencing symlinks; refusing if the name exists); RemoveSkill
+  deletes only `agent` skills. lolabot's own `<dir>/skills/` folder is
+  instructions referenced by CLAUDE.md, not harness skills: it appears in
+  Files, not in Skills.
+
+### Skills mode in the harness
+- claude: `inherit` = what a normal Claude Code session in that dir sees from
+  user space: `~/.claude/skills` and the user's enabled plugins. Because
+  agents run with `--setting-sources project,local`, user `enabledPlugins` must
+  be merged into the overlay for inherit. Hooks and other user settings stay
+  excluded. `barebones` = no user skills and no user plugins: only the agent's
+  `.claude/skills` and its project plugins (e.g. ultron-mail). Verify the
+  mechanism against the installed Claude Code; record it in
+  `internal/harness/NOTES.md`.
+- codewhale: `[skills] scan_codewhale_only` (barebones = true, inherit =
+  false), set per run without editing the agent's config if possible.
