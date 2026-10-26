@@ -33,7 +33,7 @@ func write(w http.ResponseWriter, v any, e error) {
 			status = 404
 		case errors.Is(e, core.ErrDenied):
 			status = 403
-		case errors.Is(e, core.ErrExists):
+		case errors.Is(e, core.ErrExists), errors.Is(e, core.ErrConflict):
 			status = 409
 		case errors.Is(e, core.ErrInvalid), errors.Is(e, core.ErrNotRunning):
 			status = 422
@@ -74,6 +74,7 @@ func before(r *http.Request) time.Time {
 }
 func New(s core.Service, o Options) http.Handler {
 	m := http.NewServeMux()
+	settingsRoutes(m, s)
 	m.HandleFunc("GET /api/agents", func(w http.ResponseWriter, r *http.Request) { v, e := s.List(r.Context()); write(w, v, e) })
 	m.HandleFunc("GET /api/agents/{name}", func(w http.ResponseWriter, r *http.Request) {
 		v, e := s.Get(r.Context(), r.PathValue("name"))

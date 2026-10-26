@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html"
 	"html/template"
+	"path"
 	"regexp"
 	"slices"
 	"strings"
@@ -45,6 +46,15 @@ func funcs(s *server) template.FuncMap {
 		"indent":    func(depth int) string { return strings.Repeat("\u00a0\u00a0\u00a0", max(depth-1, 0)) },
 		"evtime":    evtime,
 		"stampNano": func(t time.Time) string { return t.Format(time.RFC3339Nano) },
+		"sentence":  sentence,
+		"baseOf":    path.Base,
+		"dirOf": func(p string) string {
+			if d := path.Dir(p); d != "." {
+				return d
+			}
+			return ""
+		},
+		"bytes": bytesLabel,
 		"stateOf": func(a *core.AgentStatus) core.State {
 			if a == nil {
 				return ""
@@ -262,4 +272,25 @@ func inline(s string) string {
 	}
 	b.WriteString(html.EscapeString(s[last:]))
 	return b.String()
+}
+
+// sentence capitalises the first letter: "model changed, .env changed" →
+// "Model changed, .env changed".
+func sentence(s string) string {
+	r, n := utf8.DecodeRuneInString(s)
+	if n == 0 {
+		return s
+	}
+	return string(unicode.ToUpper(r)) + s[n:]
+}
+
+// bytesLabel is a file size the way a file manager shows it.
+func bytesLabel(n int64) string {
+	switch {
+	case n < 1000:
+		return fmt.Sprintf("%d B", n)
+	case n < 1000*1000:
+		return fmt.Sprintf("%.1f KB", float64(n)/1000)
+	}
+	return fmt.Sprintf("%.1f MB", float64(n)/1e6)
 }

@@ -43,6 +43,10 @@ const help = `lolad — agent daemon and mail
       [--team T] [--head] [--start] [--permissions bypass|default]
   adopt <dir> --harness claude|codewhale [--slug S] [--model M]
   org show | org check <from> <to> | org put (JSON on stdin)
+  model <agent> [<model>]        inspect or set the model
+  skills <agent> [mode inherit|barebones | add <id> | rm <id>]
+  env <agent> [ls | set KEY | rm KEY]  set reads the value from stdin
+  email <agent> [show | test <address>]
   reload | version
   msg ...                      agent-side signed AMP client
   hook <event>                 harness hook (JSON on stdin)
@@ -146,6 +150,10 @@ func command(ctx context.Context, args []string, stdin io.Reader, out io.Writer)
 	base := strings.TrimRight(os.Getenv("LOLAD_URL"), "/")
 	if base == "" {
 		base = app.URL(c.Listen)
+	}
+	switch args[0] {
+	case "model", "skills", "env", "email":
+		return settingsCommand(ctx, base, args, stdin, out)
 	}
 	p, o, e := options(args[1:])
 	if e != nil {
@@ -267,6 +275,26 @@ func command(ctx context.Context, args []string, stdin io.Reader, out io.Writer)
 		return syscall.Exec(bin, argv, os.Environ())
 	default:
 		return fmt.Errorf("unknown command %q; run lolad help", args[0])
+	}
+	if args[0] == "status" || args[0] == "ls" {
+		var b bytes.Buffer
+		if e := request(ctx, base, method, path, body, &b); e != nil {
+			return e
+		}
+		if _, e := out.Write(b.Bytes()); e != nil {
+			return e
+		}
+		if args[0] == "ls" {
+			var fleet []json.RawMessage
+			if json.Unmarshal(b.Bytes(), &fleet) == nil {
+				for _, v := range fleet {
+					pendingHint(v, out)
+				}
+			}
+		} else {
+			pendingHint(b.Bytes(), out)
+		}
+		return nil
 	}
 	return request(ctx, base, method, path, body, out)
 }

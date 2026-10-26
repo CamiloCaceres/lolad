@@ -307,3 +307,41 @@ for offline testing. Set `LOLAD_TEST_TEMPLATE` to a local template checkout
 when the standard DevSSD path is unavailable; without a template that test
 reports a skip. On macOS, private temporary wrappers adapt upstream GNU
 `realpath -m` and `sed -i` spellings to the built-in BSD tools.
+
+## Agent settings
+
+Open an agent's settings in the dashboard to change its model, skills mode,
+secrets, text files, or email accounts. Settings stay in the agent directory.
+A running agent shows **Pending restart** when its runtime, env file, skills,
+or email differs from the last launch; use **Restart to apply** to resume its
+conversation with the changes.
+
+```sh
+lolad model iris                         # inspect its model
+lolad model iris 'claude-sonnet-5-5[1m]'
+lolad skills iris                        # agent skills and the user library
+lolad skills iris mode barebones         # only agent skills/project plugins
+lolad skills iris mode inherit           # also personal skills/user plugins
+lolad skills iris add user:example
+lolad skills iris rm agent:example
+lolad env iris ls                        # keys, set status and length only
+lolad env iris set TOKEN < /private/path/to/token
+lolad env iris rm TOKEN
+lolad email iris show
+lolad email iris test iris@example.com   # IMAP/SMTP login checks; sends no mail
+lolad restart iris                       # apply pending settings, keep conversation
+```
+
+Env values are read from stdin, never command arguments, and are write-only
+through the UI/API/CLI. Use a private file or your secret manager as stdin;
+avoid putting a literal token in shell history. Email passwords use the same
+private env file. File edits check the version read before saving. Email watch
+can be owned by lolad or the agent's mail mod; disable the mod before enabling
+lolad watching to avoid duplicate notifications. Model choices are suggestions,
+and custom model IDs remain accepted.
+
+An existing config file scans only the `agents_dirs` you explicitly set;
+omitting that key discovers only the individual `agents` entries. The built-in
+search directory applies when no config file exists. Restarts use the exact
+harness session ID recorded by hooks when available, so another conversation
+opened in the same directory does not take over an agent's resume.

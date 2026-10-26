@@ -234,3 +234,120 @@ or restart.
 
 The isolated real `lolad new` verification and cleanup are recorded in
 [docs/e2e.md](../../docs/e2e.md#unattended-first-run-dialogs--2026-10-25).
+
+## Agent settings v2 (2026-10-25)
+
+Rechecked installed Claude Code **2.1.310** with the real `~/.local/bin/claude`,
+a throwaway project containing `.claude/skills/lolad-project-probe/SKILL.md`,
+and short Haiku print runs (`--output-format stream-json --verbose`). The
+system/init `skills` array is the primary evidence, rather than relying only
+on the model's answer. Contrary to the earlier assumption in the v2 spec,
+**`--setting-sources project,local` already excludes personal skills**: none
+of the user's named personal skills appeared, while the project sentinel did.
+It also excludes user plugin enablement. Built-in Anthropic skills/plugins
+remain present; barebones here concerns user customizations, not built-ins.
+
+Barebones therefore keeps project/local sources and the normal HOME/auth
+configuration. No `CLAUDE_CONFIG_DIR` isolation, copied credentials, keychain
+change, safe mode, or broad skill-disabling flag is needed. Project skills and
+project-enabled plugins remain supported by the earlier real plugin probe.
+
+For inherit, lolad creates a private additional directory at
+`<state>/agents/<slug>/user-skills` whose only configuration is
+`.claude/skills` symlinked to the normal user skills directory. `--add-dir`
+loads that tree without loading the user's settings, hooks, commands or agents.
+A second real print run with this projection advertised all 29 named personal
+skills (including `orca-cli`, `ops-memory`, and `whatsapp-observer`) alongside
+the project sentinel; the model also listed them. This follows the documented
+[additional-directory skills discovery](https://code.claude.com/docs/en/skills#load-skills-from-a-directory-outside-the-project).
+User `enabledPlugins` are read into the hook overlay, then project and local
+plugin entries are applied over them, including explicit false entries.
+No other user settings are copied. The user's global settings.json is read
+only for this allowlisted merge and is never written.
+
+Claude's current help documents a system-prompt snapshot that defaults to on
+and may preserve the previous prompt across resumes. Managed launches pass
+`--system-prompt-snapshot off` so a resume restart can rebuild skill visibility.
+This is deliberately a resume restart, retaining the conversation.
+
+All requested explicit model IDs were accepted by the installed binary and
+reached the API: `claude-opus-5-5`, `claude-opus-5-5[1m]`,
+`claude-sonnet-5-5`, `claude-sonnet-5-5[1m]`, `claude-haiku-5-5`, and
+`claude-fable-5-1`. The first five completed a minimal "Reply only OK" print
+request; Fable returned a server safeguard refusal (not an unknown-model
+error). Aliases also worked: `haiku` resolved to `claude-haiku-5-5`, `sonnet`
+to `claude-sonnet-5-5`, and `opus` to `claude-opus-4-6[1m]` on this account.
+The menu retains aliases and free-text model IDs. Availability and alias
+routing can differ by account.
+
+`codewhale models` was cheap and reported a stale cached provider catalog
+with **deepseek-flash** (default) and **deepseek-v4-pro**. Those actual choices
+are used instead of the fallback spelling deepseek-pro. No catalog refresh or
+provider request was needed. The per-run TOML overlay sets
+`[skills] scan_codewhale_only = true` for barebones and false for inherit,
+replacing the existing boolean while preserving other skill settings and all
+unrelated configuration. The agent's source config is unchanged. `--set`
+is avoided because its help only promises a limited set of runtime keys.
+
+The env loader now decodes quoted escape sequences written by agentcfg and
+ignores trailing unquoted comments. It never executes shell substitutions.
+
+### Live v2 daemon check and isolation correction
+
+The live test uses port 4196, socket `lolad-v2`, and temporary config/state and
+agent directories. The initial test config omitted `agents_dirs`, which exposed
+an unsafe registry default: it inherited the real projects search directory
+and launched an additional Iris process on the **test** socket. That daemon
+and socket were stopped immediately after discovery; the real port 4100 and
+socket `lolad` were never operated. The coordinator investigated the stray
+session, confirmed it only read files and mailed the throwaway daemon, and
+removed its transcript from the real agent's project history so it could not
+hijack `--continue`. No manual edits were made to the real agent directory by
+this worker. This incident is why existing config files now default to no scan
+directories, while a missing config retains the built-in defaults.
+
+Restart hardening: the supervisor persists the last nonempty harness session ID
+reported by hooks. The adapters expose an optional `PrepareResume` capability
+and use `--resume <id>` for both Claude and Codewhale when known; `--continue`
+is the fallback only when no ID is known. A fresh launch ignores any saved ID.
+The ID survives a daemon restart and a harness crash before its next hook.
+This avoids choosing an unrelated newer conversation in the same directory.
+No shared core interface change was needed.
+
+With explicit `agents_dirs: []`, the test fleet contained only `v2-probe`.
+`lolad model v2-probe sonnet` showed pending restart and its CLI restart hint;
+a resume restart cleared pending and the real pane header showed
+**Sonnet 5.5 · Claude Max**. Returning to Haiku, changing skills to inherit,
+and setting a random test secret through CLI stdin showed model, skills-mode
+and env drift. After restart, the pane advertised **68 skills available** and
+reported `orca-cli` present. A tool printed only **V2_ENV_LENGTH=26**, matching
+the API's write-only length metadata; the random value was not printed.
+A separate no-persistence init probe in the throwaway project verified both
+`lolad-live-local` and `orca-cli` and all 11 enabled user plugins were loaded
+from the inherit overlay, alongside the built-ins. The conversational answer
+incorrectly claimed the local skill was absent, so the init metadata is the
+reliable source for that assertion.
+
+Barebones launch also removes its previous managed skills symlink, since
+additional directories can be remembered by a resumed conversation. This
+keeps that remembered directory empty when switching back from inherit.
+
+The final live restart used the saved exact session ID (`--resume` present in
+the actual process argv; `--continue` absent). The prior user-skills projection
+was removed. A no-persistence init probe resuming that same ID reported **20
+skills**, with `lolad-live-local` present and `orca-cli` absent; only three
+built-in plugins remained. Historical skill lists in the conversation can
+still cause the assistant to *say* an old skill is present; the current init
+array and plugin list confirm the actual discovery behavior. Switching modes
+changes discovery, not the text of prior turns.
+
+Final validation: `go build ./...` passed with the web package included;
+`go vet` and `go test` passed for internal/harness, internal/app, internal/api,
+internal/cli, internal/supervisor and internal/registry. Tests cover settings
+round trips, every REST endpoint, stdin-only env values and restart hints,
+file conflicts and env-file aliases, email trigger ownership/mod conflicts,
+plugin precedence, skills mode changes, fingerprints across daemon adoption,
+and exact-session resume/fresh/fallback behavior. The throwaway daemon,
+`lolad-v2` server, temporary agent/config/state, probe binary, probe conversation
+trees and probe-only trust entry were removed; port 4196 is closed. No commit,
+stash, reset, checkout, or go mod tidy was run.

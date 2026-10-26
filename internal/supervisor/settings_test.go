@@ -1,0 +1,141 @@
+package supervisor
+
+import (
+	"database/sql"
+	"github.com/CamiloCaceres/lolad/internal/core"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestPendingRestartAndPersistence(t *testing.T) {
+	dir := t.TempDir()
+	db, e := sql.Open("sqlite", filepath.Join(t.TempDir(), "test.db"))
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer db.Close()
+	f := setup(t, func(o *Options) { o.DB = db; o.Agents[0].Dir = dir; o.Agents[0].Runtime.Model = "haiku" })
+	if e := f.s.Reconcile(ctx); e != nil {
+		t.Fatal(e)
+	}
+	status, e := f.s.Get(ctx, "agent")
+	if e != nil || status.PendingRestart {
+		t.Fatalf("initial pending: %v %v", status.PendingRestart, e)
+	}
+	if e = os.WriteFile(filepath.Join(dir, ".env"), []byte("TOKEN=never-print-this\n"), 0600); e != nil {
+		t.Fatal(e)
+	}
+	f.s.mu.Lock()
+	f.s.agents["agent"].Status.Runtime.Model = "sonnet"
+	f.s.mu.Unlock()
+	status, e = f.s.Get(ctx, "agent")
+	if e != nil || !status.PendingRestart || !strings.Contains(status.PendingReason, "model changed") || !strings.Contains(status.PendingReason, "env file changed") {
+		t.Fatalf("pending missing: %v %s %v", status.PendingRestart, status.PendingReason, e)
+	}
+	if strings.Contains(status.PendingReason, "never-print") {
+		t.Fatal("secret in reason")
+	}
+	// Hashes persist across daemon restarts while the same pane survives.
+	f.s.mu.Lock()
+	e = f.s.persist(f.s.agents["agent"])
+	f.s.mu.Unlock()
+	if e != nil {
+		t.Fatal(e)
+	}
+	o := f.o
+	o.Agents[0].Runtime.Model = "sonnet"
+	restored, e := New(o)
+	if e != nil {
+		t.Fatal(e)
+	}
+	status, e = restored.Get(ctx, "agent")
+	if e != nil || !status.PendingRestart {
+		t.Fatalf("lost pending drift on adoption: %v", e)
+	}
+	if e = f.s.Restart(ctx, "agent", false); e != nil {
+		t.Fatal(e)
+	}
+	f.c.advance(11 * time.Second)
+	if e = f.s.Reconcile(ctx); e != nil {
+		t.Fatal(e)
+	}
+	status, e = f.s.Get(ctx, "agent")
+	if e != nil || status.PendingRestart {
+		t.Fatalf("pending not cleared after launch: %s %v", status.PendingReason, e)
+	}
+	if e = os.WriteFile(filepath.Join(dir, ".env"), []byte("TOKEN=changed\n"), 0600); e != nil {
+		t.Fatal(e)
+	}
+	f.sessions.exists = false
+	status, e = f.s.Get(ctx, "agent")
+	if e != nil || status.PendingRestart {
+		t.Fatal("stopped pane marked pending", e)
+	}
+}
+
+type exactLauncher struct {
+	fakeLauncher
+	resumed []string
+}
+
+func (l *exactLauncher) PrepareResume(a core.Agent, o core.LaunchOpts, id string) (core.LaunchSpec, error) {
+	l.resumed = append(l.resumed, id)
+	return l.Prepare(a, o)
+}
+func TestExactSessionSurvivesLaunchAndDaemonRestart(t *testing.T) {
+	db, e := sql.Open("sqlite", filepath.Join(t.TempDir(), "sessions.db"))
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer db.Close()
+	launcher := &exactLauncher{}
+	f := setup(t, func(o *Options) { o.DB = db; o.Launchers[core.HarnessClaude] = launcher })
+	f.tick(t)
+	f.s.HandleHook(ctx, core.HookEvent{Agent: "agent", Event: "session_start", SessionID: "owned-session", Seq: 1})
+	f.s.HandleHook(ctx, core.HookEvent{Agent: "agent", Event: "stop", SessionID: "owned-session", Seq: 2})
+	// A later unrelated conversation in the same dir cannot replace this ID.
+	restored, e := New(f.o)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = restored.Restart(ctx, "agent", false); e != nil {
+		t.Fatal(e)
+	}
+	f.c.advance(11 * time.Second)
+	if e = restored.Reconcile(ctx); e != nil {
+		t.Fatal(e)
+	}
+	if len(launcher.resumed) != 1 || launcher.resumed[0] != "owned-session" {
+		t.Fatal("lost exact resume", launcher.resumed)
+	}
+	// If the new process dies before any hook, retain the last known session ID.
+	restored.mu.Lock()
+	r := restored.agents["agent"]
+	if r.HookSession != "" || r.HarnessSession != "owned-session" {
+		t.Fatal("launch lost resume ID")
+	}
+	restored.mu.Unlock()
+	if e = restored.Restart(ctx, "agent", false); e != nil {
+		t.Fatal(e)
+	}
+	f.c.advance(11 * time.Second)
+	if e = restored.Reconcile(ctx); e != nil {
+		t.Fatal(e)
+	}
+	if len(launcher.resumed) != 2 || launcher.resumed[1] != "owned-session" {
+		t.Fatal(launcher.resumed)
+	}
+	if e = restored.Restart(ctx, "agent", true); e != nil {
+		t.Fatal(e)
+	}
+	f.c.advance(11 * time.Second)
+	if e = restored.Reconcile(ctx); e != nil {
+		t.Fatal(e)
+	}
+	if len(launcher.resumed) != 2 {
+		t.Fatal("fresh launch resumed")
+	}
+}

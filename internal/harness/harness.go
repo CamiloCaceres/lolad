@@ -46,6 +46,15 @@ func managed(path string, data []byte) error {
 	return os.Rename(f.Name(), path)
 }
 func (a *Adapter) Prepare(agent core.Agent, o core.LaunchOpts) (core.LaunchSpec, error) {
+	return a.prepare(agent, o, "")
+}
+
+// PrepareResume resumes the exact conversation owned by the supervisor, rather
+// than another session that happened to run later in the same project.
+func (a *Adapter) PrepareResume(agent core.Agent, o core.LaunchOpts, sessionID string) (core.LaunchSpec, error) {
+	return a.prepare(agent, o, sessionID)
+}
+func (a *Adapter) prepare(agent core.Agent, o core.LaunchOpts, sessionID string) (core.LaunchSpec, error) {
 	spec := core.LaunchSpec{Dir: agent.Dir}
 	if !regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`).MatchString(agent.Name) {
 		return spec, fmt.Errorf("%w: agent slug", core.ErrInvalid)
@@ -71,6 +80,7 @@ func (a *Adapter) Prepare(agent core.Agent, o core.LaunchOpts) (core.LaunchSpec,
 	f, e := os.Open(envFile)
 	if e == nil {
 		sc := bufio.NewScanner(f)
+		sc.Buffer(make([]byte, 4096), 1<<20)
 		for sc.Scan() {
 			line := strings.TrimSpace(sc.Text())
 			if line == "" || strings.HasPrefix(line, "#") {
@@ -84,9 +94,39 @@ func (a *Adapter) Prepare(agent core.Agent, o core.LaunchOpts) (core.LaunchSpec,
 			}
 			k = strings.TrimSpace(k)
 			v = strings.TrimSpace(v)
-			if len(v) >= 2 && ((v[0] == '"' && v[len(v)-1] == '"') || (v[0] == '\'' && v[len(v)-1] == '\'')) {
-				v = v[1 : len(v)-1]
+			if len(v) > 0 && v[0] == '"' {
+				end := 1
+				for end < len(v) {
+					if v[end] == '\\' {
+						end += 2
+						continue
+					}
+					if v[end] == '"' {
+						break
+					}
+					end++
+				}
+				if end >= len(v) {
+					f.Close()
+					return spec, fmt.Errorf("invalid quoted env assignment")
+				}
+				decoded, err := strconv.Unquote(v[:end+1])
+				if err != nil {
+					f.Close()
+					return spec, fmt.Errorf("invalid quoted env assignment")
+				}
+				v = decoded
+			} else if len(v) > 0 && v[0] == '\'' {
+				end := strings.IndexByte(v[1:], '\'')
+				if end < 0 {
+					f.Close()
+					return spec, fmt.Errorf("invalid quoted env assignment")
+				}
+				v = v[1 : end+1]
+			} else if i := strings.Index(v, "#"); i >= 0 {
+				v = strings.TrimSpace(v[:i])
 			}
+
 			env[k] = strings.ReplaceAll(v, "${LOLABOT_HOME}", agent.Dir)
 		}
 		e = sc.Err()
@@ -122,7 +162,11 @@ func (a *Adapter) Prepare(agent core.Agent, o core.LaunchOpts) (core.LaunchSpec,
 	}
 	args := []string{bin}
 	if !o.Fresh {
-		args = append(args, "--continue")
+		if sessionID != "" {
+			args = append(args, "--resume", sessionID)
+		} else {
+			args = append(args, "--continue")
+		}
 	}
 	if agent.Runtime.Model != "" {
 		args = append(args, "--model", agent.Runtime.Model)
@@ -140,12 +184,18 @@ func (a *Adapter) Prepare(agent core.Agent, o core.LaunchOpts) (core.LaunchSpec,
 		for _, event := range []string{"SessionStart", "UserPromptSubmit", "Stop", "Notification", "PermissionRequest", "SessionEnd", "PreToolUse", "PostToolUse"} {
 			hooks[event] = []any{map[string]any{"hooks": []any{map[string]any{"type": "command", "command": "LOLAD_AGENT=" + quote(agent.Name) + " " + quote(o.LoladBin) + " hook " + event, "timeout": 3}}}}
 		}
-		data, _ := json.MarshalIndent(map[string]any{"hooks": hooks}, "", "  ")
+		overlay := map[string]any{"hooks": hooks}
+		skillArgs, err := claudeSkills(agent, dir, env, overlay)
+		if err != nil {
+			return spec, err
+		}
+		args = append(args, skillArgs...)
+		data, _ := json.MarshalIndent(overlay, "", "  ")
 		path := filepath.Join(dir, "claude-settings.json")
 		if e := managed(path, data); e != nil {
 			return spec, e
 		}
-		args = append(args, "--setting-sources", "project,local", "--settings", path)
+		args = append(args, "--setting-sources", "project,local", "--settings", path, "--system-prompt-snapshot", "off")
 	case core.HarnessCodewhale:
 		if agent.Runtime.Permissions == core.PermBypass || agent.Runtime.Permissions == "" {
 			args = append(args, "--sandbox-mode", "danger-full-access")
@@ -195,6 +245,7 @@ func (a *Adapter) Prepare(agent core.Agent, o core.LaunchOpts) (core.LaunchSpec,
 			}
 			text = strings.Join(kept, "\n")
 		}
+		text = codewhaleSkills(text, agent.Runtime.SkillsMode())
 		text += "\n# lolad managed hook overlay\n"
 		for _, event := range []string{"session_start", "session_end", "message_submit", "tool_call_before", "tool_call_after", "turn_end", "session_idle", "waiting_for_user", "session_busy"} {
 			cmd := "LOLAD_AGENT=" + quote(agent.Name) + " " + quote(o.LoladBin) + " hook " + event

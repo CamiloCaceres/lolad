@@ -166,3 +166,27 @@ func TestSlugPrecedenceAndDuplicateDiagnostics(t *testing.T) {
 		t.Fatalf("%+v %v", d, e)
 	}
 }
+
+func TestExplicitConfigDoesNotInheritDiscovery(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "config.yaml")
+	missing, e := LoadConfig(p)
+	if e != nil || len(missing.AgentsDirs) == 0 {
+		t.Fatal("missing config lost defaults", e)
+	}
+	for _, content := range []string{"listen: 127.0.0.1:4196\n", "agents: []\n", "agents_dirs: []\n"} {
+		if e = os.WriteFile(p, []byte(content), 0600); e != nil {
+			t.Fatal(e)
+		}
+		c, e := LoadConfig(p)
+		if e != nil || len(c.AgentsDirs) != 0 {
+			t.Fatalf("explicit config inherited scan dirs: %v %v", c.AgentsDirs, e)
+		}
+	}
+	if e = os.WriteFile(p, []byte("agents_dirs: [/tmp/explicit]\n"), 0600); e != nil {
+		t.Fatal(e)
+	}
+	c, e := LoadConfig(p)
+	if e != nil || len(c.AgentsDirs) != 1 || c.AgentsDirs[0] != "/tmp/explicit" {
+		t.Fatal(c.AgentsDirs, e)
+	}
+}

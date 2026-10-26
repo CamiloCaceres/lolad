@@ -146,13 +146,17 @@ func (s *server) agent(w http.ResponseWriter, r *http.Request) {
 // agentPart refreshes one live section of the agent page.
 func (s *server) agentPart(w http.ResponseWriter, r *http.Request) {
 	part := r.PathValue("part")
-	if !slices.Contains([]string{"head", "events", "mail", "facts"}, part) {
+	if !slices.Contains([]string{"head", "events", "mail", "facts", "pending"}, part) {
 		s.notFound(w, r)
 		return
 	}
 	v, err := s.agentData(r.Context(), r.PathValue("name"))
 	if err != nil {
 		s.fail(w, r, err)
+		return
+	}
+	if part == "pending" {
+		s.fragment(w, http.StatusOK, "pending", map[string]any{"A": v.A, "From": "settings"})
 		return
 	}
 	s.fragment(w, http.StatusOK, "agent-"+part, v)
@@ -195,6 +199,15 @@ func (s *server) control(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.fragment(w, http.StatusOK, "fleet-body", v)
+		return
+	}
+	if r.FormValue("from") == "settings" {
+		a, err := s.svc.Get(ctx, name)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		s.fragment(w, http.StatusOK, "pending", map[string]any{"A": a, "From": "settings"})
 		return
 	}
 	v, err := s.agentData(ctx, name)

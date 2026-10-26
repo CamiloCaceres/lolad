@@ -214,10 +214,116 @@
     if (el && el.id === "traffic" && el.querySelector("details[open]") && e.detail.triggeringEvent && e.detail.triggeringEvent.type === "lolad:mail") e.preventDefault();
   });
 
+
+  // ------------------------------------------------------------ settings
+  // model picker: typing an id picks "Other"; a rotate time turns rotation on
+  document.addEventListener("input", (e) => {
+    const t = e.target;
+    if (t.matches && t.matches("[data-custom-model]")) {
+      const r = t.closest(".model").querySelector("[data-custom-radio]");
+      if (r && t.value.trim()) r.checked = true;
+    }
+    if (t.matches && t.matches("[data-rotate-time]")) {
+      const on = t.closest(".rotate").querySelector("[data-rotate-on]");
+      if (on) on.checked = !!t.value;
+    }
+    if (t.matches && t.matches("[data-filter]")) {
+      const q = t.value.trim().toLowerCase();
+      let shown = 0;
+      document.querySelectorAll(t.dataset.filter).forEach((el) => {
+        const hit = !q || el.textContent.toLowerCase().includes(q);
+        el.hidden = !hit;
+        if (hit) shown++;
+      });
+      document.querySelectorAll(".lib-group").forEach((g) => { g.hidden = !g.querySelector(".skill:not([hidden])"); });
+      const none = document.querySelector("[data-filter-empty]");
+      if (none) none.hidden = shown > 0;
+    }
+    if (t.matches && t.matches("[data-acct-address]")) fillServers(t);
+  });
+  document.addEventListener("focusin", (e) => {
+    const t = e.target;
+    if (t.matches && t.matches("[data-custom-model]")) {
+      const r = t.closest(".model").querySelector("[data-custom-radio]");
+      if (r) r.checked = true;
+    }
+  });
+
+  // inline reveal: a button shows the form named by aria-controls
+  document.addEventListener("click", (e) => {
+    const open = e.target.closest && e.target.closest("[data-reveal]");
+    const close = e.target.closest && e.target.closest("[data-reveal-close]");
+    if (open) {
+      const f = document.getElementById(open.getAttribute("aria-controls"));
+      if (!f) return;
+      f.hidden = !f.hidden;
+      open.setAttribute("aria-expanded", String(!f.hidden));
+      if (!f.hidden) { const i = f.querySelector("input:not([type=hidden])"); if (i) i.focus(); }
+    } else if (close) {
+      const f = close.closest("form");
+      f.hidden = true;
+      f.reset();
+      const b = document.querySelector('[aria-controls="' + f.id + '"]');
+      if (b) { b.setAttribute("aria-expanded", "false"); b.focus(); }
+    }
+  });
+
+  // email: fill servers for well-known providers while they're empty or ours
+  function fillServers(addr) {
+    const form = addr.form;
+    let list = [];
+    try { list = JSON.parse(form.dataset.providers || "[]"); } catch { /* none */ }
+    const domain = (addr.value.split("@")[1] || "").toLowerCase();
+    const p = list.find((x) => x.Domain === domain);
+    [["[data-acct-imap]", p && p.IMAP], ["[data-acct-smtp]", p && p.SMTP]].forEach(([sel, v]) => {
+      const f = form.querySelector(sel);
+      if (!f || (f.value && !f.dataset.auto)) return;
+      f.value = v || "";
+      if (v) f.dataset.auto = "1"; else delete f.dataset.auto;
+    });
+  }
+  document.addEventListener("input", (e) => {
+    if (e.target.matches && e.target.matches("[data-acct-imap], [data-acct-smtp]")) delete e.target.dataset.auto;
+  }, true);
+
+  // file editor: unsaved-changes guard and ⌘S / Ctrl+S
+  const editor = () => document.querySelector("form[data-editor]");
+  function dirty() {
+    const f = editor();
+    if (!f) return false;
+    const ta = f.querySelector("[data-editor-text]");
+    return !!ta && ta.dataset.orig !== undefined && ta.value !== ta.dataset.orig;
+  }
+  function setupEditor(root) {
+    root.querySelectorAll("form[data-editor]").forEach((f) => {
+      if (f.dataset.ready) return;
+      f.dataset.ready = "1";
+      const ta = f.querySelector("[data-editor-text]");
+      const flag = f.querySelector("[data-dirty]");
+      // A conflict comes back with the user's text in the editor: still unsaved.
+      ta.dataset.orig = f.querySelector(".conflict") ? "\u0000" : ta.value;
+      const sync = () => { if (flag) flag.hidden = !dirty(); };
+      sync();
+      ta.addEventListener("input", sync);
+      ta.addEventListener("keydown", (e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === "s") { e.preventDefault(); f.requestSubmit(); }
+      });
+    });
+  }
+  const leave = () => !dirty() || confirm("Discard your unsaved changes to " + editor().dataset.path + "?");
+  window.addEventListener("click", (e) => {
+    const a = e.target.closest && e.target.closest("a[href]");
+    if (!a || a.hasAttribute("data-discard") || e.defaultPrevented || a.target === "_blank") return;
+    if (!leave()) { e.preventDefault(); e.stopPropagation(); }
+    else if (dirty()) delete editor().querySelector("[data-editor-text]").dataset.orig; // leaving: don't ask again on unload
+  }, true);
+  window.addEventListener("beforeunload", (e) => { if (dirty()) { e.preventDefault(); e.returnValue = ""; } });
+
   // ------------------------------------------------------------ boot
   function settle(root) {
     retime(root);
     setupComposer(root);
+    setupEditor(root);
     paintLive();
     retitle();
   }

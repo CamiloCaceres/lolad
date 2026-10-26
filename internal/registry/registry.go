@@ -56,6 +56,9 @@ func LoadConfig(path string) (Config, error) {
 	if e != nil {
 		return c, e
 	}
+	// An explicit config is an opt-in discovery boundary. Only a missing
+	// config inherits the built-in search directory.
+	c.AgentsDirs = nil
 	e = yaml.Unmarshal(b, &c)
 	return c, e
 }
@@ -92,6 +95,12 @@ func ResolveSlug(dir, display, override string) (string, error) {
 	return "", fmt.Errorf("%w: empty slug", core.ErrInvalid)
 }
 func Validate(r core.Runtime) error {
+	if r.Skills != "" && r.Skills != core.SkillsInherit && r.Skills != core.SkillsBarebones {
+		return fmt.Errorf("%w: skills must be inherit or barebones", core.ErrInvalid)
+	}
+	if r.Permissions != "" && r.Permissions != core.PermBypass && r.Permissions != core.PermDefault {
+		return fmt.Errorf("%w: permissions must be bypass or default", core.ErrInvalid)
+	}
 	if r.Slug != "" && !validSlug.MatchString(strings.ToLower(r.Slug)) {
 		return fmt.Errorf("%w: invalid runtime.slug %q", core.ErrInvalid, r.Slug)
 	}

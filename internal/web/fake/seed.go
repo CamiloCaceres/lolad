@@ -67,6 +67,8 @@ func (s *Service) seed() {
 		{"ultron", "Ultron", "Personal Assistant", core.Runtime{Harness: core.HarnessClaude, Model: "claude-opus-5-5", Permissions: core.PermBypass,
 			Triggers: []core.Trigger{{Webhook: "calendar", Prompt: "Calendar change:"}, {Cron: "30 7 * * *", Prompt: "Plan Milo's day."}}},
 			core.StateIdle, "", 0, "", 50 * time.Hour},
+		{"iris", "Iris", "Inbox Assistant", core.Runtime{Harness: core.HarnessClaude, Model: "claude-sonnet-5-5", Permissions: core.PermBypass, Skills: core.SkillsBarebones},
+			core.StateIdle, "", 0, "", 9 * time.Hour},
 	}
 	for i, sd := range seeds {
 		a := &core.AgentStatus{
@@ -91,6 +93,7 @@ func (s *Service) seed() {
 		}
 		s.agents = append(s.agents, a)
 	}
+	s.seedSettings()
 
 	ago := func(d time.Duration) time.Time { return now.Add(-d) }
 	h, m := time.Hour, time.Minute

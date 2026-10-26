@@ -52,6 +52,7 @@
     <h2 class="thread-name">{{.Display}}</h2>
     <p class="thread-sub">{{with .Agent}}{{template "state" .}}<span class="thread-detail">{{if .Detail}}{{.Detail}}{{else}}{{.Role}}{{end}}</span>{{else}}System messages{{end}}</p>
   </div>
+  {{with .Agent}}<a class="btn btn-icon btn-ghost thread-settings" href="/agents/{{.Name}}/settings" aria-label="Settings for {{.Display}}" title="Settings">{{template "icon" "settings"}}</a>{{end}}
   {{with .Agent}}<a class="btn btn-ghost thread-agent" href="/agents/{{.Name}}">Agent<span class="hide-sm"> details</span>{{template "icon" "next"}}</a>{{end}}
 </header>{{end}}
 

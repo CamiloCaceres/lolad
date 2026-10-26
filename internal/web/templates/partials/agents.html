@@ -54,6 +54,7 @@
   </div>
   <div class="agent-actions">
     <a class="btn btn-primary" href="/inbox/{{.A.Name}}">{{template "icon" "message"}}<span>Message</span></a>
+    <a class="btn" href="/agents/{{.A.Name}}/settings">{{template "icon" "settings"}}<span>Settings</span></a>
     {{template "controls" (dict "A" .A "From" "detail")}}
   </div>
   <p class="agent-status">
@@ -63,6 +64,7 @@
     <span class="fact">{{plural .A.Restarts "restart" "restarts"}} in 24h</span>
     {{if .A.Unread}}<span class="fact">{{.A.Unread}} unread</span>{{end}}
   </p>
+  {{template "pending" (dict "A" .A "From" "detail")}}
 </header>{{end}}
 
 {{define "agent-events"}}<div id="agent-events" hx-get="/agents/{{.A.Name}}/part/events" hx-trigger="lolad:a-{{.A.Name}} from:body delay:500ms" hx-swap="outerHTML">

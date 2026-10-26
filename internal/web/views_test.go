@@ -71,3 +71,22 @@ func TestShapeAsks(t *testing.T) {
 		t.Error("day separator only on the first message of a day")
 	}
 }
+
+func TestMarkdown(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{"# Title", "<h1>Title</h1>\n"},
+		{"one\ntwo\n\nthree", "<p>one two</p>\n<p>three</p>\n"},
+		{"- a\n- **b**", "<ul>\n<li>a</li>\n<li><strong>b</strong></li>\n</ul>\n"},
+		{"1. x\n2. y", "<ol>\n<li>x</li>\n<li>y</li>\n</ol>\n"},
+		{"```\n<b>\n```", "<pre class=\"code\"><code>&lt;b&gt;</code></pre>\n"},
+		{"> quoted", "<blockquote><p>quoted</p>\n</blockquote>\n"},
+		{"| a | b |\n|---|---|\n| 1 | `2` |", "<div class=\"md-table\"><table><thead><tr><th>a</th><th>b</th></tr></thead><tbody>\n<tr><td>1</td><td><code>2</code></td></tr>\n</tbody></table></div>\n"},
+		{"<img src=x onerror=alert(1)>", "<p>&lt;img src=x onerror=alert(1)&gt;</p>\n"},
+		{"[ok](https://lumio.co) [bad](javascript:alert(1))", `<p><a href="https://lumio.co" target="_blank" rel="noopener noreferrer">ok</a> bad <span class="md-ref">(javascript:alert(1)</span>)</p>` + "\n"},
+		{"- [x] done", "<ul>\n<li class=\"task\">☑ done</li>\n</ul>\n"},
+	} {
+		if got := string(markdown(tc.in)); got != tc.want {
+			t.Errorf("markdown(%q)\n got %q\nwant %q", tc.in, got, tc.want)
+		}
+	}
+}

@@ -13,7 +13,7 @@
         {{template "agent-mail" .Data}}
       </section>
       <section class="panel" aria-labelledby="h-config">
-        <header class="panel-head"><h2 id="h-config">Configuration</h2><span class="panel-note">lolabot.yaml runtime</span></header>
+        <header class="panel-head"><h2 id="h-config">Configuration</h2><span class="panel-note">lolabot.yaml runtime</span><a class="panel-link" href="/agents/{{.Data.A.Name}}/settings">{{template "icon" "edit"}}<span>Edit settings</span></a></header>
         {{template "agent-facts" .Data}}
       </section>
     </div>

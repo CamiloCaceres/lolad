@@ -41,6 +41,7 @@ type Service struct {
 	events []core.Event
 	seq    int64
 	subs   map[chan core.Event]struct{}
+	cfg    map[string]*agentCfg // per-agent settings (settings.go), created on first use
 
 	stop chan struct{}
 	once sync.Once
@@ -57,6 +58,7 @@ func New(opts Options) *Service {
 		now:      opts.Now,
 		simulate: opts.Simulate,
 		subs:     map[chan core.Event]struct{}{},
+		cfg:      map[string]*agentCfg{},
 		stop:     make(chan struct{}),
 	}
 	if opts.Empty {
@@ -169,6 +171,7 @@ func (s *Service) lifecycle(name string, fn func(a *core.AgentStatus)) error {
 func (s *Service) boot(a *core.AgentStatus, fresh bool) {
 	now := s.now()
 	a.Desired, a.PID, a.StartedAt, a.LastError, a.NextRestart = "up", 40000+mrand.IntN(9999), now, "", time.Time{}
+	a.PendingRestart, a.PendingReason = false, "" // a launch applies whatever changed
 	if fresh || a.SessionSince.IsZero() {
 		a.SessionSince = now
 	}

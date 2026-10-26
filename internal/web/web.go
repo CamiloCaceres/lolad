@@ -78,6 +78,20 @@ func New(svc core.Service, opts Options) http.Handler {
 	mux.HandleFunc("GET /agents/{name}/part/{part}", s.agentPart)
 	mux.HandleFunc("POST /agents/{name}/{action}", s.control)
 	mux.HandleFunc("GET /agents/{name}/terminal", s.terminal)
+	mux.HandleFunc("GET /agents/{name}/settings", s.settings)
+	mux.HandleFunc("GET /agents/{name}/settings/{tab}", s.settings)
+	mux.HandleFunc("POST /agents/{name}/settings/runtime", s.saveRuntime)
+	mux.HandleFunc("POST /agents/{name}/settings/skills/mode", s.saveSkillsMode)
+	mux.HandleFunc("POST /agents/{name}/settings/skills/add", s.addSkill)
+	mux.HandleFunc("POST /agents/{name}/settings/skills/remove", s.removeSkill)
+	mux.HandleFunc("POST /agents/{name}/settings/secrets", s.setSecret)
+	mux.HandleFunc("POST /agents/{name}/settings/secrets/delete", s.deleteSecret)
+	mux.HandleFunc("POST /agents/{name}/settings/files", s.saveFile)
+	mux.HandleFunc("POST /agents/{name}/settings/files/preview", s.previewFile)
+	mux.HandleFunc("POST /agents/{name}/settings/email/account", s.saveAccount)
+	mux.HandleFunc("POST /agents/{name}/settings/email/account/delete", s.deleteAccount)
+	mux.HandleFunc("POST /agents/{name}/settings/email", s.saveEmailGeneral)
+	mux.HandleFunc("POST /agents/{name}/settings/email/test", s.testEmail)
 
 	mux.HandleFunc("GET /org", s.orgPage)
 	mux.HandleFunc("POST /org/teams", s.orgTeamAdd)
@@ -276,7 +290,7 @@ func statusFor(err error) int {
 		return http.StatusNotFound
 	case errors.Is(err, core.ErrDenied):
 		return http.StatusForbidden
-	case errors.Is(err, core.ErrExists):
+	case errors.Is(err, core.ErrExists), errors.Is(err, core.ErrConflict):
 		return http.StatusConflict
 	case errors.Is(err, core.ErrInvalid), errors.Is(err, core.ErrNotRunning):
 		return http.StatusUnprocessableEntity

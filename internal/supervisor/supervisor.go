@@ -7,11 +7,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/CamiloCaceres/lolad/internal/agentcfg"
 	"github.com/CamiloCaceres/lolad/internal/core"
 )
 
@@ -39,20 +41,23 @@ type Options struct {
 	MailWatch    MailWatch
 }
 type record struct {
-	Status         core.AgentStatus
-	EverStarted    bool
-	Fresh          bool
-	Crashes        []time.Time
-	RestartTimes   []time.Time
-	Seq            int64
-	HookSession    string
-	LastHook       string
-	StopAt         time.Time
-	Restarting     bool
-	RotationDue    time.Time
-	StartupAt      time.Time
-	StartupDialogs map[string]bool
-	RotatedDay     string
+	HarnessSession    string
+	LaunchFingerprint map[string]string
+	LaunchRuntime     core.Runtime
+	Status            core.AgentStatus
+	EverStarted       bool
+	Fresh             bool
+	Crashes           []time.Time
+	RestartTimes      []time.Time
+	Seq               int64
+	HookSession       string
+	LastHook          string
+	StopAt            time.Time
+	Restarting        bool
+	RotationDue       time.Time
+	StartupAt         time.Time
+	StartupDialogs    map[string]bool
+	RotatedDay        string
 }
 type pending struct {
 	Mail          core.Mail
@@ -376,7 +381,20 @@ func (s *Supervisor) launch(r *record) error {
 			opts.FirstPrompt += "\nUnread mail is waiting. Run lolad msg inbox and read the waiting messages."
 		}
 	}
-	spec, e := l.Prepare(r.Status.Agent, opts)
+	_, launchFingerprint := agentcfg.New(r.Status.Dir, r.Status.Runtime.Harness, agentcfg.Options{}).Fingerprint(r.Status.Runtime.EnvFile, r.Status.Runtime)
+	var spec core.LaunchSpec
+	var e error
+	sessionID := r.HarnessSession
+	if sessionID == "" {
+		sessionID = r.HookSession
+	} // upgrade persisted v1 records
+	if resume, ok := l.(interface {
+		PrepareResume(core.Agent, core.LaunchOpts, string) (core.LaunchSpec, error)
+	}); ok && !opts.Fresh && sessionID != "" {
+		spec, e = resume.PrepareResume(r.Status.Agent, opts, sessionID)
+	} else {
+		spec, e = l.Prepare(r.Status.Agent, opts)
+	}
 	if e != nil {
 		s.crash(r, s.opts.Clock.Now(), e.Error())
 		return e
@@ -385,6 +403,8 @@ func (s *Supervisor) launch(r *record) error {
 		s.crash(r, s.opts.Clock.Now(), e.Error())
 		return e
 	}
+	r.LaunchFingerprint = launchFingerprint
+	r.LaunchRuntime = r.Status.Runtime
 	now := s.opts.Clock.Now()
 	r.EverStarted = true
 	r.Fresh = false
@@ -491,6 +511,7 @@ func (s *Supervisor) List(ctx context.Context) ([]core.AgentStatus, error) {
 	out := make([]core.AgentStatus, 0, len(s.agents))
 	for _, r := range s.agents {
 		a := r.Status
+		s.pendingRestart(r, &a)
 		a.Restarts = 0
 		for _, at := range r.RestartTimes {
 			if s.opts.Clock.Now().Sub(at) < 24*time.Hour {
@@ -636,6 +657,7 @@ func (s *Supervisor) HandleHook(ctx context.Context, ev core.HookEvent) core.Hoo
 	}
 	if ev.SessionID != "" {
 		r.HookSession = ev.SessionID
+		r.HarnessSession = ev.SessionID
 	}
 	r.LastHook = ev.Event
 	r.Status.LastActivity = s.opts.Clock.Now()
@@ -713,4 +735,47 @@ func (s *Supervisor) RecordEvent(ev core.Event) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.event(ev.Agent, ev.Kind, ev.Detail)
+}
+
+// pendingRestart compares only hashes and labels, never secret contents.
+func (s *Supervisor) pendingRestart(r *record, a *core.AgentStatus) {
+	a.PendingRestart = false
+	a.PendingReason = ""
+	if len(r.LaunchFingerprint) == 0 || !s.opts.Sessions.Exists(a.Name) {
+		return
+	}
+	dead, _, err := s.opts.Sessions.PaneDead(a.Name)
+	if err != nil || dead {
+		return
+	}
+	_, parts := agentcfg.New(a.Dir, a.Runtime.Harness, agentcfg.Options{}).Fingerprint(a.Runtime.EnvFile, a.Runtime)
+	reasons := []string{}
+	for _, key := range []string{"runtime", "env", "skills", "email"} {
+		if parts[key] == r.LaunchFingerprint[key] {
+			continue
+		}
+		switch key {
+		case "runtime":
+			if a.Runtime.Model != r.LaunchRuntime.Model {
+				reasons = append(reasons, "model changed")
+			}
+			if a.Runtime.SkillsMode() != r.LaunchRuntime.SkillsMode() {
+				reasons = append(reasons, "skills mode changed")
+			}
+			old, current := r.LaunchRuntime, a.Runtime
+			old.Model = current.Model
+			old.Skills = current.Skills
+			if !reflect.DeepEqual(old, current) || len(reasons) == 0 {
+				reasons = append(reasons, "runtime changed")
+			}
+		case "env":
+			reasons = append(reasons, "env file changed")
+		case "skills":
+			reasons = append(reasons, "skills changed")
+		case "email":
+			reasons = append(reasons, "email changed")
+		}
+	}
+	a.PendingRestart = len(reasons) > 0
+	a.PendingReason = strings.Join(reasons, ", ")
 }

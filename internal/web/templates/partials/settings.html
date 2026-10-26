@@ -1,0 +1,343 @@
+{{/* Agent settings: the pending-restart banner and one panel per tab. */}}
+
+{{define "pending"}}{{$a := .A}}{{$set := eq .From "settings"}}<div class="pending-slot" id="pending-{{.From}}"{{if .OOB}} hx-swap-oob="true"{{end}}{{if $set}} hx-get="/agents/{{$a.Name}}/part/pending" hx-trigger="lolad:a-{{$a.Name}} from:body delay:400ms" hx-swap="outerHTML"{{end}}>{{if $a.PendingRestart}}<div class="pending" role="status">
+  <span class="pending-icon">{{template "icon" "restart"}}</span>
+  <p class="pending-text"><strong>Pending restart</strong> <span>{{sentence $a.PendingReason}}. {{if running $a.State}}It applies at the next launch; a restart resumes the conversation.{{else}}It applies when {{$a.Display}} next starts.{{end}}</span></p>
+  {{if running $a.State}}<button class="btn btn-sm" type="button" hx-post="/agents/{{$a.Name}}/restart" hx-vals='{"from":"{{.From}}"}' hx-target="{{if $set}}#pending-settings{{else}}#agent-head{{end}}" hx-swap="outerHTML" hx-disabled-elt="this">{{template "icon" "restart"}}<span>Restart to apply</span></button>{{end}}
+</div>{{end}}</div>{{end}}
+
+{{define "set-oob"}}{{if .OOB}}{{template "pending" (dict "A" .A "From" "settings" "OOB" true)}}{{end}}{{end}}
+
+{{define "set-error"}}{{with .Error}}<p class="flash is-error" role="alert">{{template "icon" "x"}}<span>{{.}}</span></p>{{end}}{{end}}
+
+{{/* ------------------------------------------------------------ runtime */}}
+
+{{define "settings-runtime"}}{{$v := .}}{{$rt := .A.Runtime}}<section class="set-panel" id="settings-panel" aria-labelledby="set-h">
+  {{template "set-oob" .}}
+  <header class="set-panel-head">
+    <h2 id="set-h">Model &amp; runtime</h2>
+    <p>How lolad launches {{.A.Display}}: the <code>runtime:</code> block of its lolabot.yaml.</p>
+  </header>
+  {{template "set-error" .}}
+  <form class="set-form" method="post" action="/agents/{{.A.Name}}/settings/runtime" hx-post="/agents/{{.A.Name}}/settings/runtime" hx-target="#settings-panel" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]">
+    <div class="set-row">
+      <div class="set-label"><h3 id="lbl-model">Model</h3><p>{{if eq $rt.Harness "codewhale"}}Codewhale{{else}}Claude Code{{end}} model. Pick one, or type any id the harness accepts.</p></div>
+      <div class="set-control">
+        <div class="models" role="radiogroup" aria-labelledby="lbl-model">
+          <label class="model"><input type="radio" name="model" value=""{{if eq $rt.Model ""}} checked{{end}}><span class="model-name">Harness default</span><span class="model-note">whatever {{$rt.Harness}} picks</span></label>
+          {{range .Models}}<label class="model"><input type="radio" name="model" value="{{.ID}}"{{if and (not $v.Custom) (eq .ID $rt.Model)}} checked{{end}}><span class="model-name">{{.Label}}</span><span class="model-id mono">{{.ID}}</span>{{with .Note}}<span class="model-note">{{.}}</span>{{end}}</label>
+          {{end}}<label class="model is-custom"><input type="radio" name="model" value="custom"{{if .Custom}} checked{{end}} data-custom-radio><span class="model-name">Other</span><input name="model_custom" class="mono" value="{{if .Custom}}{{$rt.Model}}{{end}}" placeholder="model id, e.g. claude-opus-5-5[1m]" autocomplete="off" spellcheck="false" autocapitalize="off" aria-label="Other model id" data-custom-model></label>
+        </div>
+      </div>
+    </div>
+
+    <div class="set-row">
+      <div class="set-label"><h3 id="lbl-perm">Permissions</h3><p>An approval prompt nobody answers stalls an unattended agent.</p></div>
+      <div class="set-control">
+        <div class="choice" role="radiogroup" aria-labelledby="lbl-perm">
+          <label class="choice-card"><input type="radio" name="permissions" value="bypass"{{if ne $rt.Permissions "default"}} checked{{end}}><span class="choice-body"><span class="choice-title">Bypass</span><span class="choice-note">acts without asking; for unattended work</span></span></label>
+          <label class="choice-card"><input type="radio" name="permissions" value="default"{{if eq $rt.Permissions "default"}} checked{{end}}><span class="choice-body"><span class="choice-title">Ask first</span><span class="choice-note">waits for approval in its terminal</span></span></label>
+        </div>
+      </div>
+    </div>
+
+    <div class="set-row">
+      <div class="set-label"><h3><label for="on-wake">On wake</label></h3><p>The first prompt of every fresh conversation.</p></div>
+      <div class="set-control">
+        <textarea id="on-wake" name="on_wake" rows="3" placeholder="Default: read brain/ and memory/, then work through your inbox.">{{$rt.OnWake}}</textarea>
+      </div>
+    </div>
+
+    <div class="set-row">
+      <div class="set-label"><h3>Daily fresh start</h3><p>A new conversation once a day. brain/ and memory/ carry over.</p></div>
+      <div class="set-control">
+        <div class="rotate">
+          <label class="check"><input type="checkbox" name="rotate_on"{{if $rt.Rotate}} checked{{end}} data-rotate-on><span>Every day at</span></label>
+          <input type="time" name="rotate" value="{{$rt.Rotate}}" aria-label="Time of the daily fresh start" data-rotate-time>
+        </div>
+      </div>
+    </div>
+
+    <div class="set-row">
+      <div class="set-label"><h3>Lifecycle</h3><p>When lolad starts {{.A.Display}} on its own.</p></div>
+      <div class="set-control set-checks">
+        <label class="check"><input type="checkbox" name="autostart"{{if $rt.AutostartEnabled}} checked{{end}}><span><span class="check-title">Start with lolad</span><span class="help">Launch when the daemon starts.</span></span></label>
+        <label class="check"><input type="checkbox" name="wake_on_message"{{if $rt.WakeOnMessageEnabled}} checked{{end}}><span><span class="check-title">Wake on mail</span><span class="help">Mail to {{.A.Display}} while it's stopped starts it.</span></span></label>
+      </div>
+    </div>
+
+    <div class="set-row">
+      <div class="set-label"><h3>Skills</h3></div>
+      <div class="set-control"><p class="set-fact">{{if eq $rt.SkillsMode "barebones"}}<strong>Barebones</strong>: only its own skills{{else}}<strong>Inherit</strong>: your skills and plugins, plus its own{{end}} · <a href="/agents/{{.A.Name}}/settings/skills">change in Skills</a></p></div>
+    </div>
+
+    <div class="set-actions">
+      <p class="help">Saved to lolabot.yaml. Applies at the next launch.</p>
+      <button class="btn btn-primary" type="submit">Save changes</button>
+    </div>
+  </form>
+</section>{{end}}
+
+{{/* ------------------------------------------------------------ skills */}}
+
+{{define "settings-skills"}}{{$v := .}}{{$a := .A}}<section class="set-panel" id="settings-panel" aria-labelledby="set-h">
+  {{template "set-oob" .}}
+  <header class="set-panel-head">
+    <h2 id="set-h">Skills</h2>
+    <p>Folders with a SKILL.md that {{.A.Display}} can call on. Adding one copies it into {{.A.Display}}'s directory.</p>
+  </header>
+  {{template "set-error" .}}
+
+  <div class="set-row">
+    <div class="set-label"><h3 id="lbl-mode">What it sees</h3><p>Takes effect at the next launch.</p></div>
+    <div class="set-control">
+      <form class="choice" role="radiogroup" aria-labelledby="lbl-mode" method="post" action="/agents/{{.A.Name}}/settings/skills/mode" hx-post="/agents/{{.A.Name}}/settings/skills/mode" hx-target="#settings-panel" hx-swap="outerHTML" data-autosubmit>
+        <label class="choice-card"><input type="radio" name="mode" value="inherit"{{if .Inherit}} checked{{end}}><span class="choice-body"><span class="choice-title">Inherit my skills</span><span class="choice-note">Your own skills and enabled plugins, plus its own.</span></span></label>
+        <label class="choice-card"><input type="radio" name="mode" value="barebones"{{if not .Inherit}} checked{{end}}><span class="choice-body"><span class="choice-title">Barebones</span><span class="choice-note">Only its own skills. You add each one it needs.</span></span></label>
+      </form>
+    </div>
+  </div>
+
+  <div class="set-row">
+    <div class="set-label"><h3>{{.A.Display}}'s skills</h3><p>In <span class="mono">{{if eq .A.Runtime.Harness "codewhale"}}.codewhale-home/skills{{else}}.claude/skills{{end}}</span>. Always visible.</p></div>
+    <div class="set-control">
+      {{if .Own}}<ul class="skills" role="list">
+        {{range .Own}}<li class="skill">
+          <div class="skill-main"><span class="skill-name mono">{{.Name}}</span>{{with .Description}}<span class="skill-desc">{{.}}</span>{{end}}</div>
+          <div class="skill-ops">
+            {{with .FilePath}}<a class="btn btn-sm btn-ghost" href="/agents/{{$a.Name}}/settings/files?path={{.}}">{{template "icon" "edit"}}<span>SKILL.md</span></a>{{end}}
+            <form method="post" action="/agents/{{$a.Name}}/settings/skills/remove" hx-post="/agents/{{$a.Name}}/settings/skills/remove" hx-target="#settings-panel" hx-swap="outerHTML" hx-confirm="Remove {{.Name}} from {{$a.Display}}? Its folder is deleted from the agent's directory.">
+              <input type="hidden" name="id" value="{{.ID}}">
+              <button class="btn btn-sm btn-ghost is-stop" type="submit" aria-label="Remove {{.Name}}">{{template "icon" "trash"}}<span>Remove</span></button>
+            </form>
+          </div>
+        </li>{{end}}
+      </ul>{{else}}<p class="empty-inline">No skills of its own yet.{{if not .Inherit}} Under Barebones that means none at all: add what it needs from your library below.{{else}} Add one from your library below to keep it even under Barebones.{{end}}</p>{{end}}
+    </div>
+  </div>
+
+  <div class="set-row">
+    <div class="set-label"><h3>Your library</h3><p>{{if .Inherit}}{{.A.Display}} already sees these. Adding one makes its own copy, which stays if you switch to Barebones.{{else}}Not visible under Barebones. Add the ones {{.A.Display}} needs.{{end}}</p></div>
+    <div class="set-control">
+      {{if .Library}}
+      <input type="search" class="skill-filter" placeholder="Filter skills" aria-label="Filter your library" data-filter="#library .skill" autocomplete="off">
+      <div id="library" class="library">
+        {{range .Library}}<div class="lib-group">
+          <h4 class="lib-source">{{.Label}}</h4>
+          <ul class="skills" role="list">
+            {{range .Skills}}<li class="skill">
+              <div class="skill-main"><span class="skill-name mono">{{.Name}}</span>{{with .Description}}<span class="skill-desc">{{.}}</span>{{end}}</div>
+              <div class="skill-ops">
+                {{if .Added}}<span class="tag" title="{{$a.Display}} has its own copy">{{template "icon" "check"}}Added</span>
+                {{else}}{{if .Active}}<span class="tag is-quiet" title="{{$a.Display}} sees it through Inherit">inherited</span>{{end}}
+                <form method="post" action="/agents/{{$a.Name}}/settings/skills/add" hx-post="/agents/{{$a.Name}}/settings/skills/add" hx-target="#settings-panel" hx-swap="outerHTML">
+                  <input type="hidden" name="from" value="{{.ID}}">
+                  <button class="btn btn-sm" type="submit" aria-label="Add {{.Name}} to {{$a.Display}}">{{template "icon" "plus"}}<span>Add to agent</span></button>
+                </form>{{end}}
+              </div>
+            </li>{{end}}
+          </ul>
+        </div>{{end}}
+        <p class="empty-inline" data-filter-empty hidden>No skill matches.</p>
+      </div>
+      {{else}}<p class="empty-inline">No user or plugin skills found in <span class="mono">~/.claude</span>.</p>{{end}}
+    </div>
+  </div>
+</section>{{end}}
+
+{{/* ------------------------------------------------------------ secrets */}}
+
+{{define "settings-secrets"}}{{$v := .}}{{$a := .A}}<section class="set-panel" id="settings-panel" aria-labelledby="set-h">
+  {{template "set-oob" .}}
+  <header class="set-panel-head">
+    <h2 id="set-h">Secrets</h2>
+    <p>Variables in <span class="mono">{{.EnvFile}}</span>. {{.A.Display}} can read them; that's how tokens reach it. The dashboard never shows a value back.</p>
+  </header>
+  {{template "set-error" .}}
+
+  {{if .Env}}<ul class="secrets" role="list">
+    {{range .Env}}<li class="secret">
+      <div class="secret-main">
+        <span class="secret-key mono">{{.Key}}</span>
+        {{if .Set}}<span class="secret-state is-set">{{template "icon" "lock"}}set · {{plural .Length "char" "chars"}}</span>{{else}}<span class="secret-state">empty</span>{{end}}
+        {{with .Comment}}<span class="secret-comment">{{.}}</span>{{end}}
+        {{with .UsedBy}}<span class="secret-used">used by {{range $i, $u := .}}{{if $i}}, {{end}}<span class="mono">{{$u}}</span>{{end}}</span>{{end}}
+      </div>
+      <div class="secret-ops">
+        <button class="btn btn-sm btn-ghost" type="button" aria-expanded="false" aria-controls="rep-{{.Key}}" data-reveal>{{template "icon" "edit"}}<span>{{if .Set}}Replace{{else}}Set{{end}}</span></button>
+        <form method="post" action="/agents/{{$a.Name}}/settings/secrets/delete" hx-post="/agents/{{$a.Name}}/settings/secrets/delete" hx-target="#settings-panel" hx-swap="outerHTML" hx-confirm="Delete {{.Key}} from {{$v.EnvFile}}? {{$a.Display}} loses it at the next launch.">
+          <input type="hidden" name="key" value="{{.Key}}">
+          <button class="btn btn-sm btn-ghost btn-icon is-stop" type="submit" aria-label="Delete {{.Key}}" title="Delete">{{template "icon" "trash"}}</button>
+        </form>
+      </div>
+      <form class="secret-form" id="rep-{{.Key}}" hidden method="post" action="/agents/{{$a.Name}}/settings/secrets" hx-post="/agents/{{$a.Name}}/settings/secrets" hx-target="#settings-panel" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]" autocomplete="off">
+        <input type="hidden" name="key" value="{{.Key}}"><input type="hidden" name="replace" value="1">
+        <input type="password" name="value" required autocomplete="off" spellcheck="false" autocapitalize="off" data-1p-ignore data-lpignore="true" placeholder="New value for {{.Key}}" aria-label="New value for {{.Key}}">
+        <button class="btn btn-sm btn-primary" type="submit">Save</button>
+        <button class="btn btn-sm btn-ghost" type="button" data-reveal-close>Cancel</button>
+      </form>
+    </li>{{end}}
+  </ul>{{else}}<p class="empty-inline">No variables in {{.EnvFile}} yet. Add an API token or password below; {{.A.Display}} gets it as an environment variable at its next launch.</p>{{end}}
+
+  <form class="secret-add" method="post" action="/agents/{{.A.Name}}/settings/secrets" hx-post="/agents/{{.A.Name}}/settings/secrets" hx-target="#settings-panel" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]" autocomplete="off">
+    <h3>Add a secret</h3>
+    <div class="secret-add-row">
+      <label class="field"><span class="label">Name</span><input name="key" value="{{.NewKey}}" required pattern="[A-Za-z_][A-Za-z0-9_]*" title="Letters, digits and _, not starting with a digit" placeholder="GITHUB_TOKEN" class="mono" autocomplete="off" spellcheck="false" autocapitalize="characters" data-env-key></label>
+      <label class="field field-grow"><span class="label">Value</span><input type="password" name="value" required autocomplete="off" spellcheck="false" autocapitalize="off" data-1p-ignore data-lpignore="true" placeholder="pasted once, never shown again"></label>
+      <button class="btn btn-primary" type="submit">{{template "icon" "plus"}}<span>Add</span></button>
+    </div>
+    <p class="help">Saving an existing name replaces its value. Written with mode 0600 and kept out of git.</p>
+  </form>
+</section>{{end}}
+
+{{/* ------------------------------------------------------------ files */}}
+
+{{define "settings-files"}}{{$v := .}}{{$a := .A}}<section class="set-panel is-files{{if or .File .FileErr}} has-file{{end}}" id="settings-panel" aria-labelledby="set-h">
+  {{template "set-oob" .}}
+  <header class="set-panel-head">
+    <h2 id="set-h">Files</h2>
+    <p>Text files in {{.A.Display}}'s directory, saved straight to disk. It reads most of them at its next launch.</p>
+  </header>
+  <div class="files">
+    <nav class="file-list" aria-label="Files">
+      {{range .Groups}}<div class="file-group">
+        <h3 class="file-group-h">{{.Label}}</h3>
+        <ul role="list">{{range .Files}}<li><a href="/agents/{{$a.Name}}/settings/files?path={{.Path}}"{{if and $v.File (eq .Path $v.File.Path)}} aria-current="true"{{end}} title="{{.Path}}"><span class="file-name">{{with dirOf .Path}}<span class="file-dir">{{.}}/</span>{{end}}{{baseOf .Path}}</span><span class="file-size">{{bytes .Size}}</span></a></li>{{end}}</ul>
+      </div>{{else}}<p class="empty-inline">No editable files found.</p>{{end}}
+    </nav>
+    <div class="file-pane">
+      {{if .File}}{{template "file-editor" .}}
+      {{else if .FileErr}}<a class="btn btn-sm btn-ghost file-back" href="/agents/{{$a.Name}}/settings/files">{{template "icon" "back"}}<span>All files</span></a><p class="flash is-error" role="alert">{{template "icon" "x"}}<span>{{.FileErr}}</span></p>
+      {{else}}<div class="file-none">{{template "icon" "file"}}<p class="empty-title">Pick a file</p><p>Instructions, config, brain and memory are listed on the left. Markdown has a preview.</p></div>{{end}}
+    </div>
+  </div>
+</section>{{end}}
+
+{{define "file-editor"}}{{$a := .A}}{{$f := .File}}{{$md := eq $f.Kind "md"}}<form class="editor" id="editor" method="post" action="/agents/{{$a.Name}}/settings/files" hx-post="/agents/{{$a.Name}}/settings/files" hx-target="#settings-panel" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]" data-editor data-path="{{$f.Path}}">
+  <input type="hidden" name="path" value="{{$f.Path}}">
+  <input type="hidden" name="base" value="{{if .Base}}{{.Base}}{{else}}{{$f.Hash}}{{end}}">
+  <header class="editor-head">
+    <a class="btn btn-sm btn-ghost btn-icon file-back" href="/agents/{{$a.Name}}/settings/files" aria-label="All files">{{template "icon" "back"}}</a>
+    <div class="editor-title"><span class="editor-path mono">{{$f.Path}}</span><span class="editor-meta">{{bytes $f.Size}} · saved <time datetime="{{stamp $f.ModTime}}" title="{{long $f.ModTime}}" data-ago>{{ago $f.ModTime}}</time><span class="editor-dirty" data-dirty hidden> · unsaved changes</span></span></div>
+    {{if $md}}<div class="seg" role="radiogroup" aria-label="View">
+      <input type="radio" name="view" value="edit" id="view-edit" checked><label for="view-edit">Edit</label>
+      <input type="radio" name="view" value="preview" id="view-preview" hx-post="/agents/{{$a.Name}}/settings/files/preview" hx-trigger="change" hx-target="#md-preview" hx-swap="innerHTML"><label for="view-preview">Preview</label>
+    </div>{{end}}
+    <button class="btn btn-sm btn-primary" type="submit" title="Save (⌘S)">Save</button>
+  </header>
+  {{with $f.Note}}<p class="editor-note">{{template "icon" "info"}}<span>{{.}}</span></p>{{end}}
+  {{template "set-error" .}}
+  {{if .Conflict}}<div class="flash is-error conflict" role="alert">{{template "icon" "alert"}}<div>
+    <p><strong>{{$f.Path}} changed on disk after you opened it.</strong> Your version is still in the editor; nothing was saved.</p>
+    <div class="conflict-ops"><a class="btn btn-sm" href="/agents/{{$a.Name}}/settings/files?path={{$f.Path}}" data-discard>Reload from disk</a><button class="btn btn-sm" type="submit" name="force_base" value="{{$f.Hash}}" data-discard>Overwrite with mine</button></div>
+  </div></div>{{end}}
+  <textarea class="editor-text mono" name="content" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Contents of {{$f.Path}}" data-editor-text>
+{{if .Conflict}}{{.Draft}}{{else if .Draft}}{{.Draft}}{{else}}{{$f.Content}}{{end}}</textarea>
+  {{if $md}}<div class="md md-preview" id="md-preview" aria-live="polite"></div>{{end}}
+</form>{{end}}
+
+{{define "md-preview"}}{{if .}}{{.}}{{else}}<p class="muted">Nothing to preview.</p>{{end}}{{end}}
+
+{{/* ------------------------------------------------------------ email */}}
+
+{{define "settings-email"}}{{$v := .}}{{$a := .A}}{{$e := .Email}}<section class="set-panel" id="settings-panel" aria-labelledby="set-h">
+  {{template "set-oob" .}}
+  <header class="set-panel-head">
+    <h2 id="set-h">Email</h2>
+    <p>{{.A.Display}}'s mailboxes, through lolabot's <span class="mono">tools/email.sh</span>: accounts in lolabot.yaml, logins in brain/credentials.yaml, passwords in .env.</p>
+  </header>
+  {{if not $e.Supported}}
+  <div class="set-unsupported">
+    {{template "icon" "mail"}}
+    <div>
+      <p class="empty-title">{{.A.Display}} can't use email yet</p>
+      <p>Email runs through lolabot's <span class="mono">tools/email.sh</span>, and {{.A.Display}}'s directory doesn't have one. Copy <span class="mono">tools/email.sh</span> and <span class="mono">tools/env_secret.py</span> from another lolabot instance into <span class="mono">{{.A.Dir}}/tools/</span>, then come back here.</p>
+    </div>
+  </div>
+  {{else}}
+  {{range $e.Notes}}<p class="flash is-note">{{template "icon" "info"}}<span>{{.}}</span></p>{{end}}
+  {{template "set-error" .}}
+
+  <div class="set-row">
+    <div class="set-label"><h3>Accounts</h3><p>Passwords are write-only. Test connection logs in to both servers; it never sends mail.</p></div>
+    <div class="set-control">
+      {{if $e.Accounts}}<ul class="accounts" role="list">
+        {{range $i, $acc := $e.Accounts}}<li class="acct">
+          <div class="acct-head">
+            <span class="acct-addr">{{.Address}}</span>
+            {{if and (eq $e.Watch "lolad") (eq $e.WatchAccount .Address)}}<span class="tag">watched by lolad</span>{{end}}
+            {{if .PasswordSet}}<span class="secret-state is-set">{{template "icon" "lock"}}password set</span>{{else}}<span class="secret-state is-missing">{{template "icon" "alert"}}no password</span>{{end}}
+          </div>
+          <p class="acct-meta mono">IMAP {{.IMAPServer}}:{{.IMAPPort}} · SMTP {{.SMTPServer}}:{{.SMTPPort}}{{if ne .Username .Address}} · login {{.Username}}{{end}}</p>
+          <div class="acct-ops">
+            <button class="btn btn-sm" type="button" hx-post="/agents/{{$a.Name}}/settings/email/test" hx-vals='{"address":"{{.Address}}"}' hx-target="#acct-test-{{$i}}" hx-swap="innerHTML" hx-disabled-elt="this" hx-indicator="#acct-test-{{$i}}">{{template "icon" "pulse"}}<span>Test connection</span></button>
+            <form method="post" action="/agents/{{$a.Name}}/settings/email/account/delete" hx-post="/agents/{{$a.Name}}/settings/email/account/delete" hx-target="#settings-panel" hx-swap="outerHTML" hx-confirm="Remove {{.Address}} from {{$a.Display}}? The password stays in .env until you delete it under Secrets.">
+              <input type="hidden" name="address" value="{{.Address}}">
+              <button class="btn btn-sm btn-ghost is-stop" type="submit">{{template "icon" "trash"}}<span>Remove</span></button>
+            </form>
+          </div>
+          <div class="acct-test" id="acct-test-{{$i}}" aria-live="polite"></div>
+          <details class="acct-edit"{{if eq $v.EditAcct .Address}} open{{end}}>
+            <summary>{{template "icon" "edit"}}<span>Edit account</span></summary>
+            {{if eq $v.EditAcct .Address}}{{template "acct-form" (dict "A" $a "Acc" $v.AcctDraft "Orig" .Address "Providers" $v.Providers)}}{{else}}{{template "acct-form" (dict "A" $a "Acc" $acc "Orig" .Address "Providers" $v.Providers)}}{{end}}
+          </details>
+        </li>{{end}}
+      </ul>{{else}}<p class="empty-inline">No accounts yet. Add the mailbox {{.A.Display}} should read and send from.</p>{{end}}
+      <details class="acct-add"{{if or (eq $v.EditAcct "new") (not $e.Accounts)}} open{{end}}>
+        <summary class="btn btn-sm">{{template "icon" "plus"}}<span>Add account</span></summary>
+        {{if eq $v.EditAcct "new"}}{{template "acct-form" (dict "A" $a "Acc" $v.AcctDraft "Orig" "" "Providers" $v.Providers)}}{{else}}{{template "acct-form" (dict "A" $a "Acc" nil "Orig" "" "Providers" $v.Providers)}}{{end}}
+      </details>
+    </div>
+  </div>
+
+  <form class="set-form" method="post" action="/agents/{{.A.Name}}/settings/email" hx-post="/agents/{{.A.Name}}/settings/email" hx-target="#settings-panel" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]">
+    <div class="set-row">
+      <div class="set-label"><h3><label for="operators">Trusted senders</label></h3><p>Authenticated mail from these addresses is treated as coming from you. One per line.</p></div>
+      <div class="set-control"><textarea id="operators" name="operators" rows="2" class="mono" spellcheck="false" autocapitalize="off" placeholder="you@example.com">{{range $i, $o := $e.OperatorEmails}}{{if $i}}
+{{end}}{{$o}}{{end}}</textarea></div>
+    </div>
+    <div class="set-row">
+      <div class="set-label"><h3 id="lbl-watch">New mail</h3><p>How {{.A.Display}} hears about new email. Use one watcher, not two.</p></div>
+      <div class="set-control watch">
+        {{if .Mod}}<p class="watch-mod">{{template "icon" "puzzle"}}<span><strong>A mail mod watches this inbox.</strong> It's a Claude Code plugin enabled in {{.A.Display}}'s <span class="mono">.claude/settings.json</span>; lolad detected it and leaves it alone.</span></p>{{end}}
+        <div class="choice" role="radiogroup" aria-labelledby="lbl-watch">
+          <label class="choice-card"><input type="radio" name="watch" value="none"{{if not .WatchLolad}} checked{{end}}><span class="choice-body"><span class="choice-title">{{if .Mod}}Only the mod{{else}}Don't watch{{end}}</span><span class="choice-note">{{if .Mod}}lolad doesn't poll.{{else}}{{.A.Display}} checks mail when asked.{{end}}</span></span></label>
+          <label class="choice-card"><input type="radio" name="watch" value="lolad"{{if .WatchLolad}} checked{{end}} data-watch-lolad><span class="choice-body"><span class="choice-title">lolad watches</span><span class="choice-note">polls with <span class="mono">email.sh watch</span> and mails {{.A.Display}} a notice. Works for both harnesses.</span></span></label>
+        </div>
+        <div class="watch-opts">
+          <label class="field"><span class="label">Account</span><select name="watch_account">{{range $e.Accounts}}<option value="{{.Address}}"{{if eq .Address $e.WatchAccount}} selected{{end}}>{{.Address}}</option>{{else}}<option value="">add an account first</option>{{end}}</select></label>
+          <label class="field field-sm"><span class="label">Every</span><input name="every" value="{{$e.Every}}" placeholder="2m" class="mono" autocomplete="off" pattern="[0-9]+(s|m|h)([0-9]+(s|m))?" title="A duration like 90s, 2m or 1h"></label>
+        </div>
+        {{if .Mod}}<p class="flash is-warn watch-both">{{template "icon" "alert"}}<span>The mod and lolad would both deliver each new email, so {{.A.Display}} gets it twice. Turn the mod off in its settings.json if you switch to lolad.</span></p>{{end}}
+      </div>
+    </div>
+    <div class="set-actions is-static"><p class="help">Saved to lolabot.yaml. Applies at the next launch.</p><button class="btn btn-primary" type="submit">Save changes</button></div>
+  </form>
+  {{end}}
+</section>{{end}}
+
+{{define "acct-form"}}{{$acc := .Acc}}<form class="acct-form" method="post" action="/agents/{{.A.Name}}/settings/email/account" hx-post="/agents/{{.A.Name}}/settings/email/account" hx-target="#settings-panel" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]" autocomplete="off" data-providers="{{json .Providers}}">
+  <input type="hidden" name="orig" value="{{.Orig}}">
+  <div class="row2">
+    <label class="field"><span class="label">Address</span><input type="email" name="address" value="{{with $acc}}{{.Address}}{{end}}" required placeholder="agent@example.com" autocomplete="off" spellcheck="false" data-acct-address></label>
+    <label class="field"><span class="label">Login <span class="opt">if not the address</span></span><input name="username" value="{{with $acc}}{{if ne .Username .Address}}{{.Username}}{{end}}{{end}}" placeholder="same as the address" autocomplete="off" spellcheck="false"></label>
+  </div>
+  <div class="server-row">
+    <label class="field"><span class="label">IMAP server</span><input name="imap_server" value="{{with $acc}}{{.IMAPServer}}{{end}}" placeholder="imap.example.com" class="mono" autocomplete="off" spellcheck="false" data-acct-imap></label>
+    <label class="field field-port"><span class="label">Port</span><input name="imap_port" value="{{with $acc}}{{.IMAPPort}}{{end}}" placeholder="993" inputmode="numeric" class="mono" autocomplete="off"></label>
+  </div>
+  <div class="server-row">
+    <label class="field"><span class="label">SMTP server</span><input name="smtp_server" value="{{with $acc}}{{.SMTPServer}}{{end}}" placeholder="smtp.example.com" class="mono" autocomplete="off" spellcheck="false" data-acct-smtp></label>
+    <label class="field field-port"><span class="label">Port</span><input name="smtp_port" value="{{with $acc}}{{.SMTPPort}}{{end}}" placeholder="465" inputmode="numeric" class="mono" autocomplete="off"></label>
+  </div>
+  <label class="field"><span class="label">Password</span><input type="password" name="password"{{if not $acc}} required{{end}} autocomplete="off" spellcheck="false" autocapitalize="off" data-1p-ignore data-lpignore="true" placeholder="{{if and $acc $acc.PasswordSet}}set; type a new one to replace it{{else}}app password{{end}}"><span class="help">Stored in .env{{with $acc}}{{with .PasswordKey}} as <span class="mono">{{.}}</span>{{end}}{{end}}; never shown again.{{if $acc}} Leave empty to keep the current one.{{end}}</span></label>
+  <div class="form-actions form-actions-end"><button class="btn btn-primary btn-sm" type="submit">{{if .Orig}}Save account{{else}}Add account{{end}}</button></div>
+</form>{{end}}
+
+{{define "email-test"}}<div class="etest{{if .OK}} is-ok{{end}}" role="status">
+  {{template "etest-row" (dict "K" "IMAP" "V" .IMAP)}}
+  {{template "etest-row" (dict "K" "SMTP" "V" .SMTP)}}
+  {{with .Detail}}<p class="etest-detail">{{.}}</p>{{end}}
+</div>{{end}}
+
+{{define "etest-row"}}<p class="etest-row"><span class="etest-k mono">{{.K}}</span>{{if eq .V "ok"}}<span class="etest-v is-ok">{{template "icon" "check"}}logged in</span>{{else if hasPrefix .V "not tried"}}<span class="etest-v is-skip">{{.V}}</span>{{else}}<span class="etest-v is-bad">{{template "icon" "x"}}{{.V}}</span>{{end}}</p>{{end}}
