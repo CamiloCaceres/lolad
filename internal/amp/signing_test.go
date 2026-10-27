@@ -17,7 +17,12 @@ import (
 )
 
 func TestProtocolVectors(t *testing.T) {
-	path := "/tmp/amp-spec/protocol/tests/test-vectors.json"
+	// AMP_SPEC_DIR is a clone of github.com/agentmessaging/protocol.
+	dir := os.Getenv("AMP_SPEC_DIR")
+	if dir == "" {
+		t.Skip("set AMP_SPEC_DIR to a protocol clone to run the shared test vectors")
+	}
+	path := filepath.Join(dir, "tests/test-vectors.json")
 	b, e := os.ReadFile(path)
 	if os.IsNotExist(e) {
 		t.Skip("protocol clone not present")
