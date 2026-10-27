@@ -54,8 +54,8 @@ fi
 
 ENV_FILE="${LOLAD_ENV_FILE:-$LOLABOT_HOME/.env}"
 if [ ${#USE_ARGS[@]} -gt 0 ] && [ -f "$ENV_FILE" ]; then
-    # Take the named secrets from .env (owner-only, git-ignored). Preferred over aim-secret: the
-    # aim-secret on this machine belongs to Lumio's AI Maestro, which Ultron must not use.
+    # Take the named secrets from .env (owner-only, git-ignored). Preferred over aim-secret, which
+    # belongs to AI Maestro's vault and may not be this agent's to use.
     for ((i = 1; i < ${#USE_ARGS[@]}; i += 2)); do
         NAME="${USE_ARGS[$i]}"
         VALUE="$(python3 "$SCRIPT_DIR/env_secret.py" "$ENV_FILE" "$NAME")" || exit 3

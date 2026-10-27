@@ -20,10 +20,10 @@ paths before starting.
 ```yaml
 listen: 127.0.0.1:4100
 tmux_bin: psmux
-agents_dirs: ['C:\Users\Jugui\agents']
-new_agents_dir: 'C:\Users\Jugui\agents'
+agents_dirs: ['C:\Users\Bob\agents']
+new_agents_dir: 'C:\Users\Bob\agents'
 # Set to the real native executable if it is not found on PATH:
-claude_bin: 'C:\Users\Jugui\.local\bin\claude.exe'
+claude_bin: 'C:\Users\Bob\.local\bin\claude.exe'
 ```
 
 Without `tmux_bin`, Windows prefers `psmux` and then `tmux`; Unix defaults to
@@ -95,7 +95,7 @@ Linux, macOS and Windows, with the version embedded through `-ldflags`.
 CI runs build/vet/full tests on Linux/macOS, and native build/vet/tmux
 conformance on Windows, then uploads amd64 and arm64 Windows executables.
 
-## Jugui's PC checklist
+## Bob's PC checklist
 
 - Install psmux 3.4.0, the selected native harness, Git Bash where required,
   and Tailscale; confirm each intended executable is found on PATH.

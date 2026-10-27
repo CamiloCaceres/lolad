@@ -34,7 +34,7 @@ func New(b Backend, dir string, password func(string, string) (string, error)) *
 	return &Manager{backend: b, dir: dir, password: password, last: map[string]Row{}}
 }
 func defaults() Settings {
-	return Settings{Provider: "purelymail", Domain: "mail.example.com", Pattern: "{slug}@{domain}", Operators: []string{"operator@example.com"}, Watch: "lolad"}
+	return Settings{Provider: "manual", Pattern: "{slug}@{domain}", Watch: "lolad"}
 }
 func (m *Manager) read() (Settings, error) {
 	s := defaults()

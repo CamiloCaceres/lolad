@@ -4,7 +4,7 @@ Two real throwaway daemon processes ran on this Mac, using separate private
 config/state directories under `/tmp/lolad-v4-wiring-*`. Daemon A used tenant
 `milo`, local listener 4196, remote listener 4296, federation URL
 `http://127.0.0.1:4296`, and tmux socket `lolad-v4-wiring-a`. B used tenant
-`jugui`, ports 4197/4297 and socket `lolad-v4-wiring-b`.
+`bob`, ports 4197/4297 and socket `lolad-v4-wiring-b`.
 
 A had only a temporary Ultron registry entry with `autostart: false` and
 `wake_on_message: false`. B had no agents. No harness was launched. The real
@@ -26,13 +26,13 @@ A connect invite
 B connect accept < [private stdin stream]
 PASS paired through remote listeners, without device authentication
 
-A connect share jugui.lolad.local ultron
-A org check milo jugui@jugui.lolad.local
+A connect share bob.lolad.local ultron
+A org check milo bob@bob.lolad.local
 A approvals
 PASS outbound policy preview permits the human but creates no grants
 A org check milo ultron@milo.lolad.local
 PASS local full-address policy remains allowed
-PATCH A /api/connections/jugui.lolad.local {"user_reachable":true}
+PATCH A /api/connections/bob.lolad.local {"user_reachable":true}
 PATCH B /api/connections/milo.lolad.local {"user_reachable":true}
 PASS explicit user reachability on both connections
 
@@ -40,25 +40,25 @@ B send ultron@milo.lolad.local "Mailbox proof" --subject Review
 PASS same message ID appears on A with status=held
 PASS B sender copy delivery=held
 A approvals
-PASS pending grant for jugui@jugui.lolad.local → ultron
-A org check jugui@jugui.lolad.local ultron
+PASS pending grant for bob@bob.lolad.local → ultron
+A org check bob@bob.lolad.local ultron
 PASS sender preview denied while pending
-A approve jugui.lolad.local jugui@jugui.lolad.local ultron
-A org check jugui@jugui.lolad.local ultron
+A approve bob.lolad.local bob@bob.lolad.local ultron
+A org check bob@bob.lolad.local ultron
 PASS sender preview allowed after approval
 PASS A recipient copy becomes unread
 PASS B sender copy becomes delivered through a signed receipt
 
 B send milo@milo.lolad.local "User thread proof" --subject "User review"
 PASS A holds this separate user↔user first message
-A approve jugui.lolad.local jugui@jugui.lolad.local milo
+A approve bob.lolad.local bob@bob.lolad.local milo
 PASS B sender copy becomes delivered
-A send jugui@jugui.lolad.local Reviewed --subject "Re: User review" --in-reply-to [user-message-id]
+A send bob@bob.lolad.local Reviewed --subject "Re: User review" --in-reply-to [user-message-id]
 PASS reply arrives unread on B
 PASS matching thread_id and in_reply_to on both daemons
 
 [terminate B cleanly and wait for its process to exit]
-A send jugui@jugui.lolad.local "Offline proof" --subject "Queued while offline"
+A send bob@bob.lolad.local "Offline proof" --subject "Queued while offline"
 PASS A delivery=queued
 [allow one failed delivery attempt]
 B serve
@@ -67,7 +67,7 @@ PASS queued message eventually delivery=delivered on A
 PASS B receives exactly the sender's message ID
 
 A msg --as ultron read [original-agent-message-id]
-PASS output contains "External — from jugui@jugui.lolad.local via Jugui's lolad"
+PASS output contains "External — from bob@bob.lolad.local via Bob's lolad"
 
 [terminate both daemons and wait for process exit]
 tmux -L lolad-v4-wiring-a kill-server
@@ -77,7 +77,7 @@ PASS cleanup complete
 ```
 
 The reply test uses a user↔user conversation because AMP preserves participant
-identity: Milo cannot impersonate Ultron by replying as the user to a message
+identity: Alice cannot impersonate Ultron by replying as the user to a message
 addressed to Ultron. The agent mailbox path and user reply path were both
 exercised independently.
 

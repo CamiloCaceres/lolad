@@ -6,9 +6,11 @@ daemon session. External unread counts and watcher check times are not currently
 available; these are distinct from lolad's AMP inbox counts. Connection tests log
 in to IMAP and SMTP over TLS and send no messages.
 
-Choose **Provider settings**, set the Purelymail API token, and save. Defaults:
-`mail.example.com`, `{slug}@{domain}`, operator sender
-`operator@example.com`, and lolad watching. Confirm an agent's prefilled address
+Choose **Provider settings**, pick Purelymail, set its API token, your mail
+domain (for example `mail.example.com`) and operator sender addresses (for
+example `operator@example.com`), and save. The address pattern defaults to
+`{slug}@{domain}` and lolad watches new mailboxes. A fresh install starts on
+the `manual` provider. Confirm an agent's prefilled address
 and choose **Give an email**. lolad creates a mailbox with a random 256-bit
 password, saves its account via the existing agent settings path, upgrades the
 known stock email tool when needed, and tests its connection. An existing mail

@@ -46,10 +46,10 @@ you must, keep changes additive, and say so in your report.
 
 ```yaml
 listen: 127.0.0.1:4100
-agents_dirs: [/Users/you/agents]   # scanned one level deep for lolabot.yaml with runtime:
+agents_dirs: [~/agents]   # scanned one level deep for lolabot.yaml with runtime:
 agents: []                                          # extra explicit agent dirs
-lolabot_template: /Users/you/lolabot   # setup.sh used by `lolad new`
-new_agents_dir: /Users/you/agents
+lolabot_template: ~/lolabot   # setup.sh used by `lolad new`
+new_agents_dir: ~/agents
 ```
 
 Each section's tables are prefixed by owning package (`amp_*`, `sup_*`, …) and
@@ -60,10 +60,10 @@ configuration — config and org stay in YAML.
 
 ## AMP provider (`internal/amp`)
 
-Spec: https://github.com/agentmessaging/protocol v0.1.2-draft (a clone is at
-`/tmp/amp-spec/protocol`; `spec/04-messages.md`,
+Spec: https://github.com/agentmessaging/protocol v0.1.2-draft (see
+`spec/04-messages.md`,
 `spec/08-api.md`). Reference implementation to learn from, not copy:
-`/Users/you/ai-maestro/services/amp-service.ts`.
+[AI Maestro's `services/amp-service.ts`](https://github.com/23blocks-OS/ai-maestro/blob/main/services/amp-service.ts).
 
 - Address: `<name>@<tenant>.lolad.local`; bare names expand. Provider name
   `<tenant>.lolad.local`. Case-insensitive, stored lowercase.
@@ -146,14 +146,14 @@ bypassPermissions (when bypass) --setting-sources project,local --settings
   finish < 3 s; it POSTs to `/api/hook` and prints Claude's expected JSON.
 - `--continue` resumes the last conversation in that dir; a fresh launch omits
   it and passes `on_wake` (or the given first prompt) as the prompt argument.
-- Note `claude` is a zsh function on this Mac; use the binary
+- Note `claude` may be a shell function; use the binary
   `~/.local/bin/claude` (resolve via `exec.LookPath` with PATH from config,
   allow `claude_bin` override in config).
 - `[1m]` model ids are passed as one argv element (no shell, no globbing).
 **codewhale**: argv `codewhale [--continue|-c] [--approval-policy never when
 bypass] [--model m] [args…] [first prompt]`; env `CODEWHALE_HOME=<dir>/.codewhale-home`
 when that directory exists, `CODEWHALE_ALLOW_BASE_PROMPT_OVERRIDE=1` when
-`<home>/prompts/constitution.md` exists (mirror `dsh-lola/lola`). Hooks:
+`<home>/prompts/constitution.md` exists (mirror a hand-run Codewhale lolabot instance). Hooks:
 Codewhale supports `[[hooks.hooks]]` entries with `event = "..."` (see
 `codewhale` `/hooks list-events`, and project `.codewhale/hooks.toml` which
 needs approval). Find the least invasive way to install lolad's hooks per
@@ -232,9 +232,9 @@ and the dashboard form → `Service.Create`:
 2. Append the `runtime:` block to lolabot.yaml.
 3. Harness files: claude → `.claude/settings.json` with `model` (keep existing),
    `AGENTS.md` → `CLAUDE.md` symlink if missing; codewhale → `.codewhale-home/config.toml`
-   modelled on `/Users/you/agents/dsh-lola/.codewhale-home/config.toml`
+   modelled on a working Codewhale lolabot instance's `.codewhale-home/config.toml`
    (`project_instruction_imports = ["claude"]`, `[skills] scan_codewhale_only`,
-   no secrets) and a `./<slug>` launcher like `dsh-lola/lola` for manual runs.
+   no secrets) and a `./<slug>` launcher for manual runs.
 4. Write a fenced `<!-- lolad:begin --> … <!-- lolad:end -->` section into
    CLAUDE.md: its AMP address, who it reports to / who it may message (from the
    policy, regenerated whenever org changes for every agent), how to use
@@ -246,7 +246,7 @@ and the dashboard form → `Service.Create`:
 5. Register identity, add to org (team/head), optionally send Mission as the
    first mail from the user, optionally start.
 `lolad adopt <dir> --harness …` does steps 2–5 for an existing lolabot
-instance (e.g. `jugui`, `dsh-lola`).
+instance.
 
 ## `lolad msg` (agent-side client, `internal/msgcli`)
 Identity: `LOLAD_AGENT` (or `--as`), keys from `<state>/identities/<name>/`,
@@ -360,7 +360,7 @@ func (d *Dir) Fingerprint(envFile string, rt core.Runtime) (sum string, parts ma
   (replace only the `email:` block; every other byte stays). If the agent's
   `tools/email.sh` is the stock lolabot one that only knows `aim-secret`
   (AI Maestro's vault), upgrade it to read the named secrets from `.env`
-  exactly as `/Users/you/agents/jugui/tools/email.sh` does
+  exactly as `internal/agentcfg/assets/email.sh` does
   (and add `tools/env_secret.py` from jugui), keeping a `.lolad-orig` copy.
   TestEmail does its own TLS IMAP LOGIN/LOGOUT and SMTP AUTH/QUIT in Go with a
   10 s timeout (never sends mail) and reports each server separately.
@@ -403,9 +403,9 @@ and lands in the agent conversation with optional Email/Org setup links.
 
 ## Federation (v4)
 
-Milo and his brother Jugui each run a lolad (Mac; Windows 11). Both machines
-are on Milo's tailnet. They pair once; then Jugui (the human, on his own
-dashboard) and his agents can message Milo's agents that Milo shared with him,
+Two people each run a lolad (for example a Mac and a Windows 11 PC). Both machines
+are on one tailnet. They pair once; then each human (on their own
+dashboard) and their agents can message the other's agents that were shared with them,
 and the other way round. Direct provider-to-provider AMP federation
 (AMP `spec/06-federation.md`, allowlist trust): no shared server, no relay.
 Types are in `internal/core/federation.go`; `core.Service` embeds
@@ -539,7 +539,7 @@ fail all).
 
 ## Windows (v4)
 
-Jugui runs lolad natively on Windows 11: no WSL, no Docker. The tmux layer
+lolad runs natively on Windows 11: no WSL, no Docker. The tmux layer
 stays: on Windows lolad drives **psmux** (github.com/psmux/psmux, a native
 tmux-compatible multiplexer on ConPTY, installed with `winget install psmux`;
 it ships a `tmux` binary). Same `core.Sessions`, same supervisor, same live

@@ -23,7 +23,8 @@ Rules:
 - New dependency: `go get <module>` only — never `go mod tidy` (others' WIP
   can make it fail or drop pins).
 - Do not commit, stash, reset or checkout. The coordinator commits.
-- Never touch AI Maestro (`localhost:23000`, `~/.agent-messaging`, `~/.aimaestro`),
-  the running agents in `/Users/you/agents/{jugui,dsh-lola}`
-  (read-only reference), or the user's global `~/.claude/settings.json`.
+- Never touch other agent platforms running on the machine (for example AI
+  Maestro: `localhost:23000`, `~/.agent-messaging`, `~/.aimaestro`), live agent
+  directories (read-only reference at most), or the user's global
+  `~/.claude/settings.json`.
 - Tests that need tmux use a unique `-L lolad-test-<rand>` socket and kill it.

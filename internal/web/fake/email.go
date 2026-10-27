@@ -5,6 +5,7 @@ import (
 	"github.com/CamiloCaceres/lolad/internal/core"
 	"github.com/CamiloCaceres/lolad/internal/mailprov"
 	"os"
+	"path/filepath"
 	"sync"
 )
 
@@ -47,6 +48,10 @@ func (s *Service) mailManager() *mailprov.Manager {
 	}
 	dir, e := os.MkdirTemp("", "lolad-fake-email-")
 	if e != nil {
+		panic(e)
+	}
+	// The demo shows a configured provider; real installs start with manual.
+	if e = os.WriteFile(filepath.Join(dir, "email.json"), []byte(`{"provider":"purelymail","domain":"mail.example.com","pattern":"{slug}@{domain}","operators":["operator@example.com"],"watch":"lolad"}`), 0600); e != nil {
 		panic(e)
 	}
 	m := mailprov.New(s, dir, func(name, key string) (string, error) {

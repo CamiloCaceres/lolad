@@ -379,6 +379,7 @@ public final class MainActivity extends ComponentActivity {
             android.text.InputType.TYPE_CLASS_TEXT
                 | android.text.InputType.TYPE_TEXT_VARIATION_URI);
     urlField.setText(session.server().isEmpty() ? Protocol.DEFAULT_URL : session.server());
+    urlField.setHint(Protocol.URL_HINT);
     codeField =
         field(
             form,

@@ -9,8 +9,8 @@ to agent terminals, settings, files, secrets, device sessions or the local AMP A
 ## Prepare both machines
 
 Give each organization a different `tenant` in `org.yaml`, such as `milo` and
-`jugui`. Addresses then look like `ultron@milo.lolad.local` and
-`jugui@jugui.lolad.local`. Matching tenant names cannot pair: rename one first.
+`bob`. Addresses then look like `ultron@milo.lolad.local` and
+`bob@bob.lolad.local`. Matching tenant names cannot pair: rename one first.
 
 On each machine configure an HTTPS origin the other machine can reach:
 
@@ -20,7 +20,7 @@ remote:
   public_url: https://your-machine.your-tailnet.ts.net:4100
 federation:
   enabled: true
-  display: Milo
+  display: Alice
   url: https://your-machine.your-tailnet.ts.net:4100
 ```
 
@@ -38,24 +38,24 @@ and harness hooks are not exposed there. Device pairing (`lolad pair`) and
 lolad pairing (`lolad connect`) are separate operations.
 
 Both directions must work. **Tailscale node sharing is one-directional.** If
-Jugui shared his Windows device into Milo's tailnet, that alone does not make
-Milo's Mac reachable from Jugui's device. Share the Mac with Jugui as needed
+Bob shared their Windows device into Alice's tailnet, that alone does not make
+Alice's Mac reachable from Bob's device. Share the Mac with Bob as needed
 and check the tailnet ACLs and each machine's HTTPS origin from the other machine.
 
 ## Pair once
 
-On Milo's machine:
+On Alice's machine:
 
 ```sh
 lolad connect invite
 ```
 
 This one response contains an invite code. Treat it like a password: give it
-to Jugui through a private channel, never a public issue, log or command
+to Bob through a private channel, never a public issue, log or command
 argument. It expires after 72 hours and can be used once. Invitations are
 not available from the connections list or any GET endpoint.
 
-Jugui accepts on his own machine, reading the code from stdin. Put only the
+Bob accepts on their own machine, reading the code from stdin. Put only the
 `lolad-invite:...` code (not the surrounding JSON) in a private file:
 
 ```sh
@@ -72,11 +72,11 @@ request approval to message your human inbox, enable **User reachable** in
 Connections, or use the trusted local API on each machine:
 
 ```sh
-curl -X PATCH http://127.0.0.1:4100/api/connections/jugui.lolad.local \
+curl -X PATCH http://127.0.0.1:4100/api/connections/bob.lolad.local \
   -H 'Content-Type: application/json' -d '{"user_reachable":true}'
 ```
 
-On Jugui's machine the provider in that URL is `milo.lolad.local`.
+On Bob's machine the provider in that URL is `milo.lolad.local`.
 
 Compare the peer's provider name and displayed key fingerprint with the other
 person. Pairing pins the provider keys carried by the invite and the signed
@@ -84,34 +84,34 @@ acceptance; it does not trust whichever server answers an unsigned request.
 
 ## Share agents and approve senders
 
-On Milo's machine:
+On Alice's machine:
 
 ```sh
-lolad connect share jugui.lolad.local ultron
+lolad connect share bob.lolad.local ultron
 lolad connections
 ```
 
-Jugui can discover Ultron in his dashboard contacts. His own agents see remote
+Bob can discover Ultron in their dashboard contacts. His own agents see remote
 contacts grouped by lolad in `lolad msg who`, and can use full addresses when
-allowed. Jugui sends from his own dashboard or user CLI:
+allowed. Bob sends from their own dashboard or user CLI:
 
 ```sh
 lolad send ultron@milo.lolad.local "Can you review this?"
 ```
 
-The first message is held on Milo's lolad. It is not in Ultron's inbox and does
-not wake or notify Ultron. Milo sees an approval card in Inbox and, when ntfy
-is configured, a push such as “Jugui wants to message Ultron: Can you review
-this?”. Jugui sees the outbound message as held until Milo decides:
+The first message is held on Alice's lolad. It is not in Ultron's inbox and does
+not wake or notify Ultron. Alice sees an approval card in Inbox and, when ntfy
+is configured, a push such as “Bob wants to message Ultron: Can you review
+this?”. Bob sees the outbound message as held until Alice decides:
 
 ```sh
 lolad approvals
-lolad approve jugui.lolad.local jugui@jugui.lolad.local ultron
+lolad approve bob.lolad.local bob@bob.lolad.local ultron
 # Or reject this sender for this recipient:
-lolad block jugui.lolad.local jugui@jugui.lolad.local ultron
+lolad block bob.lolad.local bob@bob.lolad.local ultron
 ```
 
-Allow releases held mail and marks Jugui's copy delivered. The approved pair
+Allow releases held mail and marks Bob's copy delivered. The approved pair
 can then message in both directions. Block discards held mail and reports
 blocked to the sender. Remote mail is labelled external in the dashboard,
 `lolad msg read`, and agent session notices. Message IDs and reply threading
@@ -120,12 +120,12 @@ remain the same on both machines.
 To pre-approve specific remote participants while sharing:
 
 ```sh
-lolad connect share jugui.lolad.local ultron \
-  --with jugui@jugui.lolad.local --with ana@jugui.lolad.local
-lolad connect unshare jugui.lolad.local ultron
-lolad connect pause jugui.lolad.local
-lolad connect resume jugui.lolad.local
-lolad connect rm jugui.lolad.local
+lolad connect share bob.lolad.local ultron \
+  --with bob@bob.lolad.local --with ana@bob.lolad.local
+lolad connect unshare bob.lolad.local ultron
+lolad connect pause bob.lolad.local
+lolad connect resume bob.lolad.local
+lolad connect rm bob.lolad.local
 ```
 
 Sharing replaces that agent's pre-approved address list. An empty list allows

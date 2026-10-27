@@ -170,7 +170,7 @@ func TestEmailSave(t *testing.T) {
 	}
 }
 func TestEmailJuguiCopy(t *testing.T) {
-	source := "/Users/you/agents/jugui/lolabot.yaml"
+	source := "../registry/testdata/jugui.yaml"
 	b, e := os.ReadFile(source)
 	if e != nil {
 		t.Skip("reference unavailable")

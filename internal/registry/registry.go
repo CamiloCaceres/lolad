@@ -52,7 +52,7 @@ func DefaultConfig() Config {
 	if state == "" {
 		state = filepath.Join(home, ".local/share/lolad")
 	}
-	return Config{Federation: FederationConfig{Enabled: true}, TmuxSocket: "lolad", Listen: "127.0.0.1:4100", AgentsDirs: []string{"/Users/you/agents"}, LolabotTemplate: "/Users/you/lolabot", NewAgentsDir: "/Users/you/agents", StateDir: state}
+	return Config{Federation: FederationConfig{Enabled: true}, TmuxSocket: "lolad", Listen: "127.0.0.1:4100", AgentsDirs: []string{filepath.Join(home, "agents")}, LolabotTemplate: filepath.Join(home, "lolabot"), NewAgentsDir: filepath.Join(home, "agents"), StateDir: state}
 }
 func ConfigPath() string {
 	if p := os.Getenv("LOLAD_CONFIG"); p != "" {

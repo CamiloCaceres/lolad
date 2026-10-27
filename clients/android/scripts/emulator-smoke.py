@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Exercise only the isolated API/emulator. Never prints pairing codes or tokens."""
-import json, pathlib, re, subprocess, sys, time, urllib.parse, urllib.request, xml.etree.ElementTree as ET
-ADB='/Users/you/android/sdk/platform-tools/adb'
+import json, os, pathlib, re, subprocess, sys, time, urllib.parse, urllib.request, xml.etree.ElementTree as ET
+ADB=os.path.expanduser('~/android/sdk/platform-tools/adb')
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 SHOTS=ROOT/'docs/screenshots'
 def adb(*args):

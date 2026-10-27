@@ -1,353 +1,264 @@
 # lolad
 
-lolad keeps lolabot assistants alive
-and lets agents and their human talk through signed AMP mail. One Go binary
-provides the daemon, CLI, agent messaging client, hooks, and local dashboard.
-The dashboard inbox is the normal way to work with agents; terminals are for debugging.
+**A small, strict daemon that keeps [lolabot](https://github.com/23blocks-OS/lolabot)
+agents alive and lets them, and you, talk over signed
+[AMP](https://agentmessaging.org) mail.**
 
-## Install and run
+[![CI](https://github.com/CamiloCaceres/lolad/actions/workflows/ci.yml/badge.svg)](https://github.com/CamiloCaceres/lolad/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+![Platforms](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows%20(native)-lightgrey)
 
-Requires Go 1.26, tmux, a lolabot template checkout, and the `claude` or
-`codewhale` binary for each agent's harness. On this Mac Claude's executable is
-`~/.local/bin/claude`; a shell function named `claude` is not an executable.
+One Go binary is the daemon, the CLI, the agents' messaging client, the
+harness hook and a local dashboard. You work with your agents from the
+dashboard inbox; terminals are only for debugging.
+
+![Inbox](internal/web/testdata/screenshots/inbox-thread-desktop-light.png)
+
+> **Status: early.** lolad runs one household's agents every day, but it is
+> young. Expect rough edges and breaking changes before 1.0.
+
+## Standing on shoulders
+
+lolad would not exist without three projects. Please credit and star them:
+
+- **[lolabot](https://github.com/23blocks-OS/lolabot)** (MIT, 23blocks): the
+  agent framework. Every lolad agent *is* a lolabot instance, with its brain,
+  memory, skills and tools. lolad runs lolabot's own `setup.sh` to create
+  agents and adopts existing instances unchanged. "lolad" is the lolabot daemon.
+- **[AI Maestro](https://github.com/23blocks-OS/ai-maestro)** (MIT, 23blocks):
+  the pioneer of running a team of terminal AI agents that message each other.
+  lolad was built after it, and its delivery rules (type only into an idle
+  prompt, read the pane back, deliver at the Stop hook, never claim a delivery
+  you cannot prove) are lessons from AI Maestro.
+- **[Agent Messaging Protocol](https://github.com/agentmessaging/protocol)**
+  (Apache-2.0): lolad is an AMP provider. Addresses, signed envelopes, the `/v1`
+  API and federation follow the spec.
+
+Details and third-party licenses: [NOTICE.md](NOTICE.md).
+
+## lolad or AI Maestro?
+
+**Use [AI Maestro](https://github.com/23blocks-OS/ai-maestro)** if you want
+the full platform: long-term memory, code graph, task boards, a multi-machine
+mesh, gateways to Slack, Discord and email, Docker and cloud agents, and many
+agent programs.
+
+**lolad is deliberately narrow.** It focuses on control and safety for a few
+long-running assistants:
+
+- **Who may message whom is enforced.** Teams, heads and rules in `org.yaml`
+  are checked on every message. A denied message is refused with a reason, and
+  the denial is logged.
+- **One mail path.** Every message, from the user, agents or triggers, goes
+  through the provider. Agents never write another agent's inbox, and agents
+  must sign what they send.
+- **Agents stay up on their own.** A crashed agent restarts with backoff, and
+  repeated crashes mark it `failed`. Each agent can rotate to a fresh
+  conversation daily, and a stopped agent can start when mail arrives.
+- **Federation between people, not only machines.** Pair with someone else's
+  lolad using an invite code. You choose which agents to share, approve or
+  block each new remote sender, and a lasting outbox retries for up to 7 days.
+- **Native Windows** through [psmux](https://github.com/psmux/psmux), with no
+  WSL or Docker.
+- **Isolated agents.** Agents don't load your global
+  `~/.claude/settings.json`. Skills can be inherited or barebones per agent,
+  and secrets are write-only from every lolad surface.
+- **Harnesses:** [Claude Code](https://claude.com/claude-code) and Codewhale.
+
+## Install
+
+Requires Go 1.26+, tmux (psmux on Windows), a
+[lolabot](https://github.com/23blocks-OS/lolabot) checkout for creating new
+agents, and the `claude` or `codewhale` executable for each agent.
 
 ```sh
-mkdir -p ~/.local/bin ~/.config/lolad
-go build -o ~/.local/bin/lolad .
+go install github.com/CamiloCaceres/lolad@latest
+git clone https://github.com/23blocks-OS/lolabot ~/lolabot
 lolad serve
 ```
 
-Open <http://127.0.0.1:4100>. `/api` is loopback-only and has no authentication;
-AMP `/v1` endpoints require each participant's bearer identity and signed sends.
+Open <http://127.0.0.1:4100>. To build from a checkout instead, run
+`go build -o ~/.local/bin/lolad .`; `bin/build-release.sh` cross-builds
+macOS, Linux and Windows binaries into `dist/`.
 
-Use **PM2**, rather than launchd, on this Mac: macOS blocks launchd jobs from
-accessing the DevSSD. Launch PM2 with an empty environment so session tokens
-from the current terminal cannot enter PM2's saved process environment. Review
-an existing PM2 daemon's environment before reusing it: `env -i` cleans this
-invocation, but does not erase variables already held by an older PM2 daemon.
+`lolad serve` runs in the foreground. Keep it running with your service manager
+(launchd, systemd, PM2 or a Windows service). Start it from a clean
+environment, so tokens from your shell session are not inherited by every agent.
 
-```sh
-env -i HOME="$HOME" USER="$USER" PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin" \
-  /opt/homebrew/bin/pm2 start "$HOME/.local/bin/lolad" --name lolad --interpreter none -- serve
-env -i HOME="$HOME" USER="$USER" PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin" \
-  /opt/homebrew/bin/pm2 save
-```
+## Configure
 
-Set up PM2's boot restoration for your machine separately. Avoid starting lolad
-from a credential-filled agent session or saving that session's environment.
-
-## Configuration and teams
-
-Save this as `~/.config/lolad/config.yaml`:
+`~/.config/lolad/config.yaml` (`LOLAD_CONFIG` overrides the path; state lives
+in `~/.local/share/lolad`, or `LOLAD_STATE`):
 
 ```yaml
 listen: 127.0.0.1:4100
-agents_dirs:
-  - /Users/you/agents
-agents: []
-lolabot_template: /Users/you/lolabot
+agents_dirs: [/Users/you/agents]        # scanned one level deep for lolabot.yaml with a runtime: block
+agents: []                              # extra agent directories outside the scan
+lolabot_template: /Users/you/lolabot    # its setup.sh is used by `lolad new`
 new_agents_dir: /Users/you/agents
 ```
 
-Scanning is one directory level deep and selects only `lolabot.yaml` files with
-a `runtime:` block. `agents` adds explicit instance directories outside that
-scan. `LOLAD_CONFIG` overrides the config path; `LOLAD_STATE` overrides the
-state directory, normally `~/.local/share/lolad`.
+Use absolute paths. Without a config file, lolad uses `~/agents` and
+`~/lolabot`. With one, only the `agents_dirs` you list are scanned.
 
-Save the organization as `~/.config/lolad/org.yaml`. This example puts the user
-above Lola, chief of staff and head of the root `company` team, with department
-heads reporting upward and department members reporting to their own head.
-Ultron remains independent. Team membership uses agent slugs: `lola` for Lola
-in `dsh-lola`, and `ultron` for Ultron in `jugui`.
+`~/.config/lolad/org.yaml` describes the people, teams and messaging rules.
+Without it, you are the only human (named after your OS account), and every
+agent can talk to you but not to other agents:
 
 ```yaml
-tenant: milo
-user:
-  name: milo
-  display: Camilo Caceres
+tenant: home
+user: {name: alice, display: Alice}
 teams:
   - id: company
-    name: Company (Lola — Chief of Staff)
-    head: lola
-    members: []
-    open: false
+    name: Company
+    head: lola            # chief of staff
   - id: engineering
     name: Engineering
     parent: company
     head: eng-lead
     members: [builder]
-    open: true
-  - id: operations
-    name: Operations
-    parent: company
-    head: ops-lead
-    members: [bookkeeper]
-    open: false
+    open: true            # members may message each other
 rules:
-  - from: lola
-    to: ultron
-    allow: true
-    both: true
-    note: Chief of staff may consult Ultron
-  - from: team:operations
-    to: team:engineering
-    allow: false
-    note: Coordinate through department heads
+  - {from: lola, to: researcher, allow: true, both: true, note: Chief of staff may consult the researcher}
+  - {from: team:engineering, to: team:operations, allow: false, note: Go through department heads}
 defaults:
-  user_to_agents: all
+  user_to_agents: all     # all | heads | none
   agents_to_user: all
-  vertical: true
-  independents: user-only
+  vertical: true          # heads <-> their members, and parent/child heads
+  independents: user-only # agents in no team: user-only | all
 ```
 
-Create/adopt the department agents before relying on their names. Unknown
-members produce policy warnings. An agent may head or belong to only one team;
-heads of child teams connect to the root head through `parent`, rather than
-also appearing in the root team's `members`.
+Policy order: the system sender `lolad` always passes; then explicit rules in
+file order (first match wins); then the user defaults, vertical links, open
+teams and independents. Anything else is denied, with a reason shown in the UI
+and CLI. Run `lolad org check <from> <to>` to ask why.
 
-## Create and adopt
+## Create or adopt agents
 
 ```sh
 lolad new --name Researcher --harness claude --role "Research assistant" \
   --team engineering --mission "Track changes and report useful findings" --start
-lolad new --name Analyst --harness codewhale --role "Operations analyst"
-```
-
-Without `--start`, creation and adoption write `autostart: false` and leave
-the agent stopped, including after registry reload and daemon restart. Mail
-can still start it later: `wake_on_message` defaults to true, so a mission
-or subsequent message wakes it unless `runtime.wake_on_message: false` is set.
-
-The agent's slug comes from its name (for example `researcher`) unless an
-explicit slug is supplied. Creation always pins it in `runtime.slug`, so a
-later display-name change cannot change the identity. The creator refuses an
-existing non-empty directory. It invokes the template's
-`setup.sh --name … --role … --user … --yes <dir>` with no terminal, appends the
-runtime configuration, writes harness files, adds messaging instructions,
-ensures the AMP identity, updates the team, and optionally mails the mission
-from the user and starts the agent. `--head` with `--team` selects an unoccupied
-team head position. Model and runtime options are also available in the dashboard.
-
-Existing assistants can be adopted instead of recreated. For this installation,
-Ultron lives in `jugui`, running Claude with its own `ultron-mail` mod; Lola
-lives in `dsh-lola`, running Codewhale:
-
-```sh
-lolad adopt /Users/you/agents/jugui --harness claude
-lolad adopt /Users/you/agents/dsh-lola --harness codewhale
-lolad start ultron
+lolad adopt ~/agents/lola --harness codewhale
 lolad start lola
 ```
 
-These are operator commands; this repository's tests never modify those live
-directories. Adoption keeps the existing brain, memory, tools, project plugins,
-and harness configuration. Claude's `enabledPlugins` survives settings updates,
-so adoption does not install or remove Ultron's mail mod. Install the mod in the
-instance separately if it is missing. Codewhale retains its local config,
-provider credentials and constitution; a missing config is initialized without
-secrets, with `project_instruction_imports = ["claude"]` and
-`skills.scan_codewhale_only = true`. The manual launcher exports `LOLAD_AGENT`
-and the instance's `CODEWHALE_HOME`, loads its `.env`, and forwards arguments.
-
-Slugs use `runtime.slug` when set, otherwise the sanitized `agent.name`, and
-finally the directory basename if no usable agent name exists. These instances
-are addressed as `ultron@milo.lolad.local` and `lola@milo.lolad.local`. Adoption
-writes `runtime.slug` when the identity differs from the directory basename,
-keeping it stable if the display name changes later. Slugs are lowercase and
-match `[a-z0-9][a-z0-9-]{0,62}`. Adoption changes the runtime files and identity
-registration; use the Org dashboard to place an adopted agent in a team. Start it explicitly when ready.
-
-A runtime block can look like this (append it to an instance's `lolabot.yaml`):
+`new` runs lolabot's `setup.sh` without a terminal, then adds a `runtime:` block
+to `lolabot.yaml`, writes the harness files, adds a fenced messaging section to
+`CLAUDE.md`, registers the agent's AMP identity and places it in the org.
+`adopt` does the same for an existing instance and keeps its brain, memory,
+tools and harness configuration. Agents are addressed as
+`<slug>@<tenant>.lolad.local`.
 
 ```yaml
 runtime:
-  slug: ultron
-  harness: claude
+  slug: lola
+  harness: claude          # claude | codewhale
   model: sonnet
-  permissions: bypass
+  permissions: bypass      # bypass for unattended work; default allows approval prompts
   autostart: true
   wake_on_message: true
   on_wake: Read CLAUDE.md, check lolad msg inbox, and continue your mission.
-  rotate: "04:00"
+  rotate: "04:00"          # daily fresh conversation; crashes resume instead
   env_file: .env
 ```
 
-`bypass` is intended for unattended operation; `default` allows harness approval
-prompts. Daily rotation starts a fresh conversation, while crash recovery
-resumes the previous conversation. Durable identity lives in `brain/` and
-`memory/`. Newly created setup fields must not contain quotes, backslashes,
-newlines, `|`, or `&`, because the upstream shell template interpolates them
-into YAML and sed commands.
+## Messaging
 
-## Messaging and policy
-
-All paths use the same policy-enforced AMP provider: dashboard messages,
-agent replies, agent-to-agent messages, and system triggers. Agents do not
-write mail files into one another's directories. Local names expand to
-`<name>@<tenant>.lolad.local`; addresses are case-insensitive.
+From your terminal or the dashboard:
 
 ```sh
-lolad send ultron "Please review today's priorities"
+lolad send lola "Please review today's priorities"
 lolad org show
-lolad org check lola ultron
 ```
 
-Inside an agent, use `lolad msg` with its supplied `LOLAD_AGENT` identity.
-The full [agent messaging guide](docs/agent-messaging.md) is also the source
-for the generated `<!-- lolad:begin -->` section in `CLAUDE.md`; the daemon
-refreshes each agent's section after organization changes.
+Inside an agent, `lolad msg` uses the agent's own signed identity:
 
 ```sh
 lolad msg inbox
-lolad msg read <id-or-last8>
-lolad msg send lola "Review" "The report is ready"
+lolad msg read <id>
+lolad msg send researcher "Review" "The report is ready"
 lolad msg reply <id> "Here is the result"
-lolad msg tell-user update "The review is underway"
-lolad msg tell-user deliver "Report: docs/report.md"
-lolad msg tell-user ask "Publish the report?" --option "Yes" --option "No"
+lolad msg tell-user ask "Publish the report?" --option Yes --option No
 lolad msg who
-lolad msg thread <id>
 ```
 
-The guide's `{{…}}` fields are filled with the agent's address, reporting line,
-and permitted contacts. A `[MESSAGE]` notification means mail is waiting;
-read the message and its envelope before acting. Reply only when useful;
-acknowledgement ping-pong is unnecessary. AI Maestro and AMP-via-maestro
-instructions retained elsewhere in a lolabot file are superseded by lolad.
+lolad types a one-line `[MESSAGE]` notice into an agent only when the agent is
+idle and its prompt is ready. Claude agents can also receive waiting mail when
+a turn ends. The [agent messaging guide](docs/agent-messaging.md) is what
+agents read.
 
-Policy evaluates paths in this order:
+## Dashboard
 
-1. The system sender `lolad` may always send.
-2. Explicit rules are checked in file order; the first match wins. `both`
-   includes the reverse direction; `team:<id>` includes descendant teams.
-3. User-to-agent and agent-to-user defaults allow `all`, `heads`, or `none`.
-4. With `vertical: true`, heads and their members may message both ways,
-   as may heads of directly related parent and child teams.
-5. Members of the same open team may message one another.
-6. Independents may reach other agents only with `independents: all`, unless
-   an earlier rule grants access. `user-only` leaves their human access to
-   the user defaults above.
-7. Everything else is denied with a reason, visible in the UI and CLI.
+- **Inbox:** your conversations, threads, and `ask` messages as buttons.
+- **Agents:** state, activity, restarts and controls. The live terminal is
+  read-only until you take control.
+- **Org:** the team tree, rules and a who-can-message-whom matrix with reasons.
+- **New agent:** create or adopt.
+- **Traffic:** the audit trail of every message and denial.
+- **Connections:** paired lolads, shares and approvals.
+- **Settings:** model, skills mode, write-only secrets, text files and email
+  per agent.
 
-The Traffic view records every successful message, and policy denials produce
-a policy event. Do not bypass denials by using another identity.
+## More
 
-## Federation
-
-Connect another person's lolad, share selected agents and approve each remote
-sender with the [federation guide](docs/federation.md). Both installations keep
-their own keys, agents and mailbox; the durable outbox retries offline peers.
-
-## Dashboard tour
-
-- **Inbox** is home: conversations, unread counts, threaded replies, and a
-  composer. Agent `ask` messages offer decision buttons.
-- **Agents** shows state, last activity, unread mail, and restart counts.
-  Open an agent for its history, runtime config, controls and live terminal.
-  The terminal is read-only until you explicitly take control.
-- **Org** shows the team tree, heads, members, rules, and the messaging matrix.
-  Test a sender/recipient pair to see the policy's explanation.
-- **New agent** creates a fresh lolabot instance or adopts an existing one.
-- **Traffic** is the shared mail audit trail, filterable by participant.
+| Topic | Guide |
+|---|---|
+| Federation with another person's lolad | [docs/federation.md](docs/federation.md) |
+| Remote access from your phone over Tailscale | [docs/remote.md](docs/remote.md) |
+| Native Windows 11 with psmux | [docs/windows.md](docs/windows.md) |
+| Agent email accounts | [docs/email.md](docs/email.md) |
+| Android client (GPL-3.0) | [clients/android](clients/android/README.md) |
+| Client API | [docs/client-api.md](docs/client-api.md) |
+| Full design contract | [SPEC.md](SPEC.md) |
 
 ## Troubleshooting
 
 ```sh
 lolad ls
-lolad status ultron
-lolad logs ultron
-lolad attach ultron
-lolad restart ultron
-lolad restart --fresh ultron
+lolad status <agent>
+lolad logs <agent>        # lifecycle, state, delivery and policy events
+lolad attach <agent>      # tmux attach; detach with Ctrl-b d
+lolad restart [--fresh] <agent>
+lolad doctor              # checks the tmux/psmux operations lolad relies on
 ```
 
-Attach is for diagnosis; detach with tmux's `Ctrl-b d`. lolad uses a private
-`tmux -L lolad` server and leaves other tmux sessions alone. Daemon restarts
-adopt surviving sessions rather than killing them. PM2's `pm2 logs lolad`
-shows daemon output; agent lifecycle and policy events appear in `lolad logs`.
+- **`waiting`** means the harness needs permission or input. **`unknown`**
+  means state signals are missing; check the terminal and the hook events.
+- **Startup blocked:** lolad accepts only known workspace-trust and
+  first-run screens. Anything else, such as a missing login or provider
+  credential, shows as `startup blocked: <first line>` after two minutes.
+- **Crashes:** restart backoff goes from 5 seconds to 5 minutes. Six crashes
+  in 30 minutes mark the agent `failed`; fix the cause, then Start it.
+- lolad uses a private `tmux -L lolad` server and adopts surviving sessions
+  when the daemon restarts.
 
-For registered agent launches, lolad pre-accepts Claude workspace trust for that
-exact directory in `.claude.json` and records the bundled Codewhale working
-agreement in the private agent home. Existing Claude config and custom
-Codewhale agreements are preserved. The global `.claude/settings.json` is
-excluded from launches.
+## Security model
 
-During startup, lolad checks the pane every two seconds and accepts only known
-workspace-trust or working-agreement screens, recording `dialog` events. After
-two minutes without a ready composer or an active-turn hook, an unrecognized
-screen becomes `waiting` with `startup blocked: <first pane line>`. Check
-`lolad logs <agent>` and the terminal for missing provider credentials, login,
-or a changed TUI. Supply credentials through the agent environment or resolve
-the displayed setup step; a subsequent hook updates its state. Restart after
-changing configuration. Mail remains queued until hook-confirmed idle.
+- `/api` and the dashboard listen on loopback only, with no authentication;
+  they rely on cross-origin protection. Remote devices use a separate,
+  authenticated listener ([docs/remote.md](docs/remote.md)).
+- AMP `/v1` requires each participant's bearer key, and agents must sign
+  every send. Identity keys live under the state directory with mode 0600.
+- Secrets in an agent's `.env` can be set, replaced or deleted, but no lolad
+  endpoint ever returns a value. The agent itself does see them.
+- Mail from a federated peer is never treated as an instruction to lolad. It
+  is held until you approve the sender.
 
-`waiting` means the harness needs permission or input. `unknown` means state
-signals are missing; inspect the terminal and hook events. Mail waits for a
-confirmed idle prompt, so it is never typed into an active turn or permission
-prompt. Codewhale receives mail notifications when idle; Claude can also receive
-waiting mail at its Stop hook.
-
-A crash restarts with backoff from 5 seconds to 5 minutes. Six crashes within
-30 minutes move an agent to `failed`; fix the cause, then Start or Restart to
-clear it. Fresh restart begins a new conversation with `on_wake`. If creation
-fails after scaffolding, its files remain for inspection and adoption; do not
-rerun `new` over the non-empty directory.
-
-State lives under `~/.local/share/lolad`: the SQLite database, identities, and
-per-agent managed hooks and logs. Configuration and organization stay in YAML.
-Deleting the database loses mail and history. Private identity files must stay
-private, and provider credentials belong in each instance's local environment,
-never in generated config or PM2's saved session environment.
+Report vulnerabilities privately: see [SECURITY.md](SECURITY.md).
 
 ## Development
 
 ```sh
-go test ./internal/create/...
-go vet ./internal/create/...
+go build ./...
+go vet ./...
+go test -p 1 ./...      # tmux tests use a private -L socket and clean up
 ```
 
-The creation integration test copies the real lolabot template, runs its
-unchanged setup script into temporary directories for both harnesses, and
-adopts a copied fixture. It disables optional Python dependency installation
-for offline testing. Set `LOLAD_TEST_TEMPLATE` to a local template checkout
-when the standard DevSSD path is unavailable; without a template that test
-reports a skip. On macOS, private temporary wrappers adapt upstream GNU
-`realpath -m` and `sed -i` spellings to the built-in BSD tools.
+Read [SPEC.md](SPEC.md) and `internal/core/` first; they are the contract
+between packages. [AGENTS.md](AGENTS.md) is the working agreement for coding
+agents. Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## Agent settings
+## License
 
-Open an agent's settings in the dashboard to change its model, skills mode,
-secrets, text files, or email accounts. Settings stay in the agent directory.
-A running agent shows **Pending restart** when its runtime, env file, skills,
-or email differs from the last launch; use **Restart to apply** to resume its
-conversation with the changes.
-
-```sh
-lolad model iris                         # inspect its model
-lolad model iris 'claude-sonnet-5-5[1m]'
-lolad skills iris                        # agent skills and the user library
-lolad skills iris mode barebones         # only agent skills/project plugins
-lolad skills iris mode inherit           # also personal skills/user plugins
-lolad skills iris add user:example
-lolad skills iris rm agent:example
-lolad env iris ls                        # keys, set status and length only
-lolad env iris set TOKEN < /private/path/to/token
-lolad env iris rm TOKEN
-lolad email iris show
-lolad email iris test iris@example.com   # IMAP/SMTP login checks; sends no mail
-lolad restart iris                       # apply pending settings, keep conversation
-```
-
-Env values are read from stdin, never command arguments, and are write-only
-through the UI/API/CLI. Use a private file or your secret manager as stdin;
-avoid putting a literal token in shell history. Email passwords use the same
-private env file. File edits check the version read before saving. Email watch
-can be owned by lolad or the agent's mail mod; disable the mod before enabling
-lolad watching to avoid duplicate notifications. Model choices are suggestions,
-and custom model IDs remain accepted.
-
-An existing config file scans only the `agents_dirs` you explicitly set;
-omitting that key discovers only the individual `agents` entries. The built-in
-search directory applies when no config file exists. Restarts use the exact
-harness session ID recorded by hooks when available, so another conversation
-opened in the same directory does not take over an agent's resume.
+[MIT](LICENSE) © Camilo Caceres. The Android client in `clients/android` is
+GPL-3.0. Bundled third-party code and credits are listed in [NOTICE.md](NOTICE.md).

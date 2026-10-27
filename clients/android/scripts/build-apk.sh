@@ -1,9 +1,9 @@
 #!/bin/zsh
 set -euo pipefail
 cd "${0:A:h:h}"
-export JAVA_HOME="${JAVA_HOME:-/Users/you/android/jdk/Contents/Home}"
-export ANDROID_HOME="${ANDROID_HOME:-/Users/you/android/sdk}"
-export GRADLE_USER_HOME="${GRADLE_USER_HOME:-/Users/you/android/gradle-home}"
+export JAVA_HOME="${JAVA_HOME:-$HOME/android/jdk/Contents/Home}"
+export ANDROID_HOME="${ANDROID_HOME:-$HOME/android/sdk}"
+export GRADLE_USER_HOME="${GRADLE_USER_HOME:-$HOME/android/gradle-home}"
 signing_dir="${LOLAD_ANDROID_SIGNING_DIR:-$HOME/.local/share/lolad-android}"
 mkdir -p "$signing_dir" dist
 chmod 700 "$signing_dir"

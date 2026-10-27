@@ -3,6 +3,7 @@ package policy
 
 import (
 	"fmt"
+	"os/user"
 	"sort"
 	"strings"
 
@@ -10,7 +11,36 @@ import (
 )
 
 func DefaultOrg() core.Org {
-	return core.Org{Tenant: "home", User: core.User{Name: "milo", Display: "Camilo Caceres"}, Defaults: core.Defaults{UserToAgents: "all", AgentsToUser: "all", Vertical: true, Independents: "user-only"}}
+	name, display := localUser()
+	return core.Org{Tenant: "home", User: core.User{Name: name, Display: display}, Defaults: core.Defaults{UserToAgents: "all", AgentsToUser: "all", Vertical: true, Independents: "user-only"}}
+}
+
+// localUser names the default human participant after the OS account; org.yaml overrides it.
+func localUser() (string, string) {
+	u, err := user.Current()
+	if err != nil {
+		return "user", "user"
+	}
+	login := u.Username[strings.LastIndex(u.Username, `\`)+1:]
+	name := strings.Trim(strings.Map(func(r rune) rune {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '-':
+			return r
+		case r >= 'A' && r <= 'Z':
+			return r + 'a' - 'A'
+		}
+		return '-'
+	}, login), "-")
+	if len(name) > 63 {
+		name = name[:63]
+	}
+	if name == "" || name == "lolad" {
+		name = "user"
+	}
+	if u.Name != "" {
+		return name, u.Name
+	}
+	return name, name
 }
 
 // Policy is an immutable snapshot. Construct a new snapshot when the org changes.

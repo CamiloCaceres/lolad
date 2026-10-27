@@ -7,7 +7,8 @@ import org.json.*;
 
 /** Wire contract helpers without Android dependencies. */
 final class Protocol {
-  static final String DEFAULT_URL = "https://my-mac.example-tailnet.ts.net:4100";
+  static final String DEFAULT_URL = "";
+  static final String URL_HINT = "https://your-mac.your-tailnet.ts.net:4100";
 
   static String server(String raw) {
     try {

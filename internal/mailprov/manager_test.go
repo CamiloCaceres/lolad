@@ -86,7 +86,9 @@ func fixture(t *testing.T) (*Manager, *diskBackend, *memoryProvider, string) {
 	os.WriteFile(filepath.Join(root, "lolabot.yaml"), []byte("agent:\n  name: Iris\n"), 0600)
 	d := agentcfg.New(root, core.HarnessClaude, agentcfg.Options{UserHome: t.TempDir()})
 	b := &diskBackend{d: d}
-	m := New(b, t.TempDir(), func(_ string, key string) (string, error) { return d.ProvisionPassword("", key) })
+	state := t.TempDir()
+	os.WriteFile(filepath.Join(state, "email.json"), []byte(`{"provider":"purelymail","domain":"mail.example.com","pattern":"{slug}@{domain}","operators":["operator@example.com"],"watch":"lolad"}`), 0600)
+	m := New(b, state, func(_ string, key string) (string, error) { return d.ProvisionPassword("", key) })
 	p := &memoryProvider{}
 	m.Override = p
 	return m, b, p, root
@@ -227,6 +229,7 @@ func TestManualAttachAndDefaultWatchChoice(t *testing.T) {
 	ctx := context.Background()
 	settings := defaults()
 	settings.Provider = "manual"
+	settings.Domain = "example.test"
 	if _, e := m.EmailProvider(ctx, &ProviderUpdate{Settings: settings}); e != nil {
 		t.Fatal(e)
 	}

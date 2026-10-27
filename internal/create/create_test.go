@@ -128,7 +128,8 @@ func copyTree(t *testing.T, src, dst string) {
 func TestRealSetupBothHarnessesAndAdopt(t *testing.T) {
 	source := os.Getenv("LOLAD_TEST_TEMPLATE")
 	if source == "" {
-		source = "/Users/you/lolabot"
+		home, _ := os.UserHomeDir()
+		source = filepath.Join(home, "lolabot")
 	}
 	if _, err := os.Stat(filepath.Join(source, "setup.sh")); os.IsNotExist(err) {
 		t.Skip("real lolabot template unavailable; set LOLAD_TEST_TEMPLATE")

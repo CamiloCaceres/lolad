@@ -4,7 +4,7 @@ A native Android 8+ client for connecting to lolad, reading and replying to agen
 
 ## Install and pair
 
-Install `dist/lolad.apk` on the phone (or `adb install -r dist/lolad.apk`). Enable Tailscale and open lolad. The default server is `https://my-mac.example-tailnet.ts.net:4100`; change it when connecting to another server.
+Install `dist/lolad.apk` on the phone (or `adb install -r dist/lolad.apk`). Enable Tailscale and open lolad. Enter your server's address, for example `https://your-mac.your-tailnet.ts.net:4100` (see [remote access](../../docs/remote.md)).
 
 On the trusted dashboard, open Devices and create a pairing code. Tap **Scan dashboard QR code** or type the eight-character code and tap **Pair device**. Opening a `lolad://pair?u=<encoded-server>&c=<code>` link fills the same form; pairing requires the explicit Pair device action. Camera permission is requested only when scanning. If a device token was supplied separately, use the password field and **Connect with token**.
 

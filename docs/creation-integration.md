@@ -84,7 +84,7 @@ after its membership update. The source template is
 
 - `go test ./internal/create/...` passed, including real setup into temporary
   instances for Claude and Codewhale from a copy of
-  `/Users/you/lolabot`.
+  the lolabot template.
 - `go vet ./internal/create/...` passed.
 - Integration assertions cover the actual generated tree, parsed runtime block,
   model settings, Claude instruction symlink, Codewhale imports/skill isolation,
