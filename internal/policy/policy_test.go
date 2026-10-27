@@ -14,6 +14,7 @@ import (
 
 func company() core.Org {
 	o := DefaultOrg()
+	o.User = core.User{Name: "milo", Display: "Milo"} // the default user follows the OS account
 	o.Teams = []core.Team{{ID: "company", Head: "chief", Members: []string{"assistant"}}, {ID: "engineering", Parent: "company", Head: "cto", Members: []string{"dev", "qa"}, Open: true}, {ID: "sales", Parent: "company", Head: "sales-head", Members: []string{"rep"}}}
 	o.Rules = []core.Rule{{From: "chief", To: "cto", Allow: false, Note: "explicit deny beats vertical"}, {From: "dev", To: "rep", Allow: true, Both: true}, {From: "team:company", To: "indie", Allow: true}}
 	return o
