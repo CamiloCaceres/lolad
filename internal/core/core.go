@@ -131,8 +131,9 @@ type AgentStatus struct {
 	Detail       string    `json:"detail,omitempty"` // from the last hook, e.g. the tool waiting for approval
 	Team         string    `json:"team,omitempty"`   // team id it belongs to, if any
 	IsHead       bool      `json:"is_head,omitempty"`
-	// PendingRestart: the agent's configuration (runtime block, .env, skills,
-	// email) changed since its process started; a restart applies it.
+	// PendingRestart: a launch-only setting (model, skills mode, harness,
+	// permissions, args, env sources; .env and skills where they cannot be
+	// applied live) changed since its process started; a restart applies it.
 	PendingRestart bool   `json:"pending_restart,omitempty"`
 	PendingReason  string `json:"pending_reason,omitempty"` // e.g. "model changed, .env changed"
 }
@@ -186,6 +187,24 @@ type Mail struct {
 	Remote        string `json:"remote,omitempty"`
 	Delivery      string `json:"delivery,omitempty"`
 	DeliveryError string `json:"delivery_error,omitempty"`
+	// Attachments are payload.attachments: signed with the message.
+	Attachments []Attachment `json:"attachments,omitempty"`
+}
+
+// Attachment is an AMP provider attachment (spec 04): lolad stores the bytes,
+// the message carries this metadata inside its signed payload. Recipients
+// check Digest on download.
+type Attachment struct {
+	Storage     string    `json:"storage,omitempty"` // "" or "provider"
+	ID          string    `json:"id"`                // att_<unix>_<hex>
+	Filename    string    `json:"filename"`
+	ContentType string    `json:"content_type"`
+	Size        int64     `json:"size"`
+	Digest      string    `json:"digest"` // sha256:<hex>
+	URL         string    `json:"url"`    // /v1/attachments/<id>/download on this lolad
+	ScanStatus  string    `json:"scan_status"`
+	UploadedAt  time.Time `json:"uploaded_at"`
+	ExpiresAt   time.Time `json:"expires_at"`
 }
 
 // UserChat is the structured part of mail between the user and an agent,
@@ -208,6 +227,9 @@ type Outgoing struct {
 	Type      string         `json:"type,omitempty"`
 	InReplyTo string         `json:"in_reply_to,omitempty"`
 	Context   map[string]any `json:"context,omitempty"`
+	// Attachments are IDs the sender uploaded (Mailer/Service upload); each
+	// may go in one message only.
+	Attachments []string `json:"attachments,omitempty"`
 }
 
 // MailFilter selects messages from one participant's mailbox.
@@ -390,6 +412,11 @@ type Service interface {
 	Conversations(ctx context.Context) ([]Conversation, error)
 	Conversation(ctx context.Context, peer string, limit int, before time.Time) ([]Mail, error) // oldest first
 	UserSend(ctx context.Context, out Outgoing) (Mail, error)
+	// UploadAttachment stores a file the user is about to send; put its ID
+	// in Outgoing.Attachments. OpenAttachment reads one the user sent or
+	// received. The caller closes the reader.
+	UploadAttachment(ctx context.Context, filename, contentType string, r io.Reader) (Attachment, error)
+	OpenAttachment(ctx context.Context, id string) (Attachment, io.ReadCloser, error)
 	MarkRead(ctx context.Context, id string) error // as the user
 	Traffic(ctx context.Context, limit int, before time.Time) ([]Mail, error)
 
@@ -426,4 +453,5 @@ var (
 	ErrInvalid    = errors.New("invalid request")
 	ErrDenied     = errors.New("denied by policy")
 	ErrConflict   = errors.New("changed since it was loaded")
+	ErrTooLarge   = errors.New("too large")
 )

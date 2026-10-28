@@ -21,7 +21,7 @@
 {{/* Settings workspace keyboard navigation and safe GET-form leave guard. */}}
 <script src="{{asset "settings.js"}}" defer></script>
 </head>
-<body hx-boost="true">
+<body hx-boost="true" hx-headers='{"X-Lolad-Build": "{{build}}"}'>
 {{template "icons"}}
 <a class="skip" href="#main">Skip to content</a>
 <div class="app {{.Class}}" id="app" data-title="{{.Title}}">

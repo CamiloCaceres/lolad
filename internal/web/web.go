@@ -41,6 +41,9 @@ type Options struct {
 	// files are read from it and templates re-parsed on every request, so the
 	// UI can be edited without restarting. Leave empty in production.
 	Dir string
+	// MaxUpload is the per-file cap for files sent from the inbox; default
+	// DefaultMaxUpload (the provider's local limit).
+	MaxUpload int64
 }
 
 type server struct {
@@ -52,16 +55,19 @@ type server struct {
 	log           *slog.Logger
 	files         fs.FS // holds templates/ and static/
 	reload        bool
+	maxUpload     int64
+	uploads       pending // files uploaded in a conversation, not sent yet
 
 	mu     sync.Mutex
 	base   *template.Template
 	pages  map[string]*template.Template
 	hashes map[string]string // static path -> content hash, for cache busting
+	build  string            // hash of every static file: which assets a page loaded
 }
 
 // New returns the dashboard handler, to be mounted at "/".
 func New(svc core.Service, opts Options) http.Handler {
-	s := &server{svc: svc, log: opts.Logger, files: embedded, auth: opts.Auth, publicURL: opts.PublicURL, trustedOrigin: opts.TrustedOrigin, version: opts.Version}
+	s := &server{svc: svc, log: opts.Logger, files: embedded, auth: opts.Auth, publicURL: opts.PublicURL, trustedOrigin: opts.TrustedOrigin, version: opts.Version, maxUpload: opts.MaxUpload}
 	if s.log == nil {
 		s.log = slog.Default()
 	}
@@ -84,6 +90,8 @@ func New(svc core.Service, opts Options) http.Handler {
 	mux.HandleFunc("GET /inbox/{peer}", s.thread)
 	mux.HandleFunc("POST /inbox/{peer}", s.send)
 	mux.HandleFunc("POST /inbox/{peer}/decide", s.decide)
+	mux.HandleFunc("POST /inbox/{peer}/attachments", s.upload)
+	mux.HandleFunc("GET /inbox/{peer}/attachments/{id}", s.download)
 	mux.HandleFunc("GET /inbox/{peer}/messages", s.messages)
 	mux.HandleFunc("GET /inbox/{peer}/head", s.threadHead)
 	mux.HandleFunc("GET /fragments/conversations", s.conversationsFragment)
@@ -140,7 +148,7 @@ func New(svc core.Service, opts Options) http.Handler {
 	if opts.TrustedOrigin != "" {
 		_ = protection.AddTrustedOrigin(opts.TrustedOrigin)
 	}
-	return headers(protection.Handler(mux))
+	return headers(protection.Handler(s.fresh(mux)))
 }
 
 func headers(h http.Handler) http.Handler {
@@ -150,9 +158,29 @@ func headers(h http.Handler) http.Handler {
 		hd.Set("Referrer-Policy", "same-origin")
 		hd.Set("X-Frame-Options", "DENY")
 		// xterm.js injects <style> elements, hence 'unsafe-inline' for styles only.
-		hd.Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+		// blob: images are the composer's previews of files being attached.
+		hd.Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
 		h.ServeHTTP(w, r)
 	})
+}
+
+// fresh makes a page that predates the running build reload itself. Without
+// it, htmx swaps new markup into a page still running the old scripts and
+// styles (after a daemon upgrade, say), leaving controls unstyled or inert.
+// Pages send their build with every htmx request (hx-headers on <body>); one
+// that sends none or another gets HX-Refresh, and htmx reloads it.
+func (s *server) fresh(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("HX-Request") == "true" && r.Header.Get("X-Lolad-Build") != s.buildID() {
+			w.Header().Set("HX-Refresh", "true")
+		}
+		h.ServeHTTP(w, r)
+	})
+}
+func (s *server) buildID() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.build
 }
 
 // ---------------------------------------------------------------- templates
@@ -191,8 +219,14 @@ func (s *server) load() error {
 	if err != nil {
 		return err
 	}
+	keys := make([]string, 0, len(hashes))
+	for p, h := range hashes {
+		keys = append(keys, p+":"+h)
+	}
+	slices.Sort(keys)
+	sum := sha256.Sum256([]byte(strings.Join(keys, "\n")))
 	s.mu.Lock()
-	s.base, s.pages, s.hashes = base, pages, hashes
+	s.base, s.pages, s.hashes, s.build = base, pages, hashes, hex.EncodeToString(sum[:6])
 	s.mu.Unlock()
 	return nil
 }

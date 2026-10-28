@@ -152,26 +152,327 @@
       form.dataset.ready = "1";
       const ta = form.querySelector("textarea");
       const btn = form.querySelector("button[type=submit]");
-      const sync = () => { btn.disabled = !ta.value.trim(); grow(ta); };
+      const sync = () => { btn.disabled = !canSend(form); grow(ta); };
+      form._sync = sync;
       ta.value = store.get(draftKey(form)) || "";
+      setupAttach(form);
       sync();
       ta.addEventListener("input", () => { store.set(draftKey(form), ta.value); sync(); });
       ta.addEventListener("keydown", (e) => {
         if (e.key === "Enter" && !e.shiftKey && !e.isComposing && !coarse.matches) {
           e.preventDefault();
-          if (ta.value.trim()) form.requestSubmit();
+          if (canSend(form)) form.requestSubmit();
         }
       });
+      // Nothing to send, or files still uploading: don't post.
+      form.addEventListener("htmx:confirm", (e) => { if (e.detail.elt === form && !canSend(form)) e.preventDefault(); });
       form.addEventListener("htmx:afterRequest", (e) => {
         if (e.detail.elt !== form || !e.detail.successful) return;
         ta.value = "";
         store.set(draftKey(form), "");
+        clearFiles(form);
         sync();
         ta.focus();
       });
       if (!coarse.matches && !document.querySelector(".msg.is-open")) ta.focus({ preventScroll: true });
     });
   }
+
+  // ------------------------------------------------------------ attachments
+  // Each file uploads as soon as it is added (one request per file, three at
+  // a time); the form then sends the returned IDs as "attachment" fields.
+  // Send waits for uploads, and for failed files to be removed.
+  const files = new WeakMap(); // composer form -> [{file, name, state, id, error, xhr, li, url}]
+  const svgNS = "http://www.w3.org/2000/svg";
+  function icon(name) {
+    const svg = document.createElementNS(svgNS, "svg");
+    svg.setAttribute("class", "i");
+    svg.setAttribute("aria-hidden", "true");
+    const use = document.createElementNS(svgNS, "use");
+    use.setAttribute("href", "#i-" + name);
+    svg.append(use);
+    return svg;
+  }
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const sizeLabel = (n) => n < 1000 ? n + " B" : n < 1e6 ? (n / 1000).toFixed(1) + " KB" : (n / 1e6).toFixed(1) + " MB";
+  const two = (n) => String(n).padStart(2, "0");
+  function pastedName(type, i) {
+    const d = new Date();
+    const ext = ((type.split("/")[1] || "png").split("+")[0]).replace("jpeg", "jpg");
+    return "pasted-image-" + d.getFullYear() + "-" + two(d.getMonth() + 1) + "-" + two(d.getDate()) + "-" +
+      two(d.getHours()) + two(d.getMinutes()) + two(d.getSeconds()) + (i ? "-" + (i + 1) : "") + "." + ext;
+  }
+  const kindOf = (f) => /^image\//.test(f.type) ? "image" : /^(video|audio)\//.test(f.type) ? "media" :
+    /\.(zip|gz|tgz|tar|7z|rar)$/i.test(f.name) ? "archive" : /^text\/|pdf|json/.test(f.type) || /\.(md|csv|txt|log|json|pdf)$/i.test(f.name) ? "doc" : "blank";
+  const listOf = (form) => files.get(form) || [];
+  function canSend(form) {
+    const list = listOf(form);
+    if (list.some((f) => f.state !== "done")) return false;
+    const ta = form.querySelector("textarea");
+    return !!ta.value.trim() || list.length > 0;
+  }
+  function announce(form, msg) {
+    const s = form.parentElement.querySelector("[data-att-status]");
+    if (s) { s.textContent = ""; setTimeout(() => { s.textContent = msg; }, 30); }
+  }
+  function attachOff(form) {
+    const note = form.parentElement.querySelector("[data-attach-note]");
+    if (note) note.hidden = false;
+    announce(form, form.dataset.attachOff);
+  }
+
+  function setupAttach(form) {
+    const button = form.querySelector("[data-attach]");
+    if (!button) return;
+    button.hidden = false;
+    const hint = form.parentElement.querySelector("[data-attach-hint]");
+    if (hint) hint.hidden = false;
+    files.set(form, []);
+    const input = form.querySelector("[data-attach-input]");
+    button.addEventListener("click", () => {
+      if (form.dataset.attachOff) { attachOff(form); return; }
+      if (input) input.click();
+    });
+    if (input) input.addEventListener("change", () => { addFiles(form, [...input.files]); input.value = ""; });
+    form.addEventListener("paste", (e) => pasteFiles(form, e));
+  }
+
+  // pastedFiles returns the files on a paste, or none when it should paste as
+  // text. Some apps put the file in items but not files (Safari), and macOS
+  // often adds text alongside an image or a copied file (its name), so text
+  // wins only when it looks like copied content: a table (tabs) or several
+  // lines, e.g. cells copied from a spreadsheet that also carry a picture.
+  function pastedFiles(cd) {
+    if (!cd) return [];
+    let found = cd.files && cd.files.length ? [...cd.files] : [];
+    if (!found.length && cd.items) found = [...cd.items].filter((i) => i.kind === "file").map((i) => i.getAsFile()).filter(Boolean);
+    if (!found.length) return [];
+    const text = [...cd.types].includes("text/plain") ? cd.getData("text/plain") : "";
+    if (text && (text.includes("\t") || text.trim().split("\n").length > 1)) return [];
+    return found;
+  }
+  function pasteFiles(form, e) {
+    const found = pastedFiles(e.clipboardData);
+    if (!found.length) return;
+    e.preventDefault();
+    if (form.dataset.attachOff) { attachOff(form); return; }
+    let n = 0;
+    addFiles(form, found.map((f) => {
+      if (/^image\//.test(f.type) && (!f.name || /^image\.\w+$/i.test(f.name))) return new File([f], pastedName(f.type, n++), { type: f.type, lastModified: Date.now() });
+      return f;
+    }));
+  }
+  // A paste anywhere in a conversation (not into another field) goes to its composer.
+  document.addEventListener("paste", (e) => {
+    const t = e.target;
+    if (t && t.closest && (t.closest("[data-composer]") || t.closest("input, textarea, select, [contenteditable]"))) return;
+    const form = document.querySelector("form[data-composer]");
+    if (form && files.has(form)) pasteFiles(form, e);
+  });
+
+  function addFiles(form, picked) {
+    if (!picked.length) return;
+    const list = listOf(form);
+    const max = parseInt(form.dataset.maxFiles || "10", 10);
+    const maxBytes = parseInt(form.dataset.maxBytes || "0", 10);
+    const room = max - list.filter((f) => f.state !== "error").length;
+    if (picked.length > room) {
+      toast("You can attach up to " + max + " files to one message.", "error");
+      picked = picked.slice(0, Math.max(room, 0));
+    }
+    for (const file of picked) {
+      const item = { file, name: file.name || "file", state: "queued" };
+      if (maxBytes && file.size > maxBytes) { item.state = "error"; item.error = "Larger than " + form.dataset.maxLabel; }
+      else if (file.size === 0) { item.state = "error"; item.error = "Empty file or a folder"; }
+      list.push(item);
+      paintItem(form, item);
+    }
+    if (picked.length) announce(form, picked.length === 1 ? "Attaching " + picked[0].name : "Attaching " + picked.length + " files");
+    pump(form);
+    paintQueue(form);
+  }
+
+  function pump(form) {
+    const list = listOf(form);
+    let active = list.filter((f) => f.state === "uploading").length;
+    for (const item of list) {
+      if (active >= 3) break;
+      if (item.state === "queued") { upload(form, item); active++; }
+    }
+  }
+
+  function upload(form, item) {
+    item.state = "uploading";
+    paintItem(form, item);
+    const x = new XMLHttpRequest();
+    item.xhr = x;
+    x.open("POST", form.dataset.upload);
+    x.responseType = "json";
+    x.setRequestHeader("Accept", "application/json");
+    x.upload.addEventListener("progress", (e) => { if (e.lengthComputable) { item.progress = e.loaded / e.total; paintItem(form, item); } });
+    const done = (ok, err) => {
+      item.xhr = null;
+      if (item.state === "removed") return;
+      if (ok) { item.state = "done"; announce(form, item.name + " is ready to send"); }
+      else { item.state = "error"; item.error = err; announce(form, item.name + " was not attached: " + err); }
+      paintItem(form, item);
+      paintQueue(form);
+      pump(form);
+    };
+    x.addEventListener("load", () => {
+      const r = x.response || {};
+      if (x.status === 200 && r.id) {
+        item.id = r.id;
+        item.name = r.filename || item.name;
+        item.flagged = r.scan_status === "suspicious";
+        done(true);
+      } else done(false, r.error || (x.status === 413 ? "Too large to upload" : "Upload failed (" + x.status + ")"));
+    });
+    x.addEventListener("error", () => done(false, "Upload failed: couldn't reach lolad"));
+    const fd = new FormData();
+    fd.append("file", item.file, item.name);
+    x.send(fd);
+  }
+
+  function removeItem(form, item) {
+    item.state = "removed";
+    if (item.xhr) item.xhr.abort();
+    if (item.url) URL.revokeObjectURL(item.url);
+    const list = listOf(form);
+    list.splice(list.indexOf(item), 1);
+    if (item.li) item.li.remove();
+    announce(form, item.name + " removed");
+    paintQueue(form);
+    pump(form);
+    form.querySelector("textarea").focus();
+  }
+
+  function clearFiles(form) {
+    for (const item of listOf(form)) {
+      if (item.xhr) item.xhr.abort();
+      if (item.url) URL.revokeObjectURL(item.url);
+    }
+    if (files.has(form)) files.set(form, []);
+    const q = form.querySelector("[data-att-queue]");
+    if (q) q.replaceChildren();
+    paintQueue(form);
+  }
+
+  // paintQueue: list visibility, hidden ID fields and the Send button.
+  function paintQueue(form) {
+    const list = listOf(form);
+    const q = form.querySelector("[data-att-queue]");
+    if (q) q.hidden = list.length === 0;
+    const ids = form.querySelector("[data-att-ids]");
+    if (ids) {
+      ids.replaceChildren(...list.filter((f) => f.state === "done").map((f) => {
+        const i = document.createElement("input");
+        i.type = "hidden"; i.name = "attachment"; i.value = f.id;
+        return i;
+      }));
+    }
+    form.classList.toggle("has-files", list.length > 0);
+    if (form._sync) form._sync();
+  }
+
+  function paintItem(form, item) {
+    if (!item.li) {
+      const li = el("li", "att-chip");
+      const thumb = el("span", "att-thumb");
+      if (/^image\/(png|jpeg|gif|webp)$/.test(item.file.type) && item.file.size < 40e6) {
+        item.url = URL.createObjectURL(item.file);
+        const img = el("img");
+        img.alt = "";
+        img.src = item.url;
+        thumb.append(img);
+      } else thumb.append(icon(kindOf(item.file)));
+      const meta = el("span", "att-meta");
+      const name = el("span", "att-name", item.name);
+      name.title = item.name;
+      const info = el("span", "att-size");
+      meta.append(name, info);
+      const bar = el("span", "att-bar");
+      bar.setAttribute("role", "progressbar");
+      bar.setAttribute("aria-label", "Uploading " + item.name);
+      bar.setAttribute("aria-valuemin", "0");
+      bar.setAttribute("aria-valuemax", "100");
+      bar.append(el("i"));
+      const rm = el("button", "att-remove");
+      rm.type = "button";
+      rm.setAttribute("aria-label", "Remove " + item.name);
+      rm.title = "Remove";
+      rm.append(icon("x"));
+      rm.addEventListener("click", () => removeItem(form, item));
+      li.append(thumb, meta, bar, rm);
+      item.li = li;
+      item.info = info;
+      item.bar = bar;
+      form.querySelector("[data-att-queue]").append(li);
+    }
+    const li = item.li;
+    li.className = "att-chip is-" + item.state;
+    const pct = Math.round((item.progress || 0) * 100);
+    item.bar.hidden = item.state !== "uploading" && item.state !== "queued";
+    item.bar.setAttribute("aria-valuenow", String(pct));
+    item.bar.firstChild.style.width = (item.state === "queued" ? 0 : pct) + "%";
+    item.info.textContent = item.state === "error" ? item.error :
+      item.state === "queued" ? sizeLabel(item.file.size) + " · waiting" :
+      item.state === "uploading" ? sizeLabel(item.file.size) + " · " + (pct >= 100 ? "finishing" : pct + "%") :
+      sizeLabel(item.file.size) + (item.flagged ? " · flagged: type mismatch" : "");
+    li.classList.toggle("is-flagged", !!item.flagged);
+    li.querySelector(".att-name").textContent = item.name;
+  }
+
+  // Drag and drop anywhere on a conversation. dragover repeats while a drag
+  // is over the window; the overlay hides shortly after it stops.
+  let dropTimer;
+  const hasFiles = (e) => e.dataTransfer && [...(e.dataTransfer.types || [])].includes("Files");
+  const composer = () => document.querySelector("form[data-composer][data-upload]");
+  function showDrop(on) {
+    const d = document.querySelector("[data-drop]");
+    if (!d) return;
+    if (on && d.hidden) {
+      const f = composer();
+      if (f) announce(f, f.dataset.attachOff ? f.dataset.attachOff : "Drop files to attach them");
+    }
+    d.hidden = !on;
+  }
+  document.addEventListener("dragover", (e) => {
+    if (!hasFiles(e) || !composer()) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = composer().dataset.attachOff ? "none" : "copy";
+    showDrop(true);
+    clearTimeout(dropTimer);
+    dropTimer = setTimeout(() => showDrop(false), 180);
+  });
+  document.addEventListener("drop", (e) => {
+    const f = composer();
+    if (!hasFiles(e) || !f) return;
+    e.preventDefault();
+    clearTimeout(dropTimer);
+    showDrop(false);
+    if (f.dataset.attachOff) { attachOff(f); return; }
+    addFiles(f, [...e.dataTransfer.files]);
+    f.querySelector("textarea").focus({ preventScroll: true });
+  });
+
+  // A flagged file downloads only after a confirmation.
+  document.addEventListener("click", (e) => {
+    const a = e.target.closest && e.target.closest("a[data-confirm]");
+    if (a && !confirm(a.dataset.confirm)) e.preventDefault();
+  });
+  // A preview that can't load (expired, removed) becomes a plain line.
+  document.addEventListener("error", (e) => {
+    const img = e.target;
+    if (!(img instanceof HTMLImageElement) || !img.hasAttribute("data-att-img")) return;
+    const fig = img.closest(".att-img");
+    if (fig) fig.classList.add("is-broken");
+  }, true);
+  // Leaving with uploads in flight loses them.
+  window.addEventListener("beforeunload", (e) => {
+    const f = composer();
+    if (f && listOf(f).some((x) => x.state === "uploading" || x.state === "queued")) { e.preventDefault(); e.returnValue = ""; }
+  });
 
   // v3 creation landing banner; dismissal survives live header refreshes.
   document.addEventListener("click", (e) => {

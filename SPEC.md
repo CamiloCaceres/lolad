@@ -95,7 +95,24 @@ Spec: https://github.com/agentmessaging/protocol v0.1.2-draft (see
   kind, display, role, team, and whether the caller may message it),
   `GET /v1/agents/resolve/{address}` (public key + fingerprint),
   `GET /v1/agents/me`.
-  Skip: attachments, websocket, webhooks, federation, key rotation.
+  Attachments (spec 04, provider storage; `internal/amp/attachments.go`):
+  `POST /v1/attachments/upload` (multipart first file part, or raw body with
+  `?filename=`), checked synchronously (size, SHA-256 digest, MIME type and
+  magic bytes → `basic_clean`/`suspicious`), so `GET /v1/attachments/{id}` and
+  `POST /v1/attachments/{id}/confirm` just return the object;
+  `GET /v1/attachments/{id}/download` (uploader or a participant of the one
+  message carrying it; served as octet-stream, nosniff). Bytes live in
+  `<state>/attachments/<id>`, metadata in `amp_attachments`. The objects go in
+  `payload.attachments`, so the signature covers them; acceptance checks each
+  ID is the sender's, unsent, and matches the upload. Max 10 per message;
+  local mail allows 500 MB per file (twice that per message) because it never
+  leaves the machine; files to another lolad are refused for now (federation
+  will apply the spec's 25 MB / 100 MB). Unsent uploads are deleted after 2 h,
+  sent ones after 30 days. `lolad msg send|reply|tell-user --attach FILE`;
+  `lolad msg read` saves a received message's files to
+  `$LOLABOT_HOME/attachments/<msg-id>/` (digest checked, suspicious skipped,
+  `attachments/` added to an existing `.gitignore`); `lolad msg download`.
+  Skip: websocket, webhooks, AFP attachments, key rotation.
 - Policy is enforced inside `Send` (both directions of every path). A denial is
   recorded as an Event (`kind: policy`) so the user can see attempts.
 - After a successful Send, `OnMail` subscribers run (delivery, SSE, ntfy).
@@ -179,9 +196,11 @@ a hook must never break the agent.
 
 ### Delivery (`internal/deliver`) implements `core.Notifier`
 Lessons from AI Maestro, all mandatory:
-- Only type into a session whose state is idle (hook-reported, < 15 min old)
-  **and** whose pane `PromptReady`. Never type into a permission prompt.
-- One line: `[#<last8 of id>] [MESSAGE] from <from_name>: <subject> — <body ≤ 300 chars, newlines → space>. Read: lolad msg read <id>`.
+- Only type into a session whose last hook-reported state is idle **and**
+  whose pane is `PromptReady` at that moment. Idle does not expire: an agent
+  idle for hours is woken within one reconcile tick (≈ 2 s) of new mail.
+  Never type into a permission prompt.
+- One line: `[#<last8 of id>] [MESSAGE] from <from_name>: <subject> — <body ≤ 300 chars, newlines → space>[ (N files attached)]. Read: lolad msg read <id>`.
 - `send-keys -l <text>`, pause 150 ms, `Enter` as a separate call.
 - Read back (`capture-pane -e`, last ~40 lines): ref tag above the input box =
   confirmed; still inside the input box = staged → clear with BSpace (not C-u),
@@ -216,8 +235,12 @@ owns *how*.
   and `wake_on_message` → start it (fresh launch's first prompt mentions the
   waiting mail). Deliver via Stop-hook reply (claude) or Notifier when idle.
   Sweep every 60 s for unread mail older than 90 s.
-- Triggers: cron (`github.com/robfig/cron/v3`), mail (`<dir>/tools/email.sh
-  watch <account>` every `every`, parse the last JSON line `{new:[{id, from,
+- Triggers: cron (`github.com/robfig/cron/v3`), mail (every `every`: for an
+  account in `email.accounts`, lolad checks the mailbox itself
+  (`agentcfg.MailWatcher`: read-only EXAMINE, highest UID seen kept in
+  `<state>/mail-watch/`, headers via BODY.PEEK, trust `operator` = sender in
+  `email.operator_emails`); any other account falls back to `<dir>/tools/email.sh
+  watch <account>`. Either way the last JSON line is `{new:[{id, from,
   subject, trust}]}` — see `jugui/mods/ultron-mail/hooks/register.ts`; trusted
   `operator` mail → mail from `lolad` to the agent with the read command;
   external → event only), webhook (`POST /hook/<agent>/<name>` with token from
@@ -318,9 +341,28 @@ env file into its process, and its tools read `.env`); that is the point —
 it is how tokens are shared with the agent. Values are never logged, never put
 in events, and never sent in mail.
 
-**Pending restart.** Changes to the runtime block, the env file, skills or
-email take effect at the next launch. lolad fingerprints these at launch;
-`AgentStatus.PendingRestart`/`PendingReason` show the drift, and the UI offers
+**Applying changes without a restart.** lolad fingerprints the agent's
+settings at launch and applies what a running session can take on:
+- lolad-side runtime fields (`triggers`, `on_wake`, `autostart`,
+  `wake_on_message`, `rotate`) take effect on the next reload; email settings
+  are files the agent's tools read when they run.
+- claude, env file: the SessionStart hook adds one line to Claude Code's
+  `CLAUDE_ENV_FILE` that runs `lolad env-export` before every Bash command,
+  re-reading the env file (launch parsing; keys pinned by `runtime.env`, PATH
+  and `LOLAD_*` keep their launch values, deleted keys are unset). Claude Code
+  itself and MCP servers keep their launch environment.
+- claude, skills and plugin updates: when the agent is idle with an empty
+  input box (checked at most every 15 s), lolad types `/reload-plugins` if an
+  enabled plugin's files changed (e.g. an auto-update), then `/reload-skills`
+  if skill folders changed. Both are local commands: no model turn, no hooks.
+  `/reload-plugins` does not re-read the `--settings` overlay, so enabling or
+  disabling a plugin stays a restart.
+**Pending restart** is what is left: model (Claude Code's `/model` asks for
+confirmation and rewrites the user's global default, so lolad never types it),
+skills mode, plugins enabled or disabled, harness, permissions, args,
+`env_file` and `runtime.env`, plus the
+env file for sessions launched without live env and env/skills for codewhale.
+`AgentStatus.PendingRestart`/`PendingReason` show it, and the UI offers
 "Restart to apply" (a resume restart, not a fresh conversation).
 
 ### `internal/agentcfg` (new): one agent dir's settings
@@ -340,7 +382,7 @@ func (d *Dir) EmailPassword(envFile, address string) (string, error) // for Test
 func (d *Dir) Skills(mode core.SkillsMode) ([]core.Skill, error)
 func (d *Dir) AddSkill(fromID string) (core.Skill, error)
 func (d *Dir) RemoveSkill(id string) error
-func (d *Dir) Fingerprint(envFile string, rt core.Runtime) (sum string, parts map[string]string) // parts: "runtime","env","skills","email" -> hash
+func (d *Dir) Fingerprint(envFile string, rt core.Runtime) (sum string, parts map[string]string) // parts: "runtime","env","skills","plugins","plugin_set","email" -> hash; names plus file mtimes (directory mtimes, plugin .in_use markers and .last-complete-round are ignored)
 ```
 - **Files**: text files the dashboard may edit — `*.md`, `*.yaml`/`*.yml`,
   `*.toml`, `*.json`, `*.txt` — up to 1 MB, inside the agent dir. Never: env
@@ -362,6 +404,14 @@ func (d *Dir) Fingerprint(envFile string, rt core.Runtime) (sum string, parts ma
   (AI Maestro's vault), upgrade it to read the named secrets from `.env`
   exactly as `internal/agentcfg/assets/email.sh` does
   (and add `tools/env_secret.py` from jugui), keeping a `.lolad-orig` copy.
+  If the agent has the plain lolabot template tool set (its `email_client.py`
+  reads a plaintext `password` and has no `watch`), install lolad's whole set
+  (`email.sh`, `email_client.py`, `config.py`, `attachment_guard.py`,
+  `env_secret.py`, stock `email-send.sh`); older lolad versions are refreshed.
+  Files are recognised by SHA-256 of known versions only (email_tools.go); a
+  customised file is never overwritten (a Note says why). This also runs on
+  email-settings reads once every `password_secret` is set. `email.sh`
+  installs PyYAML into `.venv` on first use when it is missing.
   TestEmail does its own TLS IMAP LOGIN/LOGOUT and SMTP AUTH/QUIT in Go with a
   10 s timeout (never sends mail) and reports each server separately.
   Mod detection: a plugin enabled in the agent's `.claude/settings.json`

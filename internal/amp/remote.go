@@ -103,6 +103,9 @@ func (p *Provider) PersistMail(ctx context.Context, tx *sql.Tx, m core.Mail, w M
 	if e := insertMail(ctx, tx, m, w); e != nil {
 		return e
 	}
+	if e := bindAttachments(ctx, tx, m); e != nil {
+		return e
+	}
 	if m.Delivery == core.DeliveryQueued {
 		r := p.remoteHook()
 		if r == nil {

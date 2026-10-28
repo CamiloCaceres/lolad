@@ -1,6 +1,7 @@
 package supervisor
 
 import (
+	"context"
 	"database/sql"
 	"github.com/CamiloCaceres/lolad/internal/core"
 	"os"
@@ -32,7 +33,15 @@ func TestPendingRestartAndPersistence(t *testing.T) {
 	f.s.agents["agent"].Status.Runtime.Model = "sonnet"
 	f.s.mu.Unlock()
 	status, e = f.s.Get(ctx, "agent")
-	if e != nil || !status.PendingRestart || !strings.Contains(status.PendingReason, "model changed") || !strings.Contains(status.PendingReason, "env file changed") {
+	if e != nil || !status.PendingRestart || status.PendingReason != "model changed" {
+		t.Fatalf("claude re-reads .env per command, model needs a launch: %v %q %v", status.PendingRestart, status.PendingReason, e)
+	}
+	// A session launched before live env existed still needs the restart.
+	f.s.mu.Lock()
+	f.s.agents["agent"].LiveEnv = false
+	f.s.mu.Unlock()
+	status, e = f.s.Get(ctx, "agent")
+	if e != nil || !strings.Contains(status.PendingReason, "model changed") || !strings.Contains(status.PendingReason, "env file changed") {
 		t.Fatalf("pending missing: %v %s %v", status.PendingRestart, status.PendingReason, e)
 	}
 	if strings.Contains(status.PendingReason, "never-print") {
@@ -137,5 +146,92 @@ func TestExactSessionSurvivesLaunchAndDaemonRestart(t *testing.T) {
 	}
 	if len(launcher.resumed) != 2 {
 		t.Fatal("fresh launch resumed")
+	}
+}
+
+func TestLoladSideRuntimeNeedsNoRestart(t *testing.T) {
+	f := setup(t, nil)
+	f.tick(t)
+	no := false
+	f.s.mu.Lock()
+	rt := &f.s.agents["agent"].Status.Runtime
+	rt.OnWake = "new wake prompt"
+	rt.Rotate = "04:00"
+	rt.Autostart = &no
+	rt.WakeOnMessage = &no
+	rt.Triggers = []core.Trigger{{Cron: "0 9 * * *", Prompt: "standup"}}
+	f.s.mu.Unlock()
+	status, e := f.s.Get(ctx, "agent")
+	if e != nil || status.PendingRestart {
+		t.Fatalf("lolad-side fields marked pending: %q %v", status.PendingReason, e)
+	}
+	f.s.mu.Lock()
+	f.s.agents["agent"].Status.Runtime.Permissions = core.PermDefault
+	f.s.mu.Unlock()
+	if status, _ = f.s.Get(ctx, "agent"); status.PendingReason != "runtime changed" {
+		t.Fatalf("permissions are launch-only: %q", status.PendingReason)
+	}
+}
+
+type commandNotifier struct {
+	fakeNotifier
+	commands []string
+	result   core.NotifyResult
+}
+
+func (c *commandNotifier) Command(_ context.Context, _ core.Agent, text string) (core.NotifyResult, error) {
+	c.commands = append(c.commands, text)
+	return c.result, nil
+}
+
+func TestSkillChangesHotReloadIdleClaude(t *testing.T) {
+	dir := t.TempDir()
+	cn := &commandNotifier{result: core.NotifyConfirmed}
+	// barebones: only the agent's own skills count, never the real ~/.claude.
+	f := setup(t, func(o *Options) {
+		o.Agents[0].Dir = dir
+		o.Agents[0].Runtime.Skills = core.SkillsBarebones
+		o.Notifier = cn
+	})
+	f.tick(t)
+	f.s.HandleHook(ctx, core.HookEvent{Agent: "agent", Event: "stop", Seq: 1})
+	f.tick(t)
+	if len(cn.commands) != 0 {
+		t.Fatalf("reloaded with nothing changed: %v", cn.commands)
+	}
+	if e := os.MkdirAll(filepath.Join(dir, ".claude/skills/new"), 0700); e != nil {
+		t.Fatal(e)
+	}
+	if e := os.WriteFile(filepath.Join(dir, ".claude/skills/new/SKILL.md"), []byte("# new\n"), 0600); e != nil {
+		t.Fatal(e)
+	}
+	if status, _ := f.s.Get(ctx, "agent"); status.PendingRestart {
+		t.Fatalf("skill change asked for a restart: %q", status.PendingReason)
+	}
+	f.c.advance(16 * time.Second)
+	f.tick(t)
+	if len(cn.commands) != 1 || cn.commands[0] != "/reload-skills" {
+		t.Fatalf("want one /reload-skills, got %v", cn.commands)
+	}
+	f.c.advance(16 * time.Second)
+	f.tick(t)
+	if len(cn.commands) != 1 {
+		t.Fatalf("reloaded twice for one change: %v", cn.commands)
+	}
+	// A busy agent is never typed into; the change waits for idle.
+	if e := os.WriteFile(filepath.Join(dir, ".claude/skills/new/extra.md"), []byte("x"), 0600); e != nil {
+		t.Fatal(e)
+	}
+	f.s.HandleHook(ctx, core.HookEvent{Agent: "agent", Event: "prompt_submit", Seq: 2})
+	f.c.advance(16 * time.Second)
+	f.tick(t)
+	if len(cn.commands) != 1 {
+		t.Fatalf("typed into a busy agent: %v", cn.commands)
+	}
+	f.s.HandleHook(ctx, core.HookEvent{Agent: "agent", Event: "stop", Seq: 3})
+	f.c.advance(16 * time.Second)
+	f.tick(t)
+	if len(cn.commands) != 2 || cn.commands[1] != "/reload-skills" {
+		t.Fatalf("change not applied once idle: %v", cn.commands)
 	}
 }

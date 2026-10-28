@@ -138,6 +138,11 @@ func (s *Service) scheduleReply(agent string, m core.Mail) {
 	if uc, ok := m.Context["userchat"].(map[string]any); ok && uc["kind"] == "decision" {
 		body = fmt.Sprintf("Going with \"%s\". I'll let the team know.", uc["decision"])
 	}
+	if n := len(m.Attachments); n == 1 {
+		body = fmt.Sprintf("Got %s (%s). I'll go through it and report back.", m.Attachments[0].Filename, m.Attachments[0].ContentType)
+	} else if n > 1 {
+		body = fmt.Sprintf("Got all %d files. I'll go through them and report back.", n)
+	}
 	id, subject := m.ID, m.Subject
 	time.AfterFunc(1500*time.Millisecond, func() {
 		s.mu.Lock()

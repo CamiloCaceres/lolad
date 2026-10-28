@@ -450,20 +450,48 @@ func TestInheritedFingerprint(t *testing.T) {
 	put(t, d.home, ".claude/plugins/installed_plugins.json", `{"plugins":{"plugin@local":[{"scope":"user","installPath":"`+plugin+`"}]}}`)
 	put(t, d.home, ".claude/settings.json", `{"enabledPlugins":{"plugin@local":true}}`)
 	_, enabled := d.Fingerprint("", rt)
-	if user["skills"] == enabled["skills"] {
+	if user["plugins"] == enabled["plugins"] || user["skills"] != enabled["skills"] || user["plugin_set"] == enabled["plugin_set"] {
 		t.Fatal("enabled plugin missed")
 	}
+	// An auto-update moves the install path: hot-reloadable, same plugin set.
+	v2 := filepath.Join(d.home, ".claude/plugins/cache/plugin/v2")
+	put(t, v2, "skills/p/SKILL.md", "# plugin v2\n")
+	put(t, d.home, ".claude/plugins/installed_plugins.json", `{"plugins":{"plugin@local":[{"scope":"user","installPath":"`+v2+`"}]}}`)
+	_, upgraded := d.Fingerprint("", rt)
+	if upgraded["plugins"] == enabled["plugins"] || upgraded["plugin_set"] != enabled["plugin_set"] {
+		t.Fatal("plugin update must change plugins but not plugin_set")
+	}
+	put(t, d.home, ".claude/plugins/installed_plugins.json", `{"plugins":{"plugin@local":[{"scope":"user","installPath":"`+plugin+`"}]}}`)
 	stamp := time.Now().Add(time.Second)
 	if e := os.Chtimes(filepath.Join(plugin, "skills/p/SKILL.md"), stamp, stamp); e != nil {
 		t.Fatal(e)
 	}
 	_, updated := d.Fingerprint("", rt)
-	if enabled["skills"] == updated["skills"] {
+	if enabled["plugins"] == updated["plugins"] {
 		t.Fatal("plugin modification missed")
+	}
+	// Regression: Claude Code writes .in_use/<pid> into each plugin it loads, so
+	// the agent's own launch made its skills look changed forever.
+	put(t, plugin, ".in_use/4242", "")
+	_, inUse := d.Fingerprint("", rt)
+	if e := os.RemoveAll(filepath.Join(plugin, ".in_use")); e != nil {
+		t.Fatal(e)
+	}
+	_, released := d.Fingerprint("", rt)
+	if inUse["plugins"] != updated["plugins"] || released["plugins"] != updated["plugins"] {
+		t.Fatal("harness in-use markers counted as a skill change")
+	}
+	put(t, plugin, "skills/q/SKILL.md", "# added\n")
+	_, added := d.Fingerprint("", rt)
+	if added["plugins"] == updated["plugins"] {
+		t.Fatal("added plugin skill missed")
+	}
+	if e := os.RemoveAll(filepath.Join(plugin, "skills/q")); e != nil {
+		t.Fatal(e)
 	}
 	put(t, d.home, ".claude/settings.json", `{"enabledPlugins":{"plugin@local":false}}`)
 	_, disabled := d.Fingerprint("", rt)
-	if disabled["skills"] != user["skills"] {
+	if disabled["plugins"] != user["plugins"] {
 		t.Fatal("disabled plugin still counted")
 	}
 }

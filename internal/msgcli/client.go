@@ -24,12 +24,13 @@ import (
 
 const help = `lolad msg [--as name] <command>
   inbox [--all] [--json]
-  read <id|last8>
-  send <to> "<subject>" "<body>" [--type request] [--priority high] [--context '{json}']
-  reply <id|last8> "<body>"
+  read <id|last8>            (saves attached files to attachments/<id>/)
+  download <id|last8> [--dest DIR] [--force]
+  send <to> "<subject>" "<body>" [--type request] [--priority high] [--context '{json}'] [--attach FILE]...
+  reply <id|last8> "<body>" [--attach FILE]...
   thread <id|last8>
   who
-  tell-user say|update|deliver "<text>"
+  tell-user say|update|deliver "<text>" [--attach FILE]...
   tell-user ask "<question>" --option "Yes" --option "No"
 `
 
@@ -248,11 +249,18 @@ func (c *client) find(id string) (amp.Message, error) {
 	}
 	return found, nil
 }
-func (c *client) printMessage(m amp.Message) error {
+func payloadOf(m amp.Message) (amp.Payload, error) {
 	var p amp.Payload
 	dec := json.NewDecoder(bytes.NewReader(m.Payload))
 	dec.UseNumber()
-	if e := dec.Decode(&p); e != nil {
+	return p, dec.Decode(&p)
+}
+
+// printMessage shows a message; files lists saved attachments (nil = list
+// them with how to save).
+func (c *client) printMessage(m amp.Message, files ...saved) error {
+	p, e := payloadOf(m)
+	if e != nil {
 		return e
 	}
 	_, localDomain, _ := amp.ParseAddress(c.credentials.Address)
@@ -274,9 +282,29 @@ func (c *client) printMessage(m amp.Message) error {
 		b, _ := json.Marshal(p.Context)
 		fmt.Fprintf(c.out, "Context: %s\n", b)
 	}
+	if files == nil && len(p.Attachments) > 0 {
+		for _, a := range p.Attachments {
+			files = append(files, saved{Attachment: a, Note: "save with lolad msg read " + m.ID})
+		}
+	}
+	printAttachments(c.out, files)
 	return nil
 }
-func (c *client) send(to, subject, body, typ, priority, reply string, context map[string]any) error {
+
+// receive saves the files of a message addressed to us.
+func (c *client) receive(m amp.Message, force bool, dest string) ([]saved, error) {
+	p, e := payloadOf(m)
+	if e != nil || len(p.Attachments) == 0 {
+		return nil, e
+	}
+	if dest == "" {
+		home := agentHome()
+		ignoreAttachments(home)
+		dest = filepath.Join(home, "attachments")
+	}
+	return c.saveAttachments(m.ID, p.Attachments, dest, force), nil
+}
+func (c *client) send(to, subject, body, typ, priority, reply string, context map[string]any, attach []string) error {
 	_, domain, e := amp.ParseAddress(c.credentials.Address)
 	if e != nil {
 		return e
@@ -286,7 +314,11 @@ func (c *client) send(to, subject, body, typ, priority, reply string, context ma
 	} else {
 		to = strings.ToLower(to)
 	}
-	payload, e := amp.CanonicalJSON(amp.Payload{Type: typ, Message: body, Context: context})
+	files, e := c.uploadAll(attach)
+	if e != nil {
+		return e
+	}
+	payload, e := amp.CanonicalJSON(amp.Payload{Type: typ, Message: body, Context: context, Attachments: files})
 	if e != nil {
 		return e
 	}
@@ -371,19 +403,45 @@ func (c *client) run(args []string) error {
 		if e != nil {
 			return e
 		}
-		if m.Envelope.To == c.credentials.Address {
-			if e = c.request("POST", "/v1/messages/"+url.PathEscape(m.ID)+"/read", nil, &m); e != nil {
-				return e
-			}
+		if m.Envelope.To != c.credentials.Address {
+			return c.printMessage(m)
 		}
-		return c.printMessage(m)
+		if e = c.request("POST", "/v1/messages/"+url.PathEscape(m.ID)+"/read", nil, &m); e != nil {
+			return e
+		}
+		files, e := c.receive(m, false, "")
+		if e != nil {
+			return e
+		}
+		return c.printMessage(m, files...)
+	case "download":
+		pos, opts, e := parseOptions(args[1:], map[string]bool{"dest": true, "force": false})
+		if e != nil {
+			return e
+		}
+		if len(pos) != 1 {
+			return fmt.Errorf("usage: download <id|last8> [--dest DIR] [--force]")
+		}
+		m, e := c.find(pos[0])
+		if e != nil {
+			return e
+		}
+		files, e := c.receive(m, option(opts, "force", "") != "", option(opts, "dest", ""))
+		if e != nil {
+			return e
+		}
+		if len(files) == 0 {
+			fmt.Fprintln(c.out, "No attachments.")
+		}
+		printAttachments(c.out, files)
+		return nil
 	case "send":
-		pos, opts, e := parseOptions(args[1:], map[string]bool{"type": true, "priority": true, "context": true})
+		pos, opts, e := parseOptions(args[1:], map[string]bool{"type": true, "priority": true, "context": true, "attach": true})
 		if e != nil {
 			return e
 		}
 		if len(pos) != 3 {
-			return fmt.Errorf("usage: send <to> <subject> <body> [--type request] [--priority high] [--context JSON]")
+			return fmt.Errorf("usage: send <to> <subject> <body> [--type request] [--priority high] [--context JSON] [--attach FILE]...")
 		}
 		var context map[string]any
 		if raw := option(opts, "context", ""); raw != "" {
@@ -396,12 +454,16 @@ func (c *client) run(args []string) error {
 				return fmt.Errorf("context must be a JSON object")
 			}
 		}
-		return c.send(pos[0], pos[1], pos[2], option(opts, "type", "notification"), option(opts, "priority", "normal"), "", context)
+		return c.send(pos[0], pos[1], pos[2], option(opts, "type", "notification"), option(opts, "priority", "normal"), "", context, opts["attach"])
 	case "reply":
-		if len(args) != 3 {
-			return fmt.Errorf("usage: reply <id|last8> <body>")
+		pos, opts, e := parseOptions(args[1:], map[string]bool{"attach": true})
+		if e != nil {
+			return e
 		}
-		m, e := c.find(args[1])
+		if len(pos) != 2 {
+			return fmt.Errorf("usage: reply <id|last8> <body> [--attach FILE]...")
+		}
+		m, e := c.find(pos[0])
 		if e != nil {
 			return e
 		}
@@ -413,7 +475,7 @@ func (c *client) run(args []string) error {
 		if !strings.HasPrefix(subject, "Re: ") {
 			subject = "Re: " + subject
 		}
-		return c.send(to, subject, args[2], "response", "normal", m.ID, nil)
+		return c.send(to, subject, pos[1], "response", "normal", m.ID, nil, opts["attach"])
 	case "thread":
 		if len(args) != 2 {
 			return fmt.Errorf("usage: thread <id|last8>")
@@ -466,7 +528,7 @@ func (c *client) run(args []string) error {
 		}
 		return nil
 	case "tell-user":
-		pos, opts, e := parseOptions(args[1:], map[string]bool{"option": true, "subject": true})
+		pos, opts, e := parseOptions(args[1:], map[string]bool{"option": true, "subject": true, "attach": true})
 		if e != nil {
 			return e
 		}
@@ -503,7 +565,7 @@ func (c *client) run(args []string) error {
 		if kind == "update" {
 			typ = "update"
 		}
-		return c.send(to, option(opts, "subject", subjectFromText(pos[1])), pos[1], typ, "normal", "", map[string]any{"userchat": core.UserChat{Kind: kind, Options: opts["option"]}})
+		return c.send(to, option(opts, "subject", subjectFromText(pos[1])), pos[1], typ, "normal", "", map[string]any{"userchat": core.UserChat{Kind: kind, Options: opts["option"]}}, opts["attach"])
 	default:
 		return fmt.Errorf("unknown msg command %q; use lolad msg help", args[0])
 	}

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -102,6 +103,9 @@ func Run(ctx context.Context, event string, stdin io.Reader, stdout io.Writer, e
 		p["message"] = env("DEEPSEEK_ERROR")
 	}
 	ev := Map(event, p, env("LOLAD_AGENT"))
+	if ev.Event == "session_start" && env("LOLAD_HARNESS") == "claude" {
+		registerLiveEnv(env)
+	}
 	if ev.Agent == "" || env("LOLAD_URL") == "" {
 		return 0
 	}
@@ -138,6 +142,28 @@ func Run(ctx context.Context, event string, stdin io.Reader, stdout io.Writer, e
 	}
 	return 0
 }
+
+// registerLiveEnv adds one line to the session's CLAUDE_ENV_FILE, which Claude
+// Code runs before every Bash command: it re-reads the agent's env file, so
+// .env edits apply without a restart. Repeated SessionStarts (resume, clear,
+// compact) leave a single copy.
+func registerLiveEnv(env func(string) string) {
+	path, bin := env("CLAUDE_ENV_FILE"), env("LOLAD_BIN")
+	if path == "" || bin == "" || env("LOLAD_ENV_FILE") == "" {
+		return
+	}
+	line := `eval "$(` + shellQuote(bin) + ` env-export 2>/dev/null)"` + "\n"
+	if b, e := os.ReadFile(path); e == nil && strings.Contains(string(b), line) {
+		return
+	}
+	f, e := os.OpenFile(path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0600)
+	if e != nil {
+		return
+	}
+	_, _ = f.WriteString(line)
+	_ = f.Close()
+}
+func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'"'"'`) + "'" }
 func NewHandler(sink core.HookSink) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {

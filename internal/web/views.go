@@ -19,6 +19,7 @@ import (
 func funcs(s *server) template.FuncMap {
 	return template.FuncMap{
 		"asset":         s.asset,
+		"build":         s.buildID,
 		"deliveryLabel": deliveryLabel,
 		"pageStyles":    s.pageStyles,
 		"when":          when,

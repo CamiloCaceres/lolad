@@ -43,6 +43,9 @@
     </ol>
   </div>
   {{template "composer" .}}
+  {{if and .CanSend .Policy.Allow}}<div class="drop{{if not .Attach}} is-off{{end}}" data-drop hidden aria-hidden="true">
+    <div class="drop-card">{{if .Attach}}{{template "icon" "paperclip"}}<p class="drop-title">Drop to attach</p><p>Files go to {{.Display}} with your next message. Up to {{.MaxFiles}} files, {{.MaxLabel}} each.</p>{{else}}{{template "icon" "shield"}}<p class="drop-title">Can't attach here</p><p>{{.AttachNote}}</p>{{end}}</div>
+  </div>{{end}}
 </section>{{end}}
 
 {{define "thread-head"}}<header class="thread-head" id="thread-head" hx-get="/inbox/{{.Peer}}/head" hx-trigger="lolad:a-{{.Peer}} from:body delay:300ms" hx-swap="outerHTML">
@@ -73,19 +76,21 @@
   <li class="msg is-update" id="m-{{short .ID}}">
     <div class="note">
       <p class="note-head">{{template "icon" "pulse"}}<span class="note-subj">{{with subject .Mail}}{{.}}{{else}}Update{{end}}</span><time datetime="{{stamp .CreatedAt}}" title="{{long .CreatedAt}}">{{clock .CreatedAt}}</time></p>
-      <div class="note-body rich">{{markdown .Body}}</div>
+      {{if not .HideBody}}<div class="note-body rich">{{markdown .Body}}</div>{{end}}
+      {{template "atts" .Files}}
     </div>
   </li>
   {{else}}
   <li class="msg {{if .Mine}}is-mine{{else}}is-theirs{{end}} k-{{.Kind}}{{if .Cont}} is-cont{{end}}{{if and (eq .Kind "ask") (not .Answered)}} is-open{{end}}" id="m-{{short .ID}}">
     {{if not .Cont}}<p class="msg-meta">{{if not .Mine}}<span class="msg-from">{{$t.Display}}</span>{{end}}<time datetime="{{stamp .CreatedAt}}" title="{{long .CreatedAt}}">{{clock .CreatedAt}}</time></p>{{end}}
-    <div class="bubble">
+    {{if not .Bare}}<div class="bubble">
       {{if eq .Kind "deliver"}}<p class="bubble-kind">{{template "icon" "file"}}Delivered</p>{{end}}
       {{if eq .Kind "ask"}}<p class="bubble-kind">{{template "icon" "ask"}}{{if .Answered}}Question{{else}}Waiting on you{{end}}</p>{{end}}
       {{if .ShowSubj}}<p class="bubble-subj">{{subject .Mail}}</p>{{end}}
       {{if eq .Kind "decision"}}<p class="decision">{{template "icon" "check"}}<span>{{.Chat.Decision}}</span></p>
-      {{else}}<div class="rich">{{markdown .Body}}</div>{{if eq .Kind "deliver"}}<button class="btn btn-ghost deliver-copy" type="button" data-copy-message>Copy deliverable</button><textarea hidden readonly aria-label="Deliverable Markdown" data-deliver-source>{{.Body}}</textarea>{{end}}{{end}}
-    </div>
+      {{else if not .HideBody}}<div class="rich">{{markdown .Body}}</div>{{if eq .Kind "deliver"}}<button class="btn btn-ghost deliver-copy" type="button" data-copy-message>Copy deliverable</button><textarea hidden readonly aria-label="Deliverable Markdown" data-deliver-source>{{.Body}}</textarea>{{end}}{{end}}
+    </div>{{end}}
+    {{template "atts" .Files}}
     {{if eq .Kind "ask"}}{{$m := .}}
     <form class="options" method="post" action="/inbox/{{$t.Peer}}/decide" hx-post="/inbox/{{$t.Peer}}/decide" hx-target="#msgs" hx-disabled-elt="find button">
       <input type="hidden" name="id" value="{{.ID}}">
@@ -101,13 +106,19 @@
 {{define "composer"}}<div class="composer-wrap">
   <div id="composer-error" class="composer-error">{{with .Error}}{{template "composer-error" .}}{{end}}</div>
   {{if .CanSend}}{{if .Policy.Allow}}
-  <form class="composer" method="post" action="/inbox/{{.Peer}}" hx-post="/inbox/{{.Peer}}" hx-target="#msgs" hx-disabled-elt="find button" data-composer>
+  <form class="composer" method="post" action="/inbox/{{.Peer}}" hx-post="/inbox/{{.Peer}}" hx-target="#msgs" hx-disabled-elt="find .send" data-composer data-upload="/inbox/{{.Peer}}/attachments" data-max-files="{{.MaxFiles}}" data-max-bytes="{{.MaxBytes}}" data-max-label="{{.MaxLabel}}"{{if not .Attach}} data-attach-off="{{.AttachNote}}"{{end}}>
     {{template "reply-to" .}}
+    <ul class="att-queue" role="list" aria-label="Files to send" data-att-queue hidden></ul>
+    <div data-att-ids hidden></div>
+    <button class="attach" type="button" data-attach hidden aria-label="{{if .Attach}}Attach files{{else}}Attach files (unavailable){{end}}" title="{{if .Attach}}Attach files{{else}}{{.AttachNote}}{{end}}"{{if not .Attach}} aria-disabled="true" aria-describedby="attach-note"{{end}}>{{template "icon" "paperclip"}}</button>
+    {{if .Attach}}<input class="attach-input" type="file" multiple hidden tabindex="-1" aria-hidden="true" data-attach-input>{{end}}
     <label class="sr-only" for="composer-body">Message {{.Display}}</label>
     <textarea id="composer-body" name="body" rows="1" placeholder="Message {{.Display}}" autocomplete="off" enterkeyhint="send"></textarea>
     <button class="send" type="submit" aria-label="Send">{{template "icon" "send"}}</button>
   </form>
-  <p class="composer-hint"><kbd>Enter</kbd> sends · <kbd>Shift</kbd> <kbd>Enter</kbd> for a new line</p>
+  <p class="sr-only" role="status" aria-live="polite" data-att-status></p>
+  {{if not .Attach}}<p class="composer-note" id="attach-note" data-attach-note hidden>{{template "icon" "shield"}}<span>{{.AttachNote}}</span></p>{{end}}
+  <p class="composer-hint"><kbd>Enter</kbd> sends · <kbd>Shift</kbd> <kbd>Enter</kbd> for a new line{{if .Attach}}<span data-attach-hint hidden> · drop or paste files to attach</span>{{end}}</p>
   {{else}}
   <p class="composer-off">{{template "icon" "shield"}}<span>The org policy doesn't let you message {{.Display}} ({{.Policy.Reason}}). <a href="/org">Open Org</a></span></p>
   {{end}}{{else}}
@@ -167,3 +178,15 @@
 {{template "avatar" (dict "Display" .Display "State" .State "Size" "")}}
 <span class="home-row-content"><span class="home-row-top"><strong>{{.Display}}{{with .Origin}}<span class="remote-origin">{{.}}</span>{{end}}</strong>{{with .Agent}}{{template "state" .}}{{end}}<time datetime="{{stamp .LastAt}}" data-when>{{when .LastAt}}</time></span>
 <span class="home-row-preview">{{if eq .Chat.Kind "deliver"}}<span class="delivery-label">{{template "icon" "file"}}Deliverable</span>{{end}}{{if .Mine}}You: {{end}}{{excerpt .Last.Body 180}}</span></span>{{if .Unread}}<span class="count">{{.Unread}}<span class="sr-only"> unread</span></span>{{end}}{{template "icon" "next"}}</a></li>{{end}}</ul>{{end}}
+
+
+{{define "atts"}}{{if .}}<div class="atts" hx-boost="false">
+{{range .}}{{if .Inline}}<figure class="att-img">
+  <a href="{{.Href}}?inline=1" target="_blank" rel="noopener" aria-label="Open {{.Filename}} full size"><img src="{{.Href}}?inline=1" alt="{{.Filename}}" loading="lazy" decoding="async" data-att-img></a>
+  <figcaption><span class="att-name" title="{{.Filename}}">{{.Filename}}</span><span class="att-size">{{bytes .Size}}</span><a class="att-dl" href="{{.Href}}" download="{{.Filename}}" aria-label="Download {{.Filename}}" title="Download">{{template "icon" "download"}}</a></figcaption>
+</figure>{{else}}<a class="att-file{{if .Suspicious}} is-suspicious{{end}}" href="{{.Href}}" download="{{.Filename}}"{{if .Suspicious}} data-confirm="{{.Filename}} was flagged: its contents don't match its name or type. Only open it if you expected it. Download anyway?"{{end}}>
+  <span class="att-icon">{{if .Suspicious}}{{template "icon" "alert"}}{{else}}{{template "icon" .Kind}}{{end}}</span>
+  <span class="att-meta"><span class="att-name" title="{{.Filename}}">{{.Filename}}</span><span class="att-size">{{with .Ext}}{{.}} · {{end}}{{bytes .Size}}</span>{{if .Suspicious}}<span class="att-warn">Flagged: contents don't match the file type</span>{{end}}</span>
+  <span class="att-go" aria-hidden="true">{{template "icon" "download"}}</span><span class="sr-only">Download</span>
+</a>{{end}}{{end}}
+</div>{{end}}{{end}}

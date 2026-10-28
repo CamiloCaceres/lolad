@@ -58,6 +58,11 @@ type record struct {
 	StartupAt         time.Time
 	StartupDialogs    map[string]bool
 	RotatedDay        string
+	// LiveEnv: launched with the SessionStart hook that re-reads the env file
+	// before each Bash command, so env edits need no restart.
+	LiveEnv bool
+	// NextHotCheck throttles the skills/plugins scan behind hot reload.
+	NextHotCheck time.Time
 }
 type pending struct {
 	Mail          core.Mail
@@ -78,6 +83,7 @@ type Supervisor struct {
 	nextEvent   int64
 	lastSweep   time.Time
 	triggers    map[string]*triggerState
+	adopted     []core.HookEvent
 }
 
 var _ core.HookSink = (*Supervisor)(nil)
@@ -126,6 +132,9 @@ func New(o Options) (*Supervisor, error) {
 			if !dead {
 				r.EverStarted = true
 				r.StopAt = time.Time{}
+				if r.LastHook != "" && (r.Status.State == core.StateIdle || r.Status.State == core.StateBusy || r.Status.State == core.StateWaiting) {
+					s.adopted = append(s.adopted, core.HookEvent{Agent: a.Name, Event: r.LastHook, State: r.Status.State, SessionID: r.HookSession, Seq: r.Seq, At: r.Status.LastActivity})
+				}
 				// A surviving active turn is not a first-run blocker. Keep its
 				// persisted busy signal; inspect other adopted panes promptly.
 				if r.Status.State != core.StateBusy {
@@ -329,6 +338,7 @@ func (s *Supervisor) reconcileAgent(ctx context.Context, r *record, now time.Tim
 		}
 	}
 	s.deliver(ctx, r, now)
+	s.hotReload(ctx, r, now)
 	return nil
 }
 func (s *Supervisor) crash(r *record, now time.Time, detail string) {
@@ -405,6 +415,8 @@ func (s *Supervisor) launch(r *record) error {
 	}
 	r.LaunchFingerprint = launchFingerprint
 	r.LaunchRuntime = r.Status.Runtime
+	r.LiveEnv = r.Status.Runtime.Harness == core.HarnessClaude
+	r.NextHotCheck = time.Time{}
 	now := s.opts.Clock.Now()
 	r.EverStarted = true
 	r.Fresh = false
@@ -529,6 +541,15 @@ func (s *Supervisor) List(ctx context.Context) ([]core.AgentStatus, error) {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out, nil
+}
+
+// AdoptedHooks returns the last persisted hook state of each session adopted
+// at boot, so hook-only state kept elsewhere (the delivery tracker) survives a
+// daemon restart. An idle agent sends no hook until it is woken.
+func (s *Supervisor) AdoptedHooks() []core.HookEvent {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]core.HookEvent(nil), s.adopted...)
 }
 func (s *Supervisor) Get(ctx context.Context, name string) (core.AgentStatus, error) {
 	all, e := s.List(ctx)
@@ -724,7 +745,11 @@ func mailSummary(mail []core.Mail) string {
 	var b strings.Builder
 	b.WriteString("Unread mail is waiting. Read it with lolad msg read <id>:\n")
 	for _, m := range mail {
-		fmt.Fprintf(&b, "- %s from %s: %s\n", m.ID, m.FromName, m.Subject)
+		files := ""
+		if n := len(m.Attachments); n > 0 {
+			files = fmt.Sprintf(" (%d attached, saved by msg read)", n)
+		}
+		fmt.Fprintf(&b, "- %s from %s: %s%s\n", m.ID, m.FromName, m.Subject, files)
 	}
 	return b.String()
 }
@@ -737,7 +762,13 @@ func (s *Supervisor) RecordEvent(ev core.Event) {
 	s.event(ev.Agent, ev.Kind, ev.Detail)
 }
 
-// pendingRestart compares only hashes and labels, never secret contents.
+// pendingRestart compares only hashes and labels, never secret contents. It
+// lists only what a running session cannot take on: lolad applies triggers,
+// on_wake, autostart, wake_on_message and rotate itself; the agent reads its
+// email settings from disk when it uses them; and a claude session reloads
+// skills and plugin updates in place (hotReload) and re-reads the env file
+// before each Bash command (LiveEnv). Enabling or disabling a plugin is
+// launch-only: /reload-plugins does not re-read the settings overlay.
 func (s *Supervisor) pendingRestart(r *record, a *core.AgentStatus) {
 	a.PendingRestart = false
 	a.PendingReason = ""
@@ -748,33 +779,27 @@ func (s *Supervisor) pendingRestart(r *record, a *core.AgentStatus) {
 	if err != nil || dead {
 		return
 	}
-	_, parts := agentcfg.New(a.Dir, a.Runtime.Harness, agentcfg.Options{}).Fingerprint(a.Runtime.EnvFile, a.Runtime)
 	reasons := []string{}
-	for _, key := range []string{"runtime", "env", "skills", "email"} {
-		if parts[key] == r.LaunchFingerprint[key] {
-			continue
-		}
-		switch key {
-		case "runtime":
-			if a.Runtime.Model != r.LaunchRuntime.Model {
-				reasons = append(reasons, "model changed")
-			}
-			if a.Runtime.SkillsMode() != r.LaunchRuntime.SkillsMode() {
-				reasons = append(reasons, "skills mode changed")
-			}
-			old, current := r.LaunchRuntime, a.Runtime
-			old.Model = current.Model
-			old.Skills = current.Skills
-			if !reflect.DeepEqual(old, current) || len(reasons) == 0 {
-				reasons = append(reasons, "runtime changed")
-			}
-		case "env":
-			reasons = append(reasons, "env file changed")
-		case "skills":
-			reasons = append(reasons, "skills changed")
-		case "email":
-			reasons = append(reasons, "email changed")
-		}
+	if a.Runtime.Model != r.LaunchRuntime.Model {
+		reasons = append(reasons, "model changed")
+	}
+	if a.Runtime.SkillsMode() != r.LaunchRuntime.SkillsMode() {
+		reasons = append(reasons, "skills mode changed")
+	}
+	if !reflect.DeepEqual(launchFields(r.LaunchRuntime), launchFields(a.Runtime)) {
+		reasons = append(reasons, "runtime changed")
+	}
+	claude := a.Runtime.Harness == core.HarnessClaude
+	_, parts := agentcfg.New(a.Dir, a.Runtime.Harness, agentcfg.Options{}).Fingerprint(a.Runtime.EnvFile, a.Runtime)
+	if (!claude || !r.LiveEnv) && parts["env"] != r.LaunchFingerprint["env"] {
+		reasons = append(reasons, "env file changed")
+	}
+	if !claude && parts["skills"] != r.LaunchFingerprint["skills"] {
+		reasons = append(reasons, "skills changed")
+	}
+	// Sessions launched before plugin_set was recorded cannot be compared.
+	if old, ok := r.LaunchFingerprint["plugin_set"]; ok && claude && old != parts["plugin_set"] {
+		reasons = append(reasons, "plugins enabled or disabled")
 	}
 	a.PendingRestart = len(reasons) > 0
 	a.PendingReason = strings.Join(reasons, ", ")

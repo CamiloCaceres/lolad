@@ -205,6 +205,30 @@ func TestCrashBackoffAndFailure(t *testing.T) {
 		t.Fatal("Start did not clear failure")
 	}
 }
+
+// Regression: after a daemon restart the delivery tracker was empty, so an
+// adopted idle agent refused every notice until it happened to send a hook.
+func TestAdoptedHooksSurviveRestart(t *testing.T) {
+	db, e := sql.Open("sqlite", filepath.Join(t.TempDir(), "state.db"))
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer db.Close()
+	f := setup(t, func(o *Options) { o.DB = db; o.Sessions.(*fakeSessions).exists = true })
+	if len(f.s.AdoptedHooks()) != 0 {
+		t.Fatal("hook state invented for a session that never sent one")
+	}
+	f.s.HandleHook(ctx, core.HookEvent{Agent: "agent", Event: "stop", SessionID: "one", Seq: 7})
+	at := f.c.Now()
+	s, e := New(f.o)
+	if e != nil {
+		t.Fatal(e)
+	}
+	got := s.AdoptedHooks()
+	if len(got) != 1 || got[0].Agent != "agent" || got[0].State != core.StateIdle || got[0].SessionID != "one" || got[0].Seq != 7 || !got[0].At.Equal(at) {
+		t.Fatalf("%+v", got)
+	}
+}
 func TestAdoptAndPersistStopStart(t *testing.T) {
 	db, e := sql.Open("sqlite", filepath.Join(t.TempDir(), "state.db"))
 	if e != nil {
@@ -349,6 +373,33 @@ func TestMailBusyThenIdle(t *testing.T) {
 	}
 	if f.state(t).State != core.StateBusy {
 		t.Fatal("notice should start turn")
+	}
+}
+
+// Regression: an agent idle longer than 15 min was never notified, because
+// delivery required a fresh hook even after the pane confirmed idle.
+func TestMailWakesLongIdleAgent(t *testing.T) {
+	f := setup(t, nil)
+	f.tick(t)
+	f.s.HandleHook(ctx, core.HookEvent{Agent: "agent", Event: "stop", Seq: 1})
+	f.sessions.pane = "ready"
+	f.c.advance(30 * time.Minute)
+	f.tick(t)
+	f.m.add(f.c)
+	f.tick(t)
+	if f.n.calls != 1 || f.m.marked != 1 {
+		t.Fatalf("long-idle agent not woken within one tick: calls=%d marked=%d", f.n.calls, f.m.marked)
+	}
+
+	g := setup(t, nil)
+	g.tick(t)
+	g.s.HandleHook(ctx, core.HookEvent{Agent: "agent", Event: "stop", Seq: 1})
+	g.sessions.pane = "busy"
+	g.c.advance(30 * time.Minute)
+	g.m.add(g.c)
+	g.tick(t)
+	if g.n.calls != 0 {
+		t.Fatal("typed into a stale agent whose pane is not prompt-ready")
 	}
 }
 func TestWakeOnMailAndStopHook(t *testing.T) {

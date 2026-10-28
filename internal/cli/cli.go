@@ -21,6 +21,7 @@ import (
 
 	"github.com/CamiloCaceres/lolad/internal/app"
 	"github.com/CamiloCaceres/lolad/internal/core"
+	"github.com/CamiloCaceres/lolad/internal/harness"
 	"github.com/CamiloCaceres/lolad/internal/hooks"
 	"github.com/CamiloCaceres/lolad/internal/msgcli"
 	"github.com/CamiloCaceres/lolad/internal/registry"
@@ -58,6 +59,7 @@ const help = `lolad — agent daemon and mail
   reload | version
   msg ...                      agent-side signed AMP client
   hook <event>                 harness hook (JSON on stdin)
+  env-export                   agent env file as shell (run before each Bash command)
 Environment: LOLAD_URL, LOLAD_CONFIG, LOLAD_STATE
 `
 
@@ -133,6 +135,15 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 			return 1
 		}
 		return hooks.Run(ctx, args[1], stdin, stdout, os.Getenv)
+	}
+	if args[0] == "env-export" {
+		text, e := harness.EnvExport(os.Getenv)
+		if e != nil {
+			fmt.Fprintln(stderr, "lolad:", e)
+			return 1
+		}
+		fmt.Fprint(stdout, text)
+		return 0
 	}
 	if args[0] == "tmux-probe-agent" {
 		return tmuxProbeAgent(stdin, stdout)

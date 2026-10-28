@@ -11,6 +11,8 @@ import (
 	"io"
 	"strings"
 	"time"
+
+	"github.com/CamiloCaceres/lolad/internal/core"
 )
 
 type Envelope struct {
@@ -26,9 +28,10 @@ type Envelope struct {
 	ThreadID  string    `json:"thread_id"`
 }
 type Payload struct {
-	Type    string         `json:"type"`
-	Message string         `json:"message"`
-	Context map[string]any `json:"context,omitempty"`
+	Type        string            `json:"type"`
+	Message     string            `json:"message"`
+	Context     map[string]any    `json:"context,omitempty"`
+	Attachments []core.Attachment `json:"attachments,omitempty"`
 }
 type Message struct {
 	Remote        string          `json:"remote,omitempty"`

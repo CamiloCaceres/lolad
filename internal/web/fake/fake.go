@@ -27,6 +27,9 @@ type Options struct {
 	Simulate bool             // background activity; off for deterministic tests
 	Empty    bool             // a fresh install: just the operator, no agents, no mail
 	Now      func() time.Time // default time.Now
+	// MaxAttachment is the per-file upload limit; default 500 MB, like the
+	// provider for local mail.
+	MaxAttachment int64
 }
 
 // Service is the fake. The zero value is not usable; call New.
@@ -42,6 +45,9 @@ type Service struct {
 	seq    int64
 	subs   map[chan core.Event]struct{}
 	cfg    map[string]*agentCfg // per-agent settings (settings.go), created on first use
+
+	files         map[string]*stored // attachments by ID (attachments.go)
+	maxAttachment int64
 
 	connections []core.Connection
 	grants      []core.Grant
@@ -62,12 +68,16 @@ func New(opts Options) *Service {
 		subs:     map[chan core.Event]struct{}{},
 		cfg:      map[string]*agentCfg{},
 		stop:     make(chan struct{}),
+
+		files:         map[string]*stored{},
+		maxAttachment: cmp.Or(opts.MaxAttachment, DefaultMaxAttachment),
 	}
 	if opts.Empty {
 		s.org = core.Org{Tenant: "home", User: core.User{Name: "milo", Display: "Camilo Caceres"},
 			Defaults: core.Defaults{UserToAgents: "all", AgentsToUser: "all", Vertical: true, Independents: "user-only"}}
 	} else {
 		s.seed()
+		s.seedAttachments()
 		s.seedFederation()
 	}
 	if s.simulate {
@@ -515,6 +525,11 @@ func (s *Service) deliver(from, to string, out core.Outgoing) (core.Mail, error)
 		Subject: out.Subject, Priority: cmp.Or(out.Priority, "normal"), Type: cmp.Or(out.Type, "notification"),
 		Body: out.Body, Context: out.Context, Signed: true, Verified: true, CreatedAt: now, Status: core.MailUnread,
 	}
+	atts, err := s.resolveAttachments(from, false, out.Attachments)
+	if err != nil {
+		return core.Mail{}, err
+	}
+	m.Attachments = atts
 	m.ThreadID = m.ID
 	if out.InReplyTo != "" {
 		for _, p := range s.mail {
@@ -524,6 +539,7 @@ func (s *Service) deliver(from, to string, out core.Outgoing) (core.Mail, error)
 		}
 	}
 	s.mail = append(s.mail, m)
+	s.bindAttachments(m)
 	if a := s.find(from); a != nil {
 		a.LastActivity = now
 	}
@@ -542,6 +558,9 @@ func (s *Service) UserSend(ctx context.Context, out core.Outgoing) (core.Mail, e
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if core.IsRemoteName(out.To) {
+		if _, err := s.resolveAttachments(s.org.User.Name, true, out.Attachments); err != nil {
+			return core.Mail{}, err
+		}
 		for _, c := range s.connections {
 			if strings.HasSuffix(out.To, "@"+c.Provider) && !c.Paused {
 				m := core.Mail{ID: newID(s.now()), FromName: s.org.User.Name, ToName: out.To, From: s.addr(s.org.User.Name), To: out.To, Subject: out.Subject, Body: out.Body, Remote: c.Provider, Delivery: core.DeliveryQueued, CreatedAt: s.now(), Status: core.MailRead}

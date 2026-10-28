@@ -4,6 +4,7 @@ package deliver
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -51,7 +52,14 @@ func Notice(m core.Mail) string {
 	if m.Remote != "" {
 		external = "external "
 	}
-	return fmt.Sprintf("%s [MESSAGE] %sfrom %s: %s — %s. Read: lolad msg read %s", Ref(m.ID), external, oneLine(m.FromName), oneLine(m.Subject), string(body), oneLine(m.ID))
+	files := ""
+	switch n := len(m.Attachments); {
+	case n == 1:
+		files = " (1 file attached)"
+	case n > 1:
+		files = fmt.Sprintf(" (%d files attached)", n)
+	}
+	return fmt.Sprintf("%s [MESSAGE] %sfrom %s: %s — %s%s. Read: lolad msg read %s", Ref(m.ID), external, oneLine(m.FromName), oneLine(m.Subject), string(body), files, oneLine(m.ID))
 }
 func classify(pane, ref string) core.NotifyResult {
 	p := harness.Plain(pane)
@@ -78,13 +86,16 @@ func pause(ctx context.Context, d time.Duration) error {
 		return nil
 	}
 }
+
+// ready needs the last hook-reported state to be idle and the pane to show the
+// input box now. Idle never expires: any later turn reports busy first, and the
+// pane check rejects spinners and permission prompts.
 func (n *Notifier) ready(a core.Agent, pane string) bool {
 	if n.state == nil {
 		return false
 	}
 	s, at := n.state(a.Name)
-	age := time.Since(at)
-	return s == core.StateIdle && !at.IsZero() && age >= 0 && age < 15*time.Minute && n.launcher.PromptReady(pane)
+	return s == core.StateIdle && !at.IsZero() && n.launcher.PromptReady(pane)
 }
 func (n *Notifier) Notify(ctx context.Context, a core.Agent, m core.Mail) (result core.NotifyResult, err error) {
 	n.mu.Lock()
@@ -168,4 +179,68 @@ func (n *Notifier) Notify(ctx context.Context, a core.Agent, m core.Mail) (resul
 		}
 	}
 	return result, nil
+}
+
+// dimmed matches SGR-dim spans: Claude Code draws its placeholder and
+// suggested prompts dim; typed text never is.
+var dimmed = regexp.MustCompile(`\x1b\[2m[^\x1b]*(\x1b\[(0|22)?m)?`)
+
+// inputEmpty reports whether the composer row holds nothing typed: only the
+// prompt glyph, or a dimmed placeholder/suggestion (the "Try …" text is also
+// recognised in captures without escapes).
+func inputEmpty(pane string) bool {
+	i := harness.InputLine(pane)
+	if i < 0 {
+		return false
+	}
+	v := strings.TrimSpace(harness.Plain(dimmed.ReplaceAllString(strings.Split(pane, "\n")[i], "")))
+	v = strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(v, "│"), "❯"))
+	return v == "" || strings.HasPrefix(v, `Try "`)
+}
+
+// Command types a harness-local slash command (one that starts no model turn,
+// such as /reload-skills) into an idle session whose input box is empty. It is
+// confirmed once the command has left the input box; text that stays staged
+// is removed again with BSpace.
+func (n *Notifier) Command(ctx context.Context, a core.Agent, text string) (core.NotifyResult, error) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if e := ctx.Err(); e != nil {
+		return core.NotifyFailed, e
+	}
+	pane, e := n.sessions.Capture(a.Name, 40, true)
+	if e != nil {
+		return core.NotifyFailed, e
+	}
+	if !n.ready(a, pane) || !inputEmpty(pane) {
+		return core.NotifyBusy, nil
+	}
+	if e := n.sessions.SendLiteral(a.Name, text); e != nil {
+		return core.NotifyFailed, e
+	}
+	if e := pause(ctx, 150*time.Millisecond); e != nil {
+		return core.NotifyFailed, e
+	}
+	if e := n.sessions.SendKeys(a.Name, "Enter"); e != nil {
+		return core.NotifyFailed, e
+	}
+	for poll := 0; poll < 10; poll++ {
+		if e := pause(ctx, 50*time.Millisecond); e != nil {
+			return core.NotifyFailed, e
+		}
+		if pane, e = n.sessions.Capture(a.Name, 40, true); e != nil {
+			return core.NotifyFailed, e
+		}
+		if classify(pane, text) != core.NotifyStaged {
+			return core.NotifyConfirmed, nil
+		}
+	}
+	keys := make([]string, utf8.RuneCountInString(text))
+	for i := range keys {
+		keys[i] = "BSpace"
+	}
+	if e := n.sessions.SendKeys(a.Name, keys...); e != nil {
+		return core.NotifyFailed, e
+	}
+	return core.NotifyStaged, nil
 }

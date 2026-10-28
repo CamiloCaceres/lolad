@@ -1,8 +1,6 @@
 package agentcfg
 
 import (
-	"bytes"
-	_ "embed"
 	"encoding/json"
 	"errors"
 	"os"
@@ -12,19 +10,6 @@ import (
 	"github.com/CamiloCaceres/lolad/internal/core"
 	"gopkg.in/yaml.v3"
 )
-
-//go:embed assets/email.sh
-var emailScript []byte
-
-//go:embed assets/email-aim-secret.sh
-var stockEmailScript []byte
-
-func stockEmail(b []byte) bool {
-	return bytes.Equal(bytes.TrimSpace(b), bytes.TrimSpace(stockEmailScript))
-}
-
-//go:embed assets/env_secret.py
-var envScript []byte
 
 func (d *Dir) readYAML(rel string) ([]byte, *yaml.Node, error) {
 	p, e := d.safe(rel, true)
@@ -192,16 +177,37 @@ func defaultAccount(a core.EmailAccount) core.EmailAccount {
 func (d *Dir) Email(envFile string) (core.EmailSettings, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return d.email(envFile)
+	// An agent whose email lolad manages (every password_secret is set in the env
+	// file) but whose tools are lolabot's template set or an older lolad set cannot
+	// log in; bring the tools up to date here too, not only when settings are saved.
+	// Only exact known versions are replaced, with .lolad-orig backups.
+	var notes []string
+	if d.emailSecretsInEnv(envFile) {
+		if p, e := d.planEmail(); e == nil && p.blocked == "" && (p.kind == planTemplate || p.kind == planRefresh) {
+			if done, e := d.applyEmail(p); e != nil {
+				notes = append(notes, "lolad could not update the email tools: "+e.Error())
+			} else if len(done) > 0 {
+				notes = append(append(notes, upgradedNote(done)), p.notes...)
+			}
+		}
+	}
+	out, e := d.email(envFile)
+	out.Notes = append(notes, out.Notes...)
+	return out, e
 }
 func (d *Dir) email(envFile string) (core.EmailSettings, error) {
 	out := core.EmailSettings{Watch: "none", Accounts: []core.EmailAccount{}, OperatorEmails: []string{}}
-	p, e := d.safe("tools/email.sh", false)
-	if e == nil {
-		b, _ := os.ReadFile(p)
+	if _, e := d.safe("tools/email.sh", false); e == nil {
 		out.Supported = true
-		if stockEmail(b) {
-			out.Notes = append(out.Notes, "email.sh uses aim-secret; lolad will update it to read .env")
+		if plan, e := d.planEmail(); e != nil {
+			out.Notes = append(out.Notes, "cannot read the email tools")
+		} else {
+			if plan.blocked != "" {
+				out.Notes = append(out.Notes, plan.blocked)
+			} else if n := plan.note(); n != "" {
+				out.Notes = append(out.Notes, n)
+			}
+			out.Notes = append(out.Notes, plan.notes...)
 		}
 	}
 	_, n, e := d.readYAML("lolabot.yaml")
@@ -238,7 +244,7 @@ func (d *Dir) email(envFile string) (core.EmailSettings, error) {
 		v.PasswordSet = v.PasswordSet || env[v.PasswordKey] != ""
 		out.Accounts = append(out.Accounts, v)
 	}
-	p, e = d.safe(".claude/settings.json", false)
+	p, e := d.safe(".claude/settings.json", false)
 	if e == nil {
 		b, _ := os.ReadFile(p)
 		var settings struct {
@@ -369,55 +375,9 @@ func (d *Dir) SaveEmail(envFile string, s core.EmailSettings) (core.EmailSetting
 		return core.EmailSettings{}, e
 	}
 	out, e := d.email(envFile)
-	if upgraded {
-		out.Notes = append(out.Notes, "Upgraded stock email.sh and env_secret.py to read .env, including escaped quoted values; originals kept as .lolad-orig")
-	}
+	out.Notes = append(out.Notes, upgraded...)
 	out.Notes = append(out.Notes, "credentials.yaml is reserialized; other top-level keys are preserved, formatting and comments may change")
 	return out, e
-}
-func (d *Dir) upgradeEmail() (bool, error) {
-	p, e := d.safe("tools/email.sh", false)
-	if errors.Is(e, core.ErrNotFound) {
-		return false, nil
-	}
-	if e != nil {
-		return false, e
-	}
-	b, e := os.ReadFile(p)
-	if e != nil {
-		return false, errors.New("cannot read email tool")
-	}
-	if !stockEmail(b) {
-		return false, nil
-	}
-	for _, f := range []struct {
-		rel string
-		b   []byte
-	}{{"tools/email.sh", emailScript}, {"tools/env_secret.py", envScript}} {
-		p, e := d.safe(f.rel, true)
-		if e != nil {
-			return false, e
-		}
-		old, e := os.ReadFile(p)
-		if e == nil {
-			backup, e := d.safe(f.rel+".lolad-orig", true)
-			if e != nil {
-				return false, e
-			}
-			if _, e = os.Stat(backup); errors.Is(e, os.ErrNotExist) {
-				st, _ := os.Stat(p)
-				if e = atomicWrite(backup, old, st.Mode()); e != nil {
-					return false, e
-				}
-			}
-		} else if !errors.Is(e, os.ErrNotExist) {
-			return false, errors.New("cannot read email tool")
-		}
-		if e = atomicWrite(p, f.b, 0755); e != nil {
-			return false, e
-		}
-	}
-	return true, nil
 }
 func (d *Dir) EmailPassword(envFile, address string) (string, error) {
 	d.mu.Lock()

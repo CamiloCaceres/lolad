@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -676,5 +677,41 @@ func TestDevDirReloads(t *testing.T) {
 	resp.Body.Close()
 	if resp.StatusCode != 200 {
 		t.Errorf("dev mode /agents = %d", resp.StatusCode)
+	}
+}
+
+// Regression: after a daemon upgrade an open tab swapped new markup into a page
+// still running the old CSS/JS (a raw file input appeared in the composer).
+func TestStalePageReloads(t *testing.T) {
+	e := setup(t)
+	resp, page := e.do("GET", "/agents", nil, false)
+	m := regexp.MustCompile(`<body hx-boost="true" hx-headers='\{"X-Lolad-Build": "([0-9a-f]{12})"\}'>`).FindStringSubmatch(page)
+	if resp.StatusCode != 200 || m == nil {
+		t.Fatalf("page does not carry its build: %d %q", resp.StatusCode, regexp.MustCompile(`<body[^>]*>`).FindString(page))
+	}
+	hx := func(build string) http.Header {
+		req, _ := http.NewRequest("GET", e.srv.URL+"/agents", nil)
+		req.Header.Set("HX-Request", "true")
+		if build != "" {
+			req.Header.Set("X-Lolad-Build", build)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		return resp.Header
+	}
+	if h := hx(m[1]); h.Get("HX-Refresh") != "" {
+		t.Fatal("current page told to reload")
+	}
+	if h := hx(""); h.Get("HX-Refresh") != "true" {
+		t.Fatal("page from before builds were tracked not reloaded")
+	}
+	if h := hx("0123456789ab"); h.Get("HX-Refresh") != "true" {
+		t.Fatal("page from an older build not reloaded")
+	}
+	if strings.Contains(page, `type="file" multiple tabindex`) {
+		t.Fatal("file input must carry hidden so it never renders unstyled")
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"strconv"
 	"strings"
@@ -40,6 +41,8 @@ func httpError(w http.ResponseWriter, e error) {
 		failure(w, 400, "invalid_request", e.Error())
 	case errors.Is(e, errTooLarge):
 		failure(w, 413, "request_too_large", e.Error())
+	case errors.Is(e, errAttachmentTooLarge):
+		failure(w, 413, "attachment_too_large", e.Error())
 	default:
 		failure(w, 500, "internal_error", "internal provider error")
 	}
@@ -92,7 +95,7 @@ func (p *Provider) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if path == "/v1/info" && r.Method == "GET" {
-		v := map[string]any{"provider": p.Name(), "federation": p.FederationEnabled(), "version": "amp/0.1", "capabilities": []string{"threading", "priority"}, "registration_modes": []string{"preapproved"}}
+		v := map[string]any{"provider": p.Name(), "federation": p.FederationEnabled(), "version": "amp/0.1", "capabilities": []string{"threading", "priority", "attachments"}, "registration_modes": []string{"preapproved"}}
 		if id, pub, e := p.identity(ctx, "lolad"); e == nil {
 			v["public_key"] = publicPEM(pub)
 			v["fingerprint"] = id.Fingerprint
@@ -188,6 +191,85 @@ func (p *Provider) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		respond(w, 200, wire)
+	case path == "/v1/attachments/upload" && r.Method == "POST":
+		p.upload(w, r, caller)
+	case strings.HasPrefix(path, "/v1/attachments/"):
+		p.attachmentEndpoint(w, r, caller, strings.TrimPrefix(path, "/v1/attachments/"))
+	default:
+		failure(w, 404, "not_found", "unknown endpoint")
+	}
+}
+
+// upload takes one file as multipart/form-data (the first file part) or as the
+// raw body with ?filename=. lolad checks it synchronously, so the response is
+// already the confirmed, scanned attachment object.
+func (p *Provider) upload(w http.ResponseWriter, r *http.Request, caller core.Identity) {
+	// Large local files outlast the server's 30 s read timeout.
+	_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(30 * time.Minute))
+	r.Body = http.MaxBytesReader(w, r.Body, p.localLimit()+(1<<20))
+	var a core.Attachment
+	var e error
+	if mr, me := r.MultipartReader(); me == nil {
+		for {
+			part, pe := mr.NextPart()
+			if pe != nil {
+				httpError(w, fmt.Errorf("%w: no file part in the upload", core.ErrInvalid))
+				return
+			}
+			if part.FileName() == "" {
+				part.Close()
+				continue
+			}
+			a, e = p.UploadAttachment(r.Context(), caller.Name, part.FileName(), part.Header.Get("Content-Type"), part)
+			part.Close()
+			break
+		}
+	} else {
+		name := r.URL.Query().Get("filename")
+		if name == "" {
+			httpError(w, fmt.Errorf("%w: filename required", core.ErrInvalid))
+			return
+		}
+		a, e = p.UploadAttachment(r.Context(), caller.Name, name, r.Header.Get("Content-Type"), r.Body)
+	}
+	var limit *http.MaxBytesError
+	if errors.As(e, &limit) {
+		e = fmt.Errorf("%w: larger than %d MB", errAttachmentTooLarge, p.localLimit()>>20)
+	}
+	if e != nil {
+		httpError(w, e)
+		return
+	}
+	respond(w, 200, a)
+}
+func (p *Provider) attachmentEndpoint(w http.ResponseWriter, r *http.Request, caller core.Identity, rest string) {
+	id, action, _ := strings.Cut(rest, "/")
+	switch {
+	case action == "" && r.Method == "GET", action == "confirm" && r.Method == "POST":
+		a, e := p.Attachment(r.Context(), caller.Name, id)
+		if e != nil {
+			httpError(w, e)
+			return
+		}
+		respond(w, 200, a)
+	case action == "download" && r.Method == "GET":
+		a, f, e := p.OpenAttachment(r.Context(), caller.Name, id)
+		if e != nil {
+			httpError(w, e)
+			return
+		}
+		defer f.Close()
+		st, e := f.Stat()
+		if e != nil {
+			httpError(w, e)
+			return
+		}
+		// Bytes only: never rendered by this origin, whatever the declared type.
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": a.Filename}))
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-AMP-Digest", a.Digest)
+		http.ServeContent(w, r, "", st.ModTime(), f)
 	default:
 		failure(w, 404, "not_found", "unknown endpoint")
 	}

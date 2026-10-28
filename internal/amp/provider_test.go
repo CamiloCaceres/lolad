@@ -34,6 +34,10 @@ type fixture struct {
 
 func setup(t *testing.T) *fixture {
 	t.Helper()
+	return setupWith(t)
+}
+func setupWith(t *testing.T, extra ...Option) *fixture {
+	t.Helper()
 	state := t.TempDir()
 	db, e := sql.Open("sqlite", filepath.Join(state, "test.db"))
 	if e != nil {
@@ -45,9 +49,10 @@ func setup(t *testing.T) *fixture {
 	o.Defaults.Independents = "all"
 	o.Rules = []core.Rule{{From: "a", To: "c", Allow: false, Note: "restricted"}}
 	f := &fixture{state: state}
-	p, e := New(db, state, o.Tenant, policy.New(o, "a", "b", "c"), WithOrg(func() core.Org { return o }), WithAgents(func() []core.Agent {
+	opts := []Option{WithOrg(func() core.Org { return o }), WithAgents(func() []core.Agent {
 		return []core.Agent{{Name: "a", Display: "Agent A", Role: "engineer"}, {Name: "b"}, {Name: "c"}, {Name: "unkeyed"}}
-	}), WithEventSink(func(e core.Event) { f.mu.Lock(); f.events = append(f.events, e); f.mu.Unlock() }))
+	}), WithEventSink(func(e core.Event) { f.mu.Lock(); f.events = append(f.events, e); f.mu.Unlock() })}
+	p, e := New(db, state, o.Tenant, policy.New(o, "a", "b", "c"), append(opts, extra...)...)
 	if e != nil {
 		t.Fatal(e)
 	}

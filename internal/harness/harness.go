@@ -2,7 +2,6 @@
 package harness
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -78,38 +77,24 @@ func (a *Adapter) prepare(agent core.Agent, o core.LaunchOpts, sessionID string)
 	if !filepath.IsAbs(envFile) {
 		envFile = filepath.Join(agent.Dir, envFile)
 	}
-	f, e := os.Open(envFile)
+	fileEnv, fileKeys, e := ReadEnvFile(envFile, agent.Dir)
 	if e == nil {
-		sc := bufio.NewScanner(f)
-		sc.Buffer(make([]byte, 4096), 1<<20)
-		for sc.Scan() {
-			line := strings.TrimSpace(sc.Text())
-			if line == "" || strings.HasPrefix(line, "#") {
-				continue
-			}
-			line = strings.TrimPrefix(line, "export ")
-			k, v, ok := strings.Cut(line, "=")
-			if !ok {
-				f.Close()
-				return spec, fmt.Errorf("invalid env assignment")
-			}
-			k = strings.TrimSpace(k)
-			v = strings.TrimSpace(v)
-			v = envValue(v)
-
-			env[k] = strings.ReplaceAll(v, "${LOLABOT_HOME}", agent.Dir)
-		}
-		e = sc.Err()
-		f.Close()
-		if e != nil {
-			return spec, e
+		for k, v := range fileEnv {
+			env[k] = v
 		}
 	} else if !os.IsNotExist(e) || agent.Runtime.EnvFile != "" {
 		return spec, e
 	}
+	pinned := make([]string, 0, len(agent.Runtime.Env))
 	for k, v := range agent.Runtime.Env {
 		env[k] = strings.ReplaceAll(v, "${LOLABOT_HOME}", agent.Dir)
+		pinned = append(pinned, k)
 	}
+	sort.Strings(pinned)
+	// `lolad env-export` re-reads the env file before each Bash command (see liveenv.go).
+	env["LOLAD_ENV_FILE"] = envFile
+	env["LOLAD_ENV_KEYS"] = strings.Join(fileKeys, ",")
+	env["LOLAD_ENV_PINNED"] = strings.Join(pinned, ",")
 	env["LOLABOT_HOME"] = agent.Dir
 	env["LOLAD_AGENT"] = agent.Name
 	env["LOLAD_URL"] = o.LoladURL

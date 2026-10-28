@@ -7,6 +7,7 @@ import (
 	"github.com/CamiloCaceres/lolad/internal/core"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -91,5 +92,26 @@ func TestHandlerBadRequest(t *testing.T) {
 		if w.Code != 400 {
 			t.Fatal(w.Code)
 		}
+	}
+}
+
+func TestSessionStartRegistersLiveEnv(t *testing.T) {
+	path := t.TempDir() + "/sessionstart-hook-0.sh"
+	vars := map[string]string{"LOLAD_AGENT": "a", "LOLAD_HARNESS": "claude", "CLAUDE_ENV_FILE": path, "LOLAD_BIN": "/opt/lo'lad/lolad", "LOLAD_ENV_FILE": "/agent/.env"}
+	env := func(k string) string { return vars[k] }
+	var out bytes.Buffer
+	for i := 0; i < 2; i++ { // resume, clear and compact fire SessionStart again
+		Run(context.Background(), "SessionStart", strings.NewReader("{}"), &out, env)
+	}
+	b, e := os.ReadFile(path)
+	want := `eval "$('/opt/lo'"'"'lad/lolad' env-export 2>/dev/null)"` + "\n"
+	if e != nil || string(b) != want {
+		t.Fatalf("got %q want %q (%v)", b, want, e)
+	}
+	vars["LOLAD_HARNESS"] = "codewhale"
+	vars["CLAUDE_ENV_FILE"] = t.TempDir() + "/other.sh"
+	Run(context.Background(), "SessionStart", strings.NewReader("{}"), &out, env)
+	if _, e := os.Stat(vars["CLAUDE_ENV_FILE"]); !os.IsNotExist(e) {
+		t.Fatal("codewhale has no CLAUDE_ENV_FILE contract")
 	}
 }

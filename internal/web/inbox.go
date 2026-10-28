@@ -35,6 +35,9 @@ type msgView struct {
 	Answered bool   // ask: the user has answered (by decision or text); no longer waiting
 	Answer   string // ask: the option the user chose; set, the choice is final
 	Receipt  string // last message from the user: Sent | Delivered | Read
+	Files    []attView
+	HideBody bool // the body only lists the files (a message sent with no text)
+	Bare     bool // nothing to show in a bubble: just the files
 }
 
 type threadView struct {
@@ -48,6 +51,13 @@ type threadView struct {
 	CanSend bool
 	Policy  core.Decision // may the user message this peer
 	Error   string
+	// Files: Attach is false for peers on another lolad (the provider refuses
+	// to send files there yet); AttachNote says why.
+	Attach     bool
+	AttachNote string
+	MaxFiles   int
+	MaxBytes   int64
+	MaxLabel   string // "500 MB"
 }
 
 type inboxView struct {
@@ -273,6 +283,18 @@ func (s *server) loadThread(ctx context.Context, peer string, agents map[string]
 		t.Msgs = append(t.Msgs, msgView{Mail: m})
 	}
 	shape(t.Msgs, me)
+	for i := range t.Msgs {
+		m := &t.Msgs[i]
+		m.Files = attViews(peer, m.Attachments)
+		m.HideBody = len(m.Attachments) > 0 && (strings.TrimSpace(m.Body) == "" || m.Body == filesBody(attachmentNames(m.Attachments)))
+		m.Bare = m.HideBody && !m.ShowSubj && (m.Kind == "say" || m.Kind == "reply")
+	}
+	t.MaxFiles, t.MaxBytes = maxFiles, cmp.Or(s.maxUpload, DefaultMaxUpload)
+	t.MaxLabel = sizeLimit(t.MaxBytes)
+	t.Attach = !core.IsRemoteName(peer)
+	if !t.Attach {
+		t.AttachNote = noRemoteFiles
+	}
 	for i := len(t.Msgs) - 1; i >= 0; i-- {
 		if !t.Msgs[i].Mine {
 			t.ReplyTo = t.Msgs[i].ID
@@ -485,16 +507,35 @@ func findMail(msgs []core.Mail, id string) *core.Mail {
 func (s *server) send(w http.ResponseWriter, r *http.Request) {
 	peer := r.PathValue("peer")
 	body := strings.TrimSpace(strings.ReplaceAll(r.FormValue("body"), "\r\n", "\n"))
-	if body == "" {
+	ids, err := attachmentIDs(r)
+	if err != nil {
+		s.sendFailed(w, r, peer, err)
+		return
+	}
+	if len(ids) > 0 && core.IsRemoteName(peer) {
+		s.sendFailed(w, r, peer, fmt.Errorf("%w: %s", core.ErrInvalid, noRemoteFiles))
+		return
+	}
+	if body == "" && len(ids) == 0 {
 		s.sendFailed(w, r, peer, fmt.Errorf("%w: write a message first", core.ErrInvalid))
 		return
+	}
+	if body == "" {
+		names := make([]string, len(ids))
+		for i, id := range ids {
+			names[i] = "a file"
+			if a, ok := s.uploads.get(peer, id); ok {
+				names[i] = a.Filename
+			}
+		}
+		body = filesBody(names)
 	}
 	msgs, err := s.svc.Conversation(r.Context(), peer, 200, time.Time{})
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	out := core.Outgoing{To: peer, Body: body, Type: "request",
+	out := core.Outgoing{To: peer, Body: body, Type: "request", Attachments: ids,
 		Context: map[string]any{"userchat": map[string]any{"kind": "say"}}}
 	parent := findMail(msgs, r.FormValue("reply_to"))
 	if parent != nil && parent.FromName == peer {
@@ -508,6 +549,7 @@ func (s *server) send(w http.ResponseWriter, r *http.Request) {
 		s.sendFailed(w, r, peer, err)
 		return
 	}
+	s.uploads.done(ids)
 	s.afterSend(w, r, peer)
 }
 

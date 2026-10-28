@@ -35,6 +35,10 @@ type Provider struct {
 	remoteMu         sync.RWMutex
 	remote           Remote
 	started          time.Time
+	// attachments (attachments.go)
+	localAttachmentLimit int64
+	attachMu             sync.Mutex
+	lastPrune            time.Time
 }
 type Option func(*Provider)
 
@@ -98,7 +102,11 @@ func (p *Provider) Send(ctx context.Context, from string, out core.Outgoing) (co
 	if out.Type == "" {
 		out.Type = "notification"
 	}
-	payload, e := CanonicalJSON(Payload{Type: out.Type, Message: out.Body, Context: out.Context})
+	files, e := p.resolveAttachments(ctx, n, out.Attachments)
+	if e != nil {
+		return core.Mail{}, e
+	}
+	payload, e := CanonicalJSON(Payload{Type: out.Type, Message: out.Body, Context: out.Context, Attachments: files})
 	if e != nil {
 		return core.Mail{}, e
 	}
@@ -171,8 +179,8 @@ func (p *Provider) acceptWith(ctx context.Context, from string, env Envelope, pa
 	if e = json.Unmarshal(payload, &fields); e != nil || fields["message"] == nil || string(fields["message"]) == "null" {
 		return zero, fmt.Errorf("%w: payload.message required", core.ErrInvalid)
 	}
-	if _, has := fields["attachments"]; has {
-		return zero, fmt.Errorf("%w: attachments unsupported", core.ErrInvalid)
+	if e = p.checkAttachments(ctx, from, remote, body.Attachments); e != nil {
+		return zero, e
 	}
 	token, e := randomHex(12)
 	if e != nil {
@@ -198,7 +206,7 @@ func (p *Provider) acceptWith(ctx context.Context, from string, env Envelope, pa
 			return zero, e
 		}
 	}
-	m := core.Mail{ID: env.ID, ThreadID: env.ThreadID, InReplyTo: env.InReplyTo, From: env.From, To: env.To, FromName: from, ToName: to, Subject: env.Subject, Priority: env.Priority, Type: body.Type, Body: body.Message, Context: body.Context, Signed: true, Verified: true, CreatedAt: now, Status: core.MailUnread}
+	m := core.Mail{ID: env.ID, ThreadID: env.ThreadID, InReplyTo: env.InReplyTo, From: env.From, To: env.To, FromName: from, ToName: to, Subject: env.Subject, Priority: env.Priority, Type: body.Type, Body: body.Message, Context: body.Context, Attachments: body.Attachments, Signed: true, Verified: true, CreatedAt: now, Status: core.MailUnread}
 	if remote {
 		m.Remote = domain
 		m.Delivery = core.DeliveryQueued

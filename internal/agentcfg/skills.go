@@ -215,19 +215,28 @@ func (d *Dir) Fingerprint(envFile string, rt core.Runtime) (string, map[string]s
 		fingerprintSkills(d.root, p, map[string]bool{}, &entries)
 	}
 
+	var plugins, enabled []string
 	if rt.SkillsMode() == core.SkillsInherit {
 		for _, root := range d.userSkillRoots() {
 			fingerprintSkills(d.root, root, map[string]bool{}, &entries)
 		}
 		if d.harness == core.HarnessClaude {
 			for name, root := range d.enabledPluginRoots() {
-				entries = append(entries, "plugin:"+name+":"+root)
-				fingerprintSkills(d.root, root, map[string]bool{}, &entries)
+				enabled = append(enabled, name)
+				plugins = append(plugins, "plugin:"+name+":"+root)
+				fingerprintSkills(d.root, root, map[string]bool{}, &plugins)
 			}
 		}
 	}
+	// Plugins are their own parts: a running Claude Code activates updated
+	// plugin versions with /reload-plugins and skill folders with
+	// /reload-skills, but which plugins are enabled is read only at launch.
 	sort.Strings(entries)
 	parts["skills"] = hash([]byte(strings.Join(entries, "\n")))
+	sort.Strings(plugins)
+	parts["plugins"] = hash([]byte(strings.Join(plugins, "\n")))
+	sort.Strings(enabled)
+	parts["plugin_set"] = hash([]byte(strings.Join(enabled, "\n")))
 	var email []byte
 	b, n, e := d.readYAML("lolabot.yaml")
 	if e == nil {
@@ -245,8 +254,16 @@ func (d *Dir) Fingerprint(envFile string, rt core.Runtime) (string, map[string]s
 }
 
 // Follow linked skill directories as the harness does, tracking cycles without
-// including file content (the fingerprint contract is names plus mtimes).
+// including file content (the fingerprint contract is names plus file mtimes).
+// Directory mtimes are left out: they move whenever an entry is added or
+// removed, which the child names already capture, and Claude Code adds and
+// removes per-process `.in_use/<pid>` markers inside every plugin it loads, so
+// counting them made each launch report its own skills as changed. Synced
+// skills likewise get `.last-complete-round` rewritten on every sync.
 func fingerprintSkills(root, path string, stack map[string]bool, entries *[]string) {
+	if base := filepath.Base(path); base == ".in_use" || base == ".last-complete-round" {
+		return
+	}
 	real, e := filepath.EvalSymlinks(path)
 	if e != nil || stack[real] {
 		return
@@ -256,8 +273,10 @@ func fingerprintSkills(root, path string, stack map[string]bool, entries *[]stri
 		return
 	}
 	rel, _ := filepath.Rel(root, path)
-	*entries = append(*entries, filepath.ToSlash(rel)+":"+st.ModTime().UTC().Format("2006-01-02T15:04:05.000000000Z"))
-	if !st.IsDir() {
+	if st.IsDir() {
+		*entries = append(*entries, filepath.ToSlash(rel)+"/")
+	} else {
+		*entries = append(*entries, filepath.ToSlash(rel)+":"+st.ModTime().UTC().Format("2006-01-02T15:04:05.000000000Z"))
 		return
 	}
 	stack[real] = true

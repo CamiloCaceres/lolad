@@ -30,6 +30,31 @@ Creating an agent may redirect to /inbox/<slug>?created=1, or ?adopted=1 when
 adopting. These show a dismissible welcome with Email settings and Org links.
 No new Service method, dependency, daemon configuration or migration is required.
 
+## Files
+
+The composer attaches files by drag and drop onto the conversation (a dashed
+drop overlay, announced through a polite live region), the paperclip's
+multi-file picker (phones included) or pasting images, which are named
+`pasted-image-<yyyy-mm-dd-hhmmss>.png`. Each file uploads at once, one request per
+file and three at a time, to `POST /inbox/{peer}/attachments` (multipart,
+streamed to `UploadAttachment`, capped by `MaxBytesReader` just above the 500 MB
+provider limit, read deadline extended to 30 minutes). Chips show progress,
+errors and a remove button; Send waits for uploads and for failed files to be
+removed. The form posts the IDs as `attachment` fields (at most 10, checked on
+both sides). Files without text get a derived body ("Sent 2 files: …") that the
+thread hides. Conversations with peers on another lolad disable attaching and
+say why.
+
+Messages show clean PNG/JPEG/GIF/WebP files as fixed-height thumbnails that
+open full size, and everything else as a download row with icon, type and size.
+`suspicious` files carry a visible warning and download behind a confirm.
+`GET /inbox/{peer}/attachments/{id}` serves a file only when a message in that
+conversation carries it (or it is the user's unsent upload from there), always
+with `nosniff` and `CSP: sandbox`; only `?inline=1` on a clean raster image is
+served inline with its stored type, everything else as an
+`application/octet-stream` attachment with an RFC 5987 `filename*`. Range works
+because the reader is seekable. `attachments_test.go` covers this.
+
 ## Verification
 
 `inbox_v3_test.go` covers home priority, live refresh wiring, conversation rail,

@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/CamiloCaceres/lolad/internal/agentcfg"
 	"github.com/CamiloCaceres/lolad/internal/amp"
 	"github.com/CamiloCaceres/lolad/internal/auth"
 	"github.com/CamiloCaceres/lolad/internal/core"
@@ -113,11 +115,14 @@ func New(ctx context.Context, configPath string) (_ *App, err error) {
 		return nil, err
 	}
 	sessions.Exec = bin
-	a.Supervisor, err = supervisor.New(supervisor.Options{DB: a.DB, Agents: r.List(), Sessions: sessions, Launchers: launchers, Notifier: deliver.NewRouter(sessions, launchers, a.Tracker.State), Mailer: a.Provider, Launch: core.LaunchOpts{StateDir: a.Config.StateDir, LoladBin: bin, LoladURL: URL(a.Config.Listen)}, ReloadAgents: a.reloadRegistry})
+	a.Supervisor, err = supervisor.New(supervisor.Options{DB: a.DB, Agents: r.List(), Sessions: sessions, Launchers: launchers, Notifier: deliver.NewRouter(sessions, launchers, a.Tracker.State), Mailer: a.Provider, Launch: core.LaunchOpts{StateDir: a.Config.StateDir, LoladBin: bin, LoladURL: URL(a.Config.Listen)}, ReloadAgents: a.reloadRegistry, MailWatch: agentcfg.MailWatcher{StateDir: a.Config.StateDir, Fallback: supervisor.ExecMailWatch{}}})
 	if err != nil {
 		return nil, err
 	}
 	a.Tracker.Sink = a.Supervisor
+	for _, ev := range a.Supervisor.AdoptedHooks() {
+		a.Tracker.Seed(ev)
+	}
 	if err = a.initFederation(); err != nil {
 		return nil, err
 	}
@@ -267,6 +272,16 @@ func (a *App) regenerate() error {
 func (a *App) Check(_ context.Context, f, t string) core.Decision { return a.Provider.Check(f, t) }
 func (a *App) UserSend(ctx context.Context, o core.Outgoing) (core.Mail, error) {
 	return a.Provider.Send(ctx, a.Me().Name, o)
+}
+func (a *App) UploadAttachment(ctx context.Context, filename, contentType string, r io.Reader) (core.Attachment, error) {
+	return a.Provider.UploadAttachment(ctx, a.Me().Name, filename, contentType, r)
+}
+func (a *App) OpenAttachment(ctx context.Context, id string) (core.Attachment, io.ReadCloser, error) {
+	at, f, e := a.Provider.OpenAttachment(ctx, a.Me().Name, id)
+	if e != nil {
+		return at, nil, e
+	}
+	return at, f, nil
 }
 func (a *App) MarkRead(ctx context.Context, id string) error {
 	return a.Provider.MarkRead(ctx, a.Me().Name, id)

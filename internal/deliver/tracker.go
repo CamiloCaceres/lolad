@@ -45,6 +45,16 @@ func (t *Tracker) HandleHook(ctx context.Context, ev core.HookEvent) core.HookRe
 	}
 	return reply
 }
+
+// Seed restores a hook state persisted before a daemon restart. It never
+// replaces a hook already received; any later hook replaces the seed.
+func (t *Tracker) Seed(ev core.HookEvent) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if _, ok := t.events[ev.Agent]; !ok {
+		t.events[ev.Agent] = ev
+	}
+}
 func (t *Tracker) State(name string) (core.State, time.Time) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
@@ -71,6 +81,15 @@ func (r *Router) Notify(ctx context.Context, a core.Agent, m core.Mail) (core.No
 		return core.NotifyFailed, fmt.Errorf("%w: harness %s", core.ErrInvalid, a.Runtime.Harness)
 	}
 	return n.Notify(ctx, a, m)
+}
+
+// Command routes a slash command to the recipient's harness notifier.
+func (r *Router) Command(ctx context.Context, a core.Agent, text string) (core.NotifyResult, error) {
+	n := r.notifiers[a.Runtime.Harness]
+	if n == nil {
+		return core.NotifyFailed, fmt.Errorf("%w: harness %s", core.ErrInvalid, a.Runtime.Harness)
+	}
+	return n.Command(ctx, a, text)
 }
 
 var _ core.HookSink = (*Tracker)(nil)

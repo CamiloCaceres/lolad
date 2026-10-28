@@ -38,20 +38,56 @@ accounts are removed from email_accounts; their old env variables are retained
 until explicitly deleted. Each individual file write is atomic; SaveEmail is
 not a transaction across multiple files.
 
-`assets/email-aim-secret.sh` is a read-only-source copy of dsh-lola's stock
-wrapper, used to recognize stock content. Only a wrapper matching that content
-(ignoring outer whitespace) is upgraded, protecting custom tools. Original
-email.sh and any existing env_secret.py are saved as `.lolad-orig`, without
-replacing an earlier backup.
+### Email tools (`email_tools.go`)
 
-The replacement scripts started as copies of jugui's email.sh/env_secret.py.
-Two compatibility fixes are local to these embedded copies:
+lolad installs one email tool set into lolabot agents: `assets/email.sh`,
+`env_secret.py`, `email_client.py`, `config.py`, `attachment_guard.py` and
+`email-send.sh` (tools/<same name>). The Python files are based on a newer
+fork of lolabot's client (password_secret, `secrets-needed`, `watch <account>`,
+delivery records, attachment allowlist), scrubbed of personal examples and
+paths; they carry the lolabot MIT notice (`assets/LICENSE.lolabot`). Local
+fixes: the client takes server settings (imap/smtp server and port) from
+lolabot.yaml `email.accounts`, where lolad writes them, over the credentials
+file, defaults `config_key` to the address's local part and `username` to the
+address, and its messages point at lolad instead of aim-secret. `email_sanitizer.py`
+is not shipped: the template's copy is used as is (it must exist).
 
-- env_secret.py parses exports, inline comments, escaped double-quoted values,
-  and duplicate keys consistently with agentcfg. It uses no shell evaluation.
-- email.sh first reuses already-exported named secrets, allowing the harness's
-  custom runtime.env_file to work; standalone runs can select an env file with
-  LOLAD_ENV_FILE, otherwise the reference `.env` behavior applies.
+Detection is by exact content (SHA-256 of the file without outer whitespace),
+never by guesses:
+
+- **Template set** (lolabot's plain `email.sh` or `email_client.py`, hashes of
+  every lolabot release in `email_tools.go`): install the whole set. Any other
+  tool file with unknown content blocks the upgrade (nothing is written, a Note
+  names the file). `email-send.sh` is optional: replaced only if stock, kept
+  with a Note if customised, never added.
+- **aim-secret wrapper** (`assets/email-aim-secret.sh`, unchanged behaviour):
+  replace email.sh and env_secret.py only.
+- **Earlier lolad set**: files whose hash is in a tool's `shipped` list are
+  refreshed; everything else stays. When an asset changes, append the old
+  version's hash to `shipped` (TestEmailToolsHashLists guards the current one).
+- **Customised email.sh** (unknown content): nothing is touched; Note.
+
+`env_secret.py` is lolad's own helper for email.sh (it parses exports, inline
+comments, escaped double-quoted values and duplicate keys as agentcfg does,
+without shell evaluation) and is restored whenever it differs. Every replaced file is first copied to `<file>.lolad-orig`; an
+existing backup is never overwritten, so it keeps the pre-lolad original.
+Files are written dependencies first and email.sh last; an interrupted upgrade
+is simply planned again.
+
+When it runs: `SaveEmail` (dashboard email settings, mailbox provision, rotate,
+detach), and also `Email` (every read of the email settings) when every
+password_secret in the credentials is set in the agent's env file, i.e. the
+email is lolad-managed and the old tools cannot log in. The read path only does
+template and earlier-lolad upgrades, never the aim-secret one.
+
+`assets/email.sh` does not rely on the caller's shell: it adds the usual
+install dirs to PATH, uses `.venv/bin/python` when present, and installs PyYAML
+into `.venv` when that interpreter lacks it (uv, else pip/ensurepip; it creates
+the venv if missing), with progress on stderr and exit 1 on failure. Secrets
+come from the exported environment, else the env file (`LOLAD_ENV_FILE`, else
+lolabot.yaml `runtime.env_file`, else `.env`), else aim-secret if installed; a
+name missing from the env file is left unset so only the account that needs it
+fails. Values are never printed.
 
 No live agent files, user settings, or vault services were changed or contacted.
 SMTP testing authenticates and quits; it never sends MAIL, RCPT, or DATA.

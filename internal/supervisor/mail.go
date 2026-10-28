@@ -106,8 +106,11 @@ func (s *Supervisor) sweep(ctx context.Context) {
 
 var retryDelays = []time.Duration{0, 30 * time.Second, 2 * time.Minute, 10 * time.Minute}
 
+// deliver does not age out idle: an agent quiet for hours must still wake on
+// mail. Reconcile re-checks the pane once hooks go stale, and the notifier
+// re-checks it before typing.
 func (s *Supervisor) deliver(ctx context.Context, r *record, now time.Time) {
-	if s.opts.Notifier == nil || s.opts.Mailer == nil || r.Status.State != core.StateIdle || now.Sub(r.Status.LastActivity) > 15*time.Minute {
+	if s.opts.Notifier == nil || s.opts.Mailer == nil || r.Status.State != core.StateIdle {
 		return
 	}
 	queue := s.queues[r.Status.Name]
