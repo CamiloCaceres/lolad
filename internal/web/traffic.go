@@ -141,7 +141,7 @@ func (s *server) traffic(w http.ResponseWriter, r *http.Request) {
 	}
 	me := s.svc.Me()
 	v.People = []participant{{Name: me.Name, Display: me.Display, Kind: "user"}}
-	list, err := s.svc.List(ctx)
+	list, err := s.list(ctx)
 	if err != nil {
 		s.fail(w, r, err)
 		return

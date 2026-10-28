@@ -517,30 +517,75 @@ func (s *Supervisor) Interrupt(ctx context.Context, name string) error {
 	}
 	return s.opts.Sessions.SendKeys(name, "Escape")
 }
+
+// List is on every dashboard request, so it holds s.mu only to copy records:
+// the env and plugin reads behind PendingRestart and the unread counts run
+// after it is released, and never block reconciliation or hooks.
 func (s *Supervisor) List(ctx context.Context) ([]core.AgentStatus, error) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	out := make([]core.AgentStatus, 0, len(s.agents))
+	snaps := make([]statusSnap, 0, len(s.agents))
 	for _, r := range s.agents {
-		a := r.Status
-		s.pendingRestart(r, &a)
-		a.Restarts = 0
-		for _, at := range r.RestartTimes {
-			if s.opts.Clock.Now().Sub(at) < 24*time.Hour {
-				a.Restarts++
-			}
-		}
-		if s.opts.Mailer != nil {
-			mail, e := s.opts.Mailer.Unread(ctx, a.Name)
-			if e != nil {
-				return nil, e
-			}
-			a.Unread = len(mail)
+		snaps = append(snaps, s.snap(r))
+	}
+	s.mu.Unlock()
+	out := make([]core.AgentStatus, 0, len(snaps))
+	for _, sn := range snaps {
+		a, e := s.finish(ctx, sn)
+		if e != nil {
+			return nil, e
 		}
 		out = append(out, a)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out, nil
+}
+
+// statusSnap is a record's status plus what pendingRestart compares, copied
+// under s.mu (hotReload updates LaunchFingerprint in place).
+type statusSnap struct {
+	status  core.AgentStatus
+	launch  core.Runtime
+	fp      map[string]string // nil: no session to compare against
+	liveEnv bool
+}
+
+func (s *Supervisor) snap(r *record) statusSnap {
+	sn := statusSnap{status: r.Status, launch: r.LaunchRuntime, liveEnv: r.LiveEnv}
+	sn.status.Restarts = 0
+	for _, at := range r.RestartTimes {
+		if s.opts.Clock.Now().Sub(at) < 24*time.Hour {
+			sn.status.Restarts++
+		}
+	}
+	if len(r.LaunchFingerprint) > 0 && running(r.Status.State) {
+		sn.fp = make(map[string]string, 3)
+		for _, k := range []string{"env", "skills", "plugin_set"} {
+			if v, ok := r.LaunchFingerprint[k]; ok {
+				sn.fp[k] = v
+			}
+		}
+	}
+	return sn
+}
+
+func (s *Supervisor) finish(ctx context.Context, sn statusSnap) (core.AgentStatus, error) {
+	a := sn.status
+	s.pendingRestart(sn, &a)
+	if s.opts.Mailer != nil {
+		mail, e := s.opts.Mailer.Unread(ctx, a.Name)
+		if e != nil {
+			return core.AgentStatus{}, e
+		}
+		a.Unread = len(mail)
+	}
+	return a, nil
+}
+
+// running reports whether the reconcile loop last saw a live pane. Status
+// reads trust it rather than asking tmux per agent per request; Reconcile
+// moves a vanished or dead pane to crashed or stopped within one tick.
+func running(st core.State) bool {
+	return st != core.StateStopped && st != core.StateCrashed && st != core.StateFailed
 }
 
 // AdoptedHooks returns the last persisted hook state of each session adopted
@@ -552,26 +597,32 @@ func (s *Supervisor) AdoptedHooks() []core.HookEvent {
 	return append([]core.HookEvent(nil), s.adopted...)
 }
 func (s *Supervisor) Get(ctx context.Context, name string) (core.AgentStatus, error) {
-	all, e := s.List(ctx)
-	if e != nil {
-		return core.AgentStatus{}, e
+	s.mu.Lock()
+	r := s.agents[name]
+	var sn statusSnap
+	if r != nil {
+		sn = s.snap(r)
 	}
-	for _, a := range all {
-		if a.Name == name {
-			return a, nil
-		}
+	s.mu.Unlock()
+	if r == nil {
+		return core.AgentStatus{}, core.ErrNotFound
 	}
-	return core.AgentStatus{}, core.ErrNotFound
+	return s.finish(ctx, sn)
+}
+func (s *Supervisor) known(name string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.agents[name] != nil
 }
 func (s *Supervisor) Capture(ctx context.Context, name string, lines int) (string, error) {
-	if _, e := s.Get(ctx, name); e != nil {
-		return "", e
+	if !s.known(name) {
+		return "", core.ErrNotFound
 	}
 	return s.opts.Sessions.Capture(name, lines, true)
 }
 func (s *Supervisor) Attach(ctx context.Context, name string, readOnly bool) (core.Terminal, error) {
-	if _, e := s.Get(ctx, name); e != nil {
-		return nil, e
+	if !s.known(name) {
+		return nil, core.ErrNotFound
 	}
 	return s.opts.Sessions.Attach(ctx, name, readOnly)
 }
@@ -769,36 +820,48 @@ func (s *Supervisor) RecordEvent(ev core.Event) {
 // skills and plugin updates in place (hotReload) and re-reads the env file
 // before each Bash command (LiveEnv). Enabling or disabling a plugin is
 // launch-only: /reload-plugins does not re-read the settings overlay.
-func (s *Supervisor) pendingRestart(r *record, a *core.AgentStatus) {
+func (s *Supervisor) pendingRestart(sn statusSnap, a *core.AgentStatus) {
 	a.PendingRestart = false
 	a.PendingReason = ""
-	if len(r.LaunchFingerprint) == 0 || !s.opts.Sessions.Exists(a.Name) {
-		return
-	}
-	dead, _, err := s.opts.Sessions.PaneDead(a.Name)
-	if err != nil || dead {
+	if sn.fp == nil {
 		return
 	}
 	reasons := []string{}
-	if a.Runtime.Model != r.LaunchRuntime.Model {
+	if a.Runtime.Model != sn.launch.Model {
 		reasons = append(reasons, "model changed")
 	}
-	if a.Runtime.SkillsMode() != r.LaunchRuntime.SkillsMode() {
+	if a.Runtime.SkillsMode() != sn.launch.SkillsMode() {
 		reasons = append(reasons, "skills mode changed")
 	}
-	if !reflect.DeepEqual(launchFields(r.LaunchRuntime), launchFields(a.Runtime)) {
+	if !reflect.DeepEqual(launchFields(sn.launch), launchFields(a.Runtime)) {
 		reasons = append(reasons, "runtime changed")
 	}
 	claude := a.Runtime.Harness == core.HarnessClaude
-	_, parts := agentcfg.New(a.Dir, a.Runtime.Harness, agentcfg.Options{}).Fingerprint(a.Runtime.EnvFile, a.Runtime)
-	if (!claude || !r.LiveEnv) && parts["env"] != r.LaunchFingerprint["env"] {
-		reasons = append(reasons, "env file changed")
+	// Compute only the parts compared below: a claude session hot-reloads
+	// skills and plugin updates, so walking those folders here is wasted.
+	var want []string
+	if !claude || !sn.liveEnv {
+		want = append(want, "env")
 	}
-	if !claude && parts["skills"] != r.LaunchFingerprint["skills"] {
-		reasons = append(reasons, "skills changed")
+	if !claude {
+		want = append(want, "skills")
 	}
 	// Sessions launched before plugin_set was recorded cannot be compared.
-	if old, ok := r.LaunchFingerprint["plugin_set"]; ok && claude && old != parts["plugin_set"] {
+	oldSet, hasSet := sn.fp["plugin_set"]
+	if claude && hasSet {
+		want = append(want, "plugin_set")
+	}
+	parts := map[string]string{}
+	if len(want) > 0 {
+		parts = agentcfg.New(a.Dir, a.Runtime.Harness, agentcfg.Options{}).FingerprintParts(a.Runtime.EnvFile, a.Runtime, want...)
+	}
+	if (!claude || !sn.liveEnv) && parts["env"] != sn.fp["env"] {
+		reasons = append(reasons, "env file changed")
+	}
+	if !claude && parts["skills"] != sn.fp["skills"] {
+		reasons = append(reasons, "skills changed")
+	}
+	if claude && hasSet && oldSet != parts["plugin_set"] {
 		reasons = append(reasons, "plugins enabled or disabled")
 	}
 	a.PendingRestart = len(reasons) > 0

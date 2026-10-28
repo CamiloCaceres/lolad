@@ -3,10 +3,13 @@ package agentcfg
 import (
 	"encoding/json"
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/CamiloCaceres/lolad/internal/core"
 	"gopkg.in/yaml.v3"
@@ -194,63 +197,87 @@ func (d *Dir) RemoveSkill(id string) error {
 	return os.RemoveAll(p)
 }
 func (d *Dir) Fingerprint(envFile string, rt core.Runtime) (string, map[string]string) {
+	parts := d.FingerprintParts(envFile, rt)
+	b, _ := json.Marshal(parts)
+	return hash(b), parts
+}
+
+// FingerprintParts computes only the named parts of Fingerprint (all of them
+// when none are named). The skills and plugins parts walk every inherited
+// skill and plugin folder; a caller comparing just env or plugin_set should
+// not pay for that on each status read.
+func (d *Dir) FingerprintParts(envFile string, rt core.Runtime, want ...string) map[string]string {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	need := func(part string) bool { return len(want) == 0 || slices.Contains(want, part) }
 	parts := map[string]string{}
-	b, _ := json.Marshal(rt)
-	parts["runtime"] = hash(b)
-	p, e := d.envPath(envFile)
-	if e == nil {
-		b, _ = os.ReadFile(p)
-	} else {
-		b = nil
+	if need("runtime") {
+		b, _ := json.Marshal(rt)
+		parts["runtime"] = hash(b)
 	}
-	parts["env"] = hash(b)
-	var entries []string
-	for _, rel := range []string{".claude/skills", ".codewhale-home/skills", ".codewhale/skills"} {
-		p, e := d.safe(rel, true)
-		if e != nil {
-			continue
+	if need("env") {
+		var b []byte
+		if p, e := d.envPath(envFile); e == nil {
+			b, _ = os.ReadFile(p)
 		}
-		fingerprintSkills(d.root, p, map[string]bool{}, &entries)
+		parts["env"] = hash(b)
 	}
-
-	var plugins, enabled []string
-	if rt.SkillsMode() == core.SkillsInherit {
-		for _, root := range d.userSkillRoots() {
-			fingerprintSkills(d.root, root, map[string]bool{}, &entries)
+	inherit := rt.SkillsMode() == core.SkillsInherit
+	if need("skills") {
+		var entries []string
+		for _, rel := range []string{".claude/skills", ".codewhale-home/skills", ".codewhale/skills"} {
+			p, e := d.safe(rel, true)
+			if e != nil {
+				continue
+			}
+			fingerprintSkills(d.root, p, &entries)
 		}
-		if d.harness == core.HarnessClaude {
-			for name, root := range d.enabledPluginRoots() {
-				enabled = append(enabled, name)
-				plugins = append(plugins, "plugin:"+name+":"+root)
-				fingerprintSkills(d.root, root, map[string]bool{}, &plugins)
+		if inherit {
+			for _, root := range d.userSkillRoots() {
+				fingerprintSkills(d.root, root, &entries)
 			}
 		}
+		sort.Strings(entries)
+		parts["skills"] = hash([]byte(strings.Join(entries, "\n")))
 	}
 	// Plugins are their own parts: a running Claude Code activates updated
 	// plugin versions with /reload-plugins and skill folders with
 	// /reload-skills, but which plugins are enabled is read only at launch.
-	sort.Strings(entries)
-	parts["skills"] = hash([]byte(strings.Join(entries, "\n")))
-	sort.Strings(plugins)
-	parts["plugins"] = hash([]byte(strings.Join(plugins, "\n")))
-	sort.Strings(enabled)
-	parts["plugin_set"] = hash([]byte(strings.Join(enabled, "\n")))
-	var email []byte
-	b, n, e := d.readYAML("lolabot.yaml")
-	if e == nil {
-		a, z := blockSpan(b, n, "email")
-		email = append(email, b[a:z]...)
+	if need("plugins") || need("plugin_set") {
+		var plugins, enabled []string
+		if inherit && d.harness == core.HarnessClaude {
+			for name, root := range d.enabledPluginRoots() {
+				enabled = append(enabled, name)
+				if need("plugins") {
+					plugins = append(plugins, "plugin:"+name+":"+root)
+					fingerprintSkills(d.root, root, &plugins)
+				}
+			}
+		}
+		if need("plugins") {
+			sort.Strings(plugins)
+			parts["plugins"] = hash([]byte(strings.Join(plugins, "\n")))
+		}
+		if need("plugin_set") {
+			sort.Strings(enabled)
+			parts["plugin_set"] = hash([]byte(strings.Join(enabled, "\n")))
+		}
 	}
-	_, n, e = d.readYAML("brain/credentials.yaml")
-	if e == nil {
-		b, _ = yaml.Marshal(nodeGet(n, "email_accounts"))
-		email = append(email, b...)
+	if need("email") {
+		var email []byte
+		b, n, e := d.readYAML("lolabot.yaml")
+		if e == nil {
+			a, z := blockSpan(b, n, "email")
+			email = append(email, b[a:z]...)
+		}
+		_, n, e = d.readYAML("brain/credentials.yaml")
+		if e == nil {
+			b, _ = yaml.Marshal(nodeGet(n, "email_accounts"))
+			email = append(email, b...)
+		}
+		parts["email"] = hash(email)
 	}
-	parts["email"] = hash(email)
-	b, _ = json.Marshal(parts)
-	return hash(b), parts
+	return parts
 }
 
 // Follow linked skill directories as the harness does, tracking cycles without
@@ -260,25 +287,40 @@ func (d *Dir) Fingerprint(envFile string, rt core.Runtime) (string, map[string]s
 // removes per-process `.in_use/<pid>` markers inside every plugin it loads, so
 // counting them made each launch report its own skills as changed. Synced
 // skills likewise get `.last-complete-round` rewritten on every sync.
-func fingerprintSkills(root, path string, stack map[string]bool, entries *[]string) {
-	if base := filepath.Base(path); base == ".in_use" || base == ".last-complete-round" {
+func fingerprintSkills(root, path string, entries *[]string) {
+	if skipSkillEntry(filepath.Base(path)) {
 		return
 	}
 	real, e := filepath.EvalSymlinks(path)
-	if e != nil || stack[real] {
+	if e != nil {
 		return
 	}
 	st, e := os.Stat(real)
 	if e != nil {
 		return
 	}
-	rel, _ := filepath.Rel(root, path)
-	if st.IsDir() {
-		*entries = append(*entries, filepath.ToSlash(rel)+"/")
-	} else {
-		*entries = append(*entries, filepath.ToSlash(rel)+":"+st.ModTime().UTC().Format("2006-01-02T15:04:05.000000000Z"))
+	rel, e := filepath.Rel(root, path)
+	walkSkills(rel, e == nil, real, st.IsDir(), st.ModTime(), map[string]bool{}, entries)
+}
+
+func skipSkillEntry(name string) bool { return name == ".in_use" || name == ".last-complete-round" }
+
+// walkSkills records one resolved entry and, for a directory, its children.
+// Only symlinked children are resolved: any other child's real path is its
+// parent's plus its name and its Lstat is its Stat, so a plain file costs one
+// syscall rather than a full EvalSymlinks per path component. Names stay
+// lexically relative to the fingerprint root (empty when that root has no
+// relative path to it), as filepath.Rel would give them.
+func walkSkills(rel string, named bool, real string, dir bool, mod time.Time, stack map[string]bool, entries *[]string) {
+	name := ""
+	if named {
+		name = filepath.ToSlash(rel)
+	}
+	if !dir {
+		*entries = append(*entries, name+":"+mod.UTC().Format("2006-01-02T15:04:05.000000000Z"))
 		return
 	}
+	*entries = append(*entries, name+"/")
 	stack[real] = true
 	defer delete(stack, real)
 	children, e := os.ReadDir(real)
@@ -286,7 +328,34 @@ func fingerprintSkills(root, path string, stack map[string]bool, entries *[]stri
 		return
 	}
 	for _, child := range children {
-		fingerprintSkills(root, filepath.Join(path, child.Name()), stack, entries)
+		if skipSkillEntry(child.Name()) {
+			continue
+		}
+		childRel := filepath.Join(rel, child.Name())
+		childReal := filepath.Join(real, child.Name())
+		if child.Type()&fs.ModeSymlink != 0 {
+			if childReal, e = filepath.EvalSymlinks(childReal); e != nil || stack[childReal] {
+				continue
+			}
+			st, e := os.Stat(childReal)
+			if e != nil {
+				continue
+			}
+			walkSkills(childRel, named, childReal, st.IsDir(), st.ModTime(), stack, entries)
+			continue
+		}
+		if stack[childReal] {
+			continue
+		}
+		if child.IsDir() {
+			walkSkills(childRel, named, childReal, true, time.Time{}, stack, entries)
+			continue
+		}
+		info, e := child.Info()
+		if e != nil {
+			continue
+		}
+		walkSkills(childRel, named, childReal, false, info.ModTime(), stack, entries)
 	}
 }
 

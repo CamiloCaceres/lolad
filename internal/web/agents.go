@@ -108,7 +108,7 @@ var stateOrder = []core.State{core.StateFailed, core.StateCrashed, core.StateWai
 
 func (s *server) fleetData(ctx context.Context) (fleetView, error) {
 	var v fleetView
-	list, err := s.svc.List(ctx)
+	list, err := s.list(ctx)
 	if err != nil {
 		return v, err
 	}
@@ -173,7 +173,7 @@ type activityItem struct {
 }
 
 func (s *server) agentData(ctx context.Context, name string) (agentView, error) {
-	a, err := s.svc.Get(ctx, name)
+	a, err := s.agentStatus(ctx, name)
 	if err != nil {
 		return agentView{}, err
 	}
@@ -348,7 +348,7 @@ func (s *server) control(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.FormValue("from") == "settings" {
-		a, err := s.svc.Get(ctx, name)
+		a, err := s.agentStatus(ctx, name)
 		if err != nil {
 			s.fail(w, r, err)
 			return

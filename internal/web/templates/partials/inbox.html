@@ -136,7 +136,7 @@
 {{template "conv-list" .V}}
 {{template "nav-badges" .Badges}}{{end}}
 
-{{define "home"}}<section class="home" id="inbox-home" aria-label="Inbox" hx-get="/" hx-select="#inbox-home" hx-target="this" hx-swap="outerHTML" hx-trigger="lolad:mail from:body delay:400ms, lolad:federation from:body delay:400ms" hx-push-url="false">
+{{define "home"}}<section class="home" id="inbox-home" aria-label="Inbox" hx-get="/" hx-select="#inbox-home" hx-target="this" hx-disinherit="hx-select hx-target hx-swap hx-push-url" hx-swap="outerHTML" hx-trigger="lolad:mail from:body delay:400ms, lolad:federation from:body delay:400ms" hx-push-url="false">
   <div class="home-inner">
   <header class="inbox-home-head"><div><h1>Inbox</h1><p>Conversations with your agents.</p></div>{{if .Agents}}{{template "new-message" .Agents}}{{end}}</header>
   {{if .Approvals}}<section class="federation-approvals" aria-label="Sender approvals"><h2 class="home-h your-turn">New people need your approval <span class="count is-you">{{len .Approvals}}</span></h2>{{range .Approvals}}<article class="federation-approval"><strong>{{or .RemoteDisplay .Remote}} wants to message {{.LocalDisplay}}</strong><p>{{.Peer}} · “{{.FirstSubject}}” · {{.Held}} waiting</p><form method="post" action="/grants/decide"><input type="hidden" name="peer" value="{{.Peer}}"><input type="hidden" name="remote" value="{{.Remote}}"><input type="hidden" name="local" value="{{.Local}}"><button class="btn btn-sm" name="decision" value="allow">Allow</button><button class="btn btn-sm btn-ghost" name="decision" value="block">Block</button></form></article>{{end}}</section>{{end}}

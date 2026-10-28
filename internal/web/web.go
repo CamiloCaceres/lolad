@@ -148,7 +148,7 @@ func New(svc core.Service, opts Options) http.Handler {
 	if opts.TrustedOrigin != "" {
 		_ = protection.AddTrustedOrigin(opts.TrustedOrigin)
 	}
-	return headers(protection.Handler(s.fresh(mux)))
+	return headers(protection.Handler(s.fresh(cached(mux))))
 }
 
 func headers(h http.Handler) http.Handler {
@@ -263,7 +263,7 @@ type badges struct {
 
 func (s *server) badges(r *http.Request) badges {
 	var b badges
-	if convs, err := s.svc.Conversations(r.Context()); err == nil {
+	if convs, err := s.conversations(r.Context()); err == nil {
 		for _, c := range convs {
 			b.Unread += c.Unread
 		}
@@ -271,7 +271,7 @@ func (s *server) badges(r *http.Request) badges {
 			b.Pending += len(asks)
 		}
 	}
-	if agents, err := s.svc.List(r.Context()); err == nil {
+	if agents, err := s.list(r.Context()); err == nil {
 		for _, a := range agents {
 			if attention(a.State) {
 				b.Alert++

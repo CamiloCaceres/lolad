@@ -42,7 +42,7 @@ func (s *Supervisor) hotReload(ctx context.Context, r *record, now time.Time) {
 	}
 	r.NextHotCheck = now.Add(15 * time.Second)
 	name := r.Status.Name
-	_, parts := agentcfg.New(r.Status.Dir, r.Status.Runtime.Harness, agentcfg.Options{}).Fingerprint(r.Status.Runtime.EnvFile, r.Status.Runtime)
+	parts := agentcfg.New(r.Status.Dir, r.Status.Runtime.Harness, agentcfg.Options{}).FingerprintParts(r.Status.Runtime.EnvFile, r.Status.Runtime, "plugins", "skills")
 	for _, step := range []struct{ part, command string }{{"plugins", "/reload-plugins"}, {"skills", "/reload-skills"}} {
 		if parts[step.part] == r.LaunchFingerprint[step.part] {
 			continue

@@ -86,7 +86,7 @@ func (s *server) attachBlocked(ctx context.Context, peer string) (string, int) {
 	if core.IsRemoteName(peer) {
 		return noRemoteFiles, http.StatusUnprocessableEntity
 	}
-	if _, err := s.svc.Get(ctx, peer); err != nil {
+	if _, err := s.agentStatus(ctx, peer); err != nil {
 		if errors.Is(err, core.ErrNotFound) {
 			return "There is no agent called " + peer + ".", http.StatusNotFound
 		}

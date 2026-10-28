@@ -92,7 +92,7 @@ var fileGroupLabels = map[string]string{"instructions": "Instructions", "config"
 
 func (s *server) settingsData(r *http.Request, name, tab string) (settingsView, error) {
 	ctx := r.Context()
-	a, err := s.svc.Get(ctx, name)
+	a, err := s.agentStatus(ctx, name)
 	if err != nil {
 		return settingsView{}, err
 	}
@@ -228,7 +228,7 @@ func (s *server) settled(w http.ResponseWriter, r *http.Request, tab, flash stri
 
 func (s *server) saveRuntime(w http.ResponseWriter, r *http.Request) {
 	ctx, name := r.Context(), r.PathValue("name")
-	a, err := s.svc.Get(ctx, name)
+	a, err := s.agentStatus(ctx, name)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -272,7 +272,7 @@ func defaultOn(on bool) *bool {
 
 func (s *server) saveSkillsMode(w http.ResponseWriter, r *http.Request) {
 	ctx, name := r.Context(), r.PathValue("name")
-	a, err := s.svc.Get(ctx, name)
+	a, err := s.agentStatus(ctx, name)
 	if err != nil {
 		s.fail(w, r, err)
 		return

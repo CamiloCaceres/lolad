@@ -35,7 +35,7 @@ func (s *server) connectionData(r *http.Request) (connectionsView, error) {
 	if err != nil {
 		return v, err
 	}
-	agents, err := s.svc.List(ctx)
+	agents, err := s.list(ctx)
 	if err != nil {
 		return v, err
 	}
@@ -138,7 +138,7 @@ func (s *server) connectionUpdate(w http.ResponseWriter, r *http.Request) {
 	case "reachability":
 		u.UserReachable = new(r.FormValue("reachable") == "yes")
 	case "shares":
-		agents, e := s.svc.List(r.Context())
+		agents, e := s.list(r.Context())
 		if e != nil {
 			s.fail(w, r, e)
 			return

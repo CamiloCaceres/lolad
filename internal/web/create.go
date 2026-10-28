@@ -39,7 +39,7 @@ func (s *server) newData(r *http.Request) (newView, error) {
 	if err != nil {
 		return v, err
 	}
-	v.Agents, err = s.svc.List(r.Context())
+	v.Agents, err = s.list(r.Context())
 	v.ClaudeModels = s.svc.Models(core.HarnessClaude)
 	v.CodewhaleModels = s.svc.Models(core.HarnessCodewhale)
 	return v, err
@@ -97,7 +97,7 @@ func (s *server) create(w http.ResponseWriter, r *http.Request) {
 			fields[key] = "Setup cannot use quotes, backslashes, newlines, | or & here."
 		}
 	}
-	agents, err := s.svc.List(r.Context())
+	agents, err := s.list(r.Context())
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -171,7 +171,7 @@ func (s *server) adopt(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	agents, err := s.svc.List(r.Context())
+	agents, err := s.list(r.Context())
 	if err != nil {
 		s.fail(w, r, err)
 		return

@@ -60,7 +60,7 @@ func (s *server) orgData(ctx context.Context) (orgView, error) {
 	if err != nil {
 		return v, err
 	}
-	list, err := s.svc.List(ctx)
+	list, err := s.list(ctx)
 	if err != nil {
 		return v, err
 	}

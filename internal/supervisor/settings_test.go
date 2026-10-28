@@ -78,7 +78,18 @@ func TestPendingRestartAndPersistence(t *testing.T) {
 	if e = os.WriteFile(filepath.Join(dir, ".env"), []byte("TOKEN=changed\n"), 0600); e != nil {
 		t.Fatal(e)
 	}
+	f.s.mu.Lock()
+	f.s.agents["agent"].LiveEnv = false
+	f.s.mu.Unlock()
+	if status, e = f.s.Get(ctx, "agent"); e != nil || status.PendingReason != "env file changed" {
+		t.Fatalf("running pane drift: %q %v", status.PendingReason, e)
+	}
+	// Status reads trust the reconciled state instead of asking tmux, so a
+	// vanished pane stops being pending once a tick has seen it.
 	f.sessions.exists = false
+	if e = f.s.Reconcile(ctx); e != nil {
+		t.Fatal(e)
+	}
 	status, e = f.s.Get(ctx, "agent")
 	if e != nil || status.PendingRestart {
 		t.Fatal("stopped pane marked pending", e)

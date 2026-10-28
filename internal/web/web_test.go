@@ -715,3 +715,23 @@ func TestStalePageReloads(t *testing.T) {
 		t.Fatal("file input must carry hidden so it never renders unstyled")
 	}
 }
+
+// A live block that refreshes itself with hx-select must not lend that
+// select (or its target, swap and push-url) to the boosted links inside it:
+// a click would then pick the block out of the next page, find nothing and
+// leave the screen blank.
+func TestLiveBlocksDisinheritSelect(t *testing.T) {
+	e := setup(t)
+	tag := regexp.MustCompile(`<(section|div|ul|ol|header|aside)\b[^>]*\bhx-select="[^"]*"[^>]*>`)
+	for _, p := range []string{"/", "/inbox/lola", "/agents", "/agents/lola", "/org", "/connections"} {
+		code, body := e.get(p)
+		if code != http.StatusOK {
+			t.Fatalf("GET %s = %d", p, code)
+		}
+		for _, m := range tag.FindAllString(body, -1) {
+			if !strings.Contains(m, `hx-disinherit="hx-select hx-target hx-swap hx-push-url"`) {
+				t.Errorf("GET %s: %s lends hx-select to its links", p, m)
+			}
+		}
+	}
+}

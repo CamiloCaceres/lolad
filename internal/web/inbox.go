@@ -85,10 +85,18 @@ type askView struct {
 
 // openAsks finds the questions each peer asked that the user hasn't answered
 // yet. Conversation.Pending only looks at the last message; an ask followed by
-// a progress update is still waiting.
+// a progress update is still waiting. convs must be the request's full list
+// (s.conversations): within a GET the answer is kept for the nav badges.
 func (s *server) openAsks(ctx context.Context, convs []core.Conversation) map[string][]msgView {
+	c := cacheOf(ctx)
+	if c != nil && c.asks != nil {
+		return c.asks
+	}
 	me := s.svc.Me().Name
 	out := map[string][]msgView{}
+	if c != nil {
+		defer func() { c.asks = out }()
+	}
 	for _, c := range convs {
 		if c.Last.FromName == me {
 			continue // anything earlier was answered by what the user wrote last
@@ -129,11 +137,11 @@ func agentMap(list []core.AgentStatus) map[string]*core.AgentStatus {
 
 func (s *server) inboxData(ctx context.Context, active string) (inboxView, map[string]*core.AgentStatus, error) {
 	v := inboxView{Active: active}
-	convs, err := s.svc.Conversations(ctx)
+	convs, err := s.conversations(ctx)
 	if err != nil {
 		return v, nil, err
 	}
-	list, err := s.svc.List(ctx)
+	list, err := s.list(ctx)
 	if err != nil {
 		return v, nil, err
 	}
@@ -385,7 +393,7 @@ func dayLabel(t time.Time) string {
 
 func (s *server) thread(w http.ResponseWriter, r *http.Request) {
 	peer := r.PathValue("peer")
-	list, err := s.svc.List(r.Context())
+	list, err := s.list(r.Context())
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -421,7 +429,7 @@ func (s *server) messages(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) renderThread(w http.ResponseWriter, r *http.Request, peer, errMsg string, code int) {
 	ctx := r.Context()
-	list, err := s.svc.List(ctx)
+	list, err := s.list(ctx)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -446,7 +454,7 @@ func (s *server) renderThread(w http.ResponseWriter, r *http.Request, peer, errM
 
 func (s *server) threadHead(w http.ResponseWriter, r *http.Request) {
 	peer := r.PathValue("peer")
-	list, e := s.svc.List(r.Context())
+	list, e := s.list(r.Context())
 	if e != nil {
 		s.fail(w, r, e)
 		return
@@ -456,7 +464,7 @@ func (s *server) threadHead(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, e)
 		return
 	}
-	if a, err := s.svc.Get(r.Context(), peer); err == nil {
+	if a, err := s.agentStatus(r.Context(), peer); err == nil {
 		t.Agent, t.Display, t.CanSend = &a, a.Display, true
 	}
 	s.fragment(w, http.StatusOK, "thread-head", t)
