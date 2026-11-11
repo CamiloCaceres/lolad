@@ -66,19 +66,52 @@ final class Protocol {
 
   static JSONObject outgoing(String peer, String body, JSONObject parent, String decision)
       throws JSONException {
+    return outgoing(peer, body, parent, decision, null, "");
+  }
+
+  /**
+   * Sends a message with optional, already-uploaded attachment ids. The body may
+   * be empty only when files are attached, and the required subject then comes
+   * from {@code fallbackSubject} (derived from the file names by the caller).
+   */
+  static JSONObject outgoing(
+      String peer,
+      String body,
+      JSONObject parent,
+      String decision,
+      java.util.List<String> attachmentIds,
+      String fallbackSubject)
+      throws JSONException {
+    String text = body == null ? "" : body;
+    java.util.List<String> files = attachmentIds == null ? java.util.Collections.emptyList() : attachmentIds;
+    for (String id : files) {
+      if (id == null || id.trim().isEmpty())
+        throw new IllegalArgumentException("Attach a file before sending.");
+    }
+    if (files.size() > Attachments.MAX_FILES)
+      throw new IllegalArgumentException("Attach at most " + Attachments.MAX_FILES + " files.");
+    if (decision == null && text.trim().isEmpty() && files.isEmpty())
+      throw new IllegalArgumentException("Write a message or attach a file.");
     JSONObject chat =
         new JSONObject()
             .put("kind", decision != null ? "decision" : parent != null ? "reply" : "say");
     JSONObject out =
         new JSONObject()
             .put("to", peer)
-            .put("body", decision == null ? body : decision)
+            .put("body", decision == null ? text : decision)
             .put("type", parent == null ? "request" : "response");
     if (parent != null) {
       out.put("in_reply_to", parent.getString("id"));
       String subject = parent.optString("subject").replaceFirst("(?i)^(Re:\\s*)+", "");
-      out.put("subject", subject.isEmpty() ? "Re: Message" : "Re: " + subject);
-    } else out.put("subject", body.length() > 80 ? body.substring(0, 80) : body);
+      String reply = subject.isEmpty() ? "Re: Message" : "Re: " + subject;
+      out.put("subject", reply.length() > 256 ? reply.substring(0, 256) : reply);
+    } else {
+      String subject = text.trim();
+      if (subject.isEmpty()) subject = Attachments.safe(fallbackSubject).trim();
+      if (subject.isEmpty())
+        subject = files.isEmpty() ? "Message" : files.size() == 1 ? "Attachment" : files.size() + " files";
+      out.put("subject", subject.length() > 80 ? subject.substring(0, 80) : subject);
+    }
     if (decision != null) {
       if (parent == null || !"ask".equals(kind(parent)))
         throw new IllegalArgumentException("Question required");
@@ -89,6 +122,7 @@ final class Protocol {
       if (!valid) throw new IllegalArgumentException("Unknown option");
       chat.put("decision", decision);
     }
+    if (!files.isEmpty()) out.put("attachments", new JSONArray(files));
     return out.put("context", new JSONObject().put("userchat", chat));
   }
 

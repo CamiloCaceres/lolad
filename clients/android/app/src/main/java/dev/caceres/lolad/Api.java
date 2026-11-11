@@ -2,7 +2,10 @@ package dev.caceres.lolad;
 
 import java.io.*;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import okhttp3.*;
+import okio.BufferedSink;
 import org.json.*;
 
 final class Api {
@@ -20,6 +23,15 @@ final class Api {
             .followRedirects(false)
             .followSslRedirects(false)
             .build();
+  }
+
+  /** Byte progress for streamed uploads, downloads and previews. */
+  interface Progress {
+    void progress(long written, long total);
+  }
+
+  interface StreamSource {
+    InputStream open() throws IOException;
   }
 
   static final class Failure extends IOException {
@@ -72,6 +84,192 @@ final class Api {
         message = "Server error (" + r.code() + "). Try again shortly.";
     }
     throw new Failure(r.code(), message, Math.max(1, retry));
+  }
+
+  /**
+   * The exact multipart shape the server requires: one part named "file".
+   * OkHttp percent-escapes quotes and line breaks in the filename.
+   */
+  static MultipartBody multipart(String filename, RequestBody part) {
+    return new MultipartBody.Builder()
+        .setType(MultipartBody.FORM)
+        .addFormDataPart("file", filename, part)
+        .build();
+  }
+
+  /** Streams a file from disk; the file is never read into memory as a whole. */
+  static RequestBody fileBody(File file, String contentType, Progress progress) {
+    long length = file == null ? 0 : file.length();
+    return streamBody(() -> new FileInputStream(file), length, contentType, progress);
+  }
+
+  static RequestBody streamBody(
+      StreamSource source, long length, String contentType, Progress progress) {
+    MediaType type =
+        contentType == null || contentType.isEmpty() ? null : MediaType.parse(contentType);
+    return new RequestBody() {
+      @Override
+      public MediaType contentType() {
+        return type;
+      }
+
+      @Override
+      public long contentLength() {
+        return length;
+      }
+
+      @Override
+      public void writeTo(BufferedSink sink) throws IOException {
+        long total = length;
+        long written = 0;
+        int last = -1;
+        byte[] buffer = new byte[64 * 1024];
+        try (InputStream input = source.open()) {
+          if (input == null) throw new IOException("That file could not be opened.");
+          int read;
+          while ((read = input.read(buffer)) != -1) {
+            sink.write(buffer, 0, read);
+            written += read;
+            if (progress != null) {
+              int percent = total > 0 ? (int) Math.min(100, written * 100 / total) : 0;
+              if (percent != last) {
+                last = percent;
+                progress.progress(written, total);
+              }
+            }
+          }
+        }
+        if (progress != null) progress.progress(written, total > 0 ? total : written);
+      }
+    };
+  }
+
+  /** Uploads one file to a conversation; returns the stored attachment JSON. */
+  JSONObject upload(
+      String peer, String filename, String contentType, RequestBody part, AtomicReference<Call> handle)
+      throws Exception {
+    Request.Builder builder =
+        new Request.Builder()
+            .url(server + "/api/mail/attachments?peer=" + Protocol.segment(peer))
+            .post(multipart(filename, part));
+    if (!token.isEmpty()) builder.header("Authorization", "Bearer " + token);
+    Call call = http.newBuilder().readTimeout(120, TimeUnit.SECONDS).build().newCall(builder.build());
+    if (handle != null) handle.set(call);
+    try (Response response = call.execute()) {
+      if (!response.isSuccessful()) {
+        throw new Failure(
+            response.code(), Attachments.uploadError(response.code()), 60);
+      }
+      if (response.body() == null) throw new IOException("The server sent no attachment.");
+      return new JSONObject(response.body().string());
+    }
+  }
+
+  String attachmentPath(String peer, String id, boolean inline) {
+    return "/api/mail/attachments/"
+        + Protocol.segment(id)
+        + "?peer="
+        + Protocol.segment(peer)
+        + (inline ? "&inline=1" : "");
+  }
+
+  /** Synchronous streamed fetch to a file, for cached inline thumbnails. */
+  void fetch(String peer, String id, boolean inline, File target, Progress progress)
+      throws IOException {
+    Request.Builder builder = new Request.Builder().url(server + attachmentPath(peer, id, inline));
+    if (!token.isEmpty()) builder.header("Authorization", "Bearer " + token);
+    try (Response response = http.newCall(builder.build()).execute()) {
+      if (!response.isSuccessful())
+        throw new Failure(response.code(), Attachments.downloadError(response.code()), 60);
+      if (response.body() == null) throw new IOException("The server sent no file.");
+      long total = response.body().contentLength();
+      if (total > 40L * 1024 * 1024) throw new IOException("That preview is too large.");
+      File temp = new File(target.getPath() + ".part");
+      byte[] buffer = new byte[64 * 1024];
+      long written = 0;
+      int last = -1;
+      try (InputStream in = response.body().byteStream();
+          OutputStream out = new FileOutputStream(temp)) {
+        int read;
+        while ((read = in.read(buffer)) != -1) {
+          out.write(buffer, 0, read);
+          written += read;
+          if (progress != null) {
+            int percent = total > 0 ? (int) Math.min(100, written * 100 / total) : 0;
+            if (percent != last) {
+              last = percent;
+              progress.progress(written, total);
+            }
+          }
+        }
+      }
+      if (!temp.renameTo(target)) {
+        temp.delete();
+        throw new IOException("Could not save that preview.");
+      }
+    }
+  }
+
+  /** A streamed download; images ask for inline=1 and decide what they get from Content-Type. */
+  Call download(
+      String peer,
+      String id,
+      boolean inline,
+      OutputStream sink,
+      Progress progress,
+      Runnable success,
+      Consumer<Exception> failure) {
+    Request.Builder builder = new Request.Builder().url(server + attachmentPath(peer, id, inline));
+    if (!token.isEmpty()) builder.header("Authorization", "Bearer " + token);
+    Call call = http.newCall(builder.build());
+    call.enqueue(
+        new Callback() {
+          @Override
+          public void onFailure(Call c, IOException e) {
+            closeQuietly(sink);
+            if (!c.isCanceled()) failure.accept(e);
+          }
+
+          @Override
+          public void onResponse(Call c, Response response) {
+            try (Response r = response) {
+              if (!r.isSuccessful())
+                throw new Failure(r.code(), Attachments.downloadError(r.code()), 60);
+              if (r.body() == null) throw new IOException("The server sent no file.");
+              long total = r.body().contentLength();
+              InputStream in = r.body().byteStream();
+              byte[] buffer = new byte[64 * 1024];
+              long written = 0;
+              int last = -1;
+              int read;
+              while ((read = in.read(buffer)) != -1) {
+                sink.write(buffer, 0, read);
+                written += read;
+                if (progress != null) {
+                  int percent = total > 0 ? (int) Math.min(100, written * 100 / total) : 0;
+                  if (percent != last) {
+                    last = percent;
+                    progress.progress(written, total);
+                  }
+                }
+              }
+              sink.flush();
+              closeQuietly(sink);
+              if (!c.isCanceled()) success.run();
+            } catch (Exception e) {
+              closeQuietly(sink);
+              if (!c.isCanceled()) failure.accept(e);
+            }
+          }
+        });
+    return call;
+  }
+
+  private static void closeQuietly(OutputStream sink) {
+    try {
+      if (sink != null) sink.close();
+    } catch (Exception ignored) {
+    }
   }
 
   String call(String path, JSONObject body) throws IOException {

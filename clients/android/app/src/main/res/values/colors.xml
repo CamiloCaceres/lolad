@@ -1,0 +1,23 @@
+<resources>
+ <!-- Pearl-gray paper, charcoal ink and quiet hairlines. Muted hues are anchors, not accents. -->
+ <color name="lolad_paper">#FAFBFD</color>
+ <color name="lolad_raised">#FFFFFF</color>
+ <color name="lolad_backdrop">#E9EDF3</color>
+ <color name="lolad_ink">#1F2124</color>
+ <color name="lolad_secondary">#454A52</color>
+ <color name="lolad_muted">#5B6472</color>
+ <color name="lolad_outline">#737E8C</color>
+ <color name="lolad_hairline">#24000000</color>
+ <color name="lolad_track">#E2E7EE</color>
+ <color name="lolad_quiet">#E2E7EE</color>
+ <color name="lolad_on_quiet">#1F2124</color>
+ <color name="lolad_awake">#336B45</color>
+ <color name="lolad_attention">#95500E</color>
+ <color name="lolad_error">#9E3B2F</color>
+ <color name="lolad_mine">#1F2124</color>
+ <color name="lolad_on_mine">#FAFBFD</color>
+ <color name="lolad_card_mine">#33383F</color>
+ <color name="lolad_card_mine_hairline">#3DFFFFFF</color>
+ <color name="lolad_terminal">#F3F5F8</color>
+ <color name="lolad_terminal_ink">#2A2F36</color>
+</resources>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Stable ids so RecyclerView layout state and IME focus survive recreation. -->
+<resources>
+ <item name="list_inbox" type="id" />
+ <item name="list_agents" type="id" />
+ <item name="list_chat" type="id" />
+ <item name="agent_scroll" type="id" />
+ <item name="terminal_scroll" type="id" />
+ <item name="draft_field" type="id" />
+</resources>

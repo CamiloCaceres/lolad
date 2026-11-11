@@ -1,12 +1,36 @@
 <resources>
  <style name="AppTheme" parent="Theme.Material3.DayNight.NoActionBar">
-  <item name="colorPrimary">#24272D</item><item name="colorOnPrimary">#FAFBFD</item>
-  <item name="colorSurface">#FAFBFD</item><item name="colorOnSurface">#24272D</item>
-  <item name="colorOnSurfaceVariant">#525D6C</item><item name="colorOutline">#7F8D9F</item>
-  <item name="colorSecondaryContainer">#E9EDF3</item><item name="colorOnSecondaryContainer">#24272D</item>
-  <item name="colorSurfaceContainerHigh">#FAFBFD</item><item name="colorSurfaceContainer">#FAFBFD</item>
-  <item name="android:windowBackground">#E9EDF3</item><item name="android:colorBackground">#E9EDF3</item><item name="android:colorBackgroundFloating">#FAFBFD</item>
-  <item name="android:fontFamily">sans</item><item name="android:windowLightStatusBar">true</item>
-  <item name="android:colorAccent">#596A7D</item><item name="android:windowActionModeOverlay">true</item>
+  <item name="colorPrimary">@color/lolad_ink</item>
+  <item name="colorOnPrimary">@color/lolad_paper</item>
+  <item name="colorPrimaryContainer">@color/lolad_ink</item>
+  <item name="colorOnPrimaryContainer">@color/lolad_paper</item>
+  <item name="colorSecondary">@color/lolad_secondary</item>
+  <item name="colorOnSecondary">@color/lolad_paper</item>
+  <item name="colorSecondaryContainer">@color/lolad_quiet</item>
+  <item name="colorOnSecondaryContainer">@color/lolad_on_quiet</item>
+  <item name="colorTertiary">@color/lolad_awake</item>
+  <item name="colorOnTertiary">@color/lolad_paper</item>
+  <item name="colorError">@color/lolad_error</item>
+  <item name="colorOnError">@color/lolad_paper</item>
+  <item name="colorSurface">@color/lolad_paper</item>
+  <item name="colorOnSurface">@color/lolad_ink</item>
+  <item name="colorSurfaceVariant">@color/lolad_backdrop</item>
+  <item name="colorOnSurfaceVariant">@color/lolad_secondary</item>
+  <item name="colorOutline">@color/lolad_outline</item>
+  <item name="colorOutlineVariant">@color/lolad_hairline</item>
+  <item name="colorSurfaceContainerLowest">@color/lolad_backdrop</item>
+  <item name="colorSurfaceContainerLow">@color/lolad_paper</item>
+  <item name="colorSurfaceContainer">@color/lolad_paper</item>
+  <item name="colorSurfaceContainerHigh">@color/lolad_raised</item>
+  <item name="colorSurfaceContainerHighest">@color/lolad_raised</item>
+  <item name="android:windowBackground">@color/lolad_backdrop</item>
+  <item name="android:colorBackground">@color/lolad_backdrop</item>
+  <item name="android:colorBackgroundFloating">@color/lolad_raised</item>
+  <item name="android:fontFamily">sans</item>
+  <item name="android:windowLightStatusBar">true</item>
+  <item name="android:statusBarColor">@android:color/transparent</item>
+  <item name="android:navigationBarColor">@android:color/transparent</item>
+  <item name="android:colorAccent">@color/lolad_secondary</item>
+  <item name="android:windowActionModeOverlay">true</item>
  </style>
 </resources>

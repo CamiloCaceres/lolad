@@ -7,6 +7,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"log"
 	"log/slog"
@@ -24,6 +25,10 @@ import (
 )
 
 func main() {
+	// -thread seeds a long synthetic conversation for scroll/jank verification.
+	// It is off by default so the shared fixture keeps its documented shape.
+	thread := flag.Int("thread", 0, "seed N synthetic messages into the iris conversation")
+	flag.Parse()
 	localListener, err := net.Listen("tcp", "127.0.0.1:4193")
 	if err != nil {
 		log.Fatal(err)
@@ -62,6 +67,29 @@ func main() {
 		_, e := a.Provider.Send(ctx, peer, core.Outgoing{To: a.Me().Name, Subject: subject, Body: body, Context: map[string]any{"userchat": core.UserChat{Kind: kind, Options: options}}})
 		if e != nil {
 			log.Fatal(e)
+		}
+	}
+	if *thread > 0 {
+		for i := 0; i < *thread; i++ {
+			kind := "say"
+			if i%17 == 0 {
+				kind = "update"
+			}
+			body := fmt.Sprintf("**Synthetic message %d.** A quiet check-in from the fixture.\n\n- item %d\n- second line for wrapping\n\n`status=%d` and a [link](https://example.com).", i+1, i+1, i+1)
+			m, e := a.Provider.Send(ctx, "iris", core.Outgoing{
+				To:      a.Me().Name,
+				Subject: fmt.Sprintf("Synthetic %d", i+1),
+				Body:    body,
+				Context: map[string]any{"userchat": core.UserChat{Kind: kind}},
+			})
+			if e != nil {
+				log.Fatal(e)
+			}
+			// Long fixture threads are pre-read so opening them tests rendering,
+			// not a thousand mark-read requests.
+			if e = a.Provider.MarkRead(ctx, a.Me().Name, m.ID); e != nil {
+				log.Fatal(e)
+			}
 		}
 	}
 	send("ultron", "say", "All quiet", "The demo environment is ready. No live services were contacted.")

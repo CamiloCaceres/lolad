@@ -1,0 +1,23 @@
+<resources>
+ <!-- Deep neutral-cool night: never pure black, raised surfaces lighter than the reading paper. -->
+ <color name="lolad_paper">#1D2229</color>
+ <color name="lolad_raised">#262E38</color>
+ <color name="lolad_backdrop">#14181E</color>
+ <color name="lolad_ink">#E7EBF1</color>
+ <color name="lolad_secondary">#B4BECC</color>
+ <color name="lolad_muted">#97A4B4</color>
+ <color name="lolad_outline">#7E8B9B</color>
+ <color name="lolad_hairline">#24FFFFFF</color>
+ <color name="lolad_track">#101419</color>
+ <color name="lolad_quiet">#2A313A</color>
+ <color name="lolad_on_quiet">#E7EBF1</color>
+ <color name="lolad_awake">#86B797</color>
+ <color name="lolad_attention">#D79A5B</color>
+ <color name="lolad_error">#E39A8B</color>
+ <color name="lolad_mine">#2C3642</color>
+ <color name="lolad_on_mine">#E7EBF1</color>
+ <color name="lolad_card_mine">#3A4656</color>
+ <color name="lolad_card_mine_hairline">#33FFFFFF</color>
+ <color name="lolad_terminal">#12171D</color>
+ <color name="lolad_terminal_ink">#D6DEE8</color>
+</resources>

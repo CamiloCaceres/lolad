@@ -1,7 +1,16 @@
 #!/usr/bin/env python3
 """Exercise only the isolated API/emulator. Never prints pairing codes or tokens."""
 import json, os, pathlib, re, subprocess, sys, time, urllib.parse, urllib.request, xml.etree.ElementTree as ET
-ADB=os.path.expanduser('~/android/sdk/platform-tools/adb')
+def find_adb():
+    candidates=[os.environ.get('ADB',''), os.path.join(os.environ.get('ANDROID_HOME',''),'platform-tools','adb'),
+                os.path.expanduser('~/android/sdk/platform-tools/adb'),
+                os.path.expanduser('~/Library/Android/sdk/platform-tools/adb'),
+                '/Volumes/DevSSD/Developer/android/sdk/platform-tools/adb']
+    for candidate in candidates:
+        if candidate and os.path.exists(candidate):
+            return candidate
+    return 'adb'
+ADB=find_adb()
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 SHOTS=ROOT/'docs/screenshots'
 def adb(*args):
@@ -15,6 +24,12 @@ def tap(label, exact=True):
     for n in nodes():
         text=n.get('text','')
         if (text==label if exact else label in text):
+            x1,y1,x2,y2=map(int,re.findall(r'\d+',n.get('bounds')))
+            adb('shell','input','tap',str((x1+x2)//2),str((y1+y2)//2));time.sleep(.6);return
+    raise RuntimeError('Missing control: '+label)
+def tap_desc(label):
+    for n in nodes():
+        if n.get('content-desc','')==label:
             x1,y1,x2,y2=map(int,re.findall(r'\d+',n.get('bounds')))
             adb('shell','input','tap',str((x1+x2)//2),str((y1+y2)//2));time.sleep(.6);return
     raise RuntimeError('Missing control: '+label)
@@ -68,7 +83,7 @@ def remaining():
         if exists('Conversations'): break
         tap('Back')
     tap('Agents',False);assert exists('Your agents');shot('agents-light.png')
-    tap('Disconnect');tap('Disconnect');time.sleep(.5)
+    tap_desc('More actions');tap('Disconnect');tap('Disconnect');time.sleep(.5)
     pair(4183);assert exists('Conversations')
     # Revoke just the most recently paired emulator device via trusted throwaway API.
     devices=json.load(urllib.request.urlopen('http://127.0.0.1:4193/api/devices'))
