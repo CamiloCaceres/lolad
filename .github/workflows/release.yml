@@ -76,7 +76,7 @@ jobs:
 
   macos:
     needs: meta
-    runs-on: macos-14
+    runs-on: macos-latest
     env:
       VERSION: ${{ needs.meta.outputs.version }}
       UPDATE_PUBLIC_KEY: ${{ vars.UPDATE_PUBLIC_KEY }}
