@@ -1,0 +1,159 @@
+{{define "layout"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1b1b1b" media="(prefers-color-scheme: dark)">
+<meta name="htmx-config" content='{"allowEval":false,"includeIndicatorStyles":false,"historyCacheSize":0,"defaultSwapStyle":"innerHTML","responseHandling":[{"code":"204","swap":false},{"code":"[23]..","swap":true},{"code":"422","swap":true},{"code":"409","swap":true},{"code":"[45]..","swap":false,"error":true}]}'>
+<title>Welcome · lolad</title>
+<link rel="icon" href="{{asset "favicon.svg"}}" type="image/svg+xml">
+<link rel="stylesheet" href="{{asset "app.css"}}">
+{{range pageStyles}}<link rel="stylesheet" href="{{asset .}}">
+{{end}}<script src="{{asset "vendor/htmx.min.js"}}" defer></script>
+<script src="{{asset "app.js"}}" defer></script>
+<script src="{{asset "term.js"}}" defer></script>
+<script src="{{asset "welcome.js"}}" defer></script>
+</head>
+<body class="welcome-body" hx-boost="true" hx-headers='{"X-Lolad-Build": "{{build}}"}'>
+{{template "icons"}}
+<a class="skip" href="#main">Skip to content</a>
+<div class="welcome" id="app">
+  <header class="welcome-head">
+    <a class="welcome-brand" href="/welcome" aria-label="lolad setup">
+      <svg class="brand-mark" viewBox="0 0 20 20" aria-hidden="true"><circle cx="6" cy="10" r="3.2"/><circle cx="14" cy="10" r="3.2"/></svg>
+      <span>lolad</span>
+    </a>
+    <form method="post" action="/welcome/leave" hx-boost="false"><button class="btn btn-ghost btn-sm" type="submit">Set up later</button></form>
+  </header>
+  <main id="main" class="welcome-main" tabindex="-1">
+    <nav aria-label="Setup progress">
+      <ol class="welcome-steps">
+        {{range .Steps}}<li class="ws ws-{{.State}}"{{if eq .State "current"}} aria-current="step"{{end}}>{{if .Href}}<a href="{{.Href}}"><span class="ws-n" aria-hidden="true">{{template "icon" "check"}}</span><span class="ws-label" data-n="{{.N}}"><span class="sr-only">Step {{.N}}, done: </span>{{.Label}}</span></a>{{else}}<span class="ws-n" aria-hidden="true">{{.N}}</span><span class="ws-label" data-n="{{.N}}"><span class="sr-only">Step {{.N}}{{if eq .State "todo"}}, not yet: {{else}}: {{end}}</span>{{.Label}}</span>{{end}}</li>
+        {{end}}
+      </ol>
+    </nav>
+    <section class="welcome-card" aria-labelledby="welcome-title">
+      {{with .Error}}<div class="flash is-error welcome-error" role="alert" tabindex="-1">{{template "icon" "alert"}}<div>{{.}}</div></div>{{end}}
+      {{if eq .Step "login"}}{{template "welcome-login" .}}
+      {{else if eq .Step "harnesses"}}{{template "welcome-harnesses" .}}
+      {{else if eq .Step "folder"}}{{template "welcome-folder" .}}
+      {{else if eq .Step "name"}}{{template "welcome-name" .}}
+      {{else if eq .Step "agent"}}{{template "welcome-agent" .}}
+      {{else}}{{template "welcome-done" .}}{{end}}
+    </section>
+  </main>
+</div>
+<div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+</body>
+</html>{{end}}
+
+{{define "welcome-login"}}
+<h1 class="welcome-title" id="welcome-title">Keep lolad running in the background</h1>
+<p class="welcome-lede">lolad starts when you sign in to your computer, so your agents are already working when you sit down, and can reach you when you are not at the keyboard.</p>
+{{if .S.Service.Installed}}
+<p class="welcome-status"><span class="state st-idle"><i></i>On</span> lolad starts when you sign in.</p>
+<form method="post" action="/welcome/service" class="welcome-actions"><input type="hidden" name="op" value="skip"><button class="btn btn-primary" type="submit" autofocus>Continue{{template "icon" "next"}}</button></form>
+{{else if .S.Service.Available}}
+{{if eq .S.Platform "darwin"}}<p class="help">macOS will show a “Background item added” notice. That is lolad.</p>{{end}}
+<div class="welcome-actions">
+  <form method="post" action="/welcome/service"><input type="hidden" name="op" value="install"><button class="btn btn-primary" type="submit" autofocus>Start at login</button></form>
+  <form method="post" action="/welcome/service"><input type="hidden" name="op" value="skip"><button class="btn btn-ghost" type="submit">Not now</button></form>
+</div>
+{{else}}
+<p class="welcome-note">This copy of lolad cannot set that up by itself. You can do it later by running <code>lolad service install</code> in a terminal.</p>
+<form method="post" action="/welcome/service" class="welcome-actions"><input type="hidden" name="op" value="skip"><button class="btn btn-primary" type="submit" autofocus>Continue{{template "icon" "next"}}</button></form>
+{{end}}
+{{end}}
+
+{{define "welcome-harnesses"}}
+<h1 class="welcome-title" id="welcome-title">Choose the tool your agents run on</h1>
+<p class="welcome-lede">Agents run on a coding assistant installed on this computer. Get at least one to <strong>Ready</strong>. Install and Sign in open a terminal below, so you can see exactly what happens.</p>
+{{template "welcome-harnesses-list" .}}
+{{with .Terminal}}{{template "welcome-terminal" .}}{{end}}
+<div class="welcome-foot">
+  {{template "welcome-next" (dict "Ready" .AnyReady)}}
+  <form method="post" action="/welcome/harnesses/rescan" class="welcome-rescan">
+    {{with .Terminal}}<input type="hidden" name="terminal" value="{{.Session}}">{{end}}
+    <input type="hidden" name="capture_path_present" value="1">
+    <button class="btn" type="submit">{{template "icon" "restart"}}<span>Re-scan</span></button>
+    <details class="welcome-adv"><summary>Advanced</summary>
+      <label class="check"><input type="checkbox" name="capture_path" value="on"{{if .S.CapturePath}} checked{{end}}><span><span class="check-title">Use my terminal’s PATH</span><span class="help">Lets lolad find tools your shell can run. Only PATH is read, never other variables or passwords.</span></span></label>
+    </details>
+  </form>
+</div>
+{{end}}
+
+{{define "welcome-folder"}}
+<h1 class="welcome-title" id="welcome-title">Where should your agents live?</h1>
+<p class="welcome-lede">Each agent gets its own folder with its instructions and memory. You can change this later.</p>
+<form method="post" action="/welcome/folder" class="welcome-form">
+  <label class="field"><span class="label">Agents folder</span>
+    <input name="dir" class="mono" value="{{.Folder}}" required autocomplete="off" spellcheck="false" autofocus aria-describedby="folder-check folder-error"{{if .Fields.dir}} aria-invalid="true"{{end}} hx-get="/welcome/folder/check" hx-trigger="input changed delay:300ms" hx-target="#folder-check" hx-swap="innerHTML" hx-push-url="false">
+  </label>
+  <span class="new-field-error" id="folder-error">{{.Fields.dir}}</span>
+  <div id="folder-check" aria-live="polite">{{template "welcome-folder-check" (dict "Path" .Folder "Warning" .FolderWarning)}}</div>
+  <div class="welcome-actions"><button class="btn btn-primary" type="submit">Use this folder{{template "icon" "next"}}</button><a class="btn btn-ghost" href="/welcome?step=harnesses">Back</a></div>
+</form>
+{{end}}
+
+{{define "welcome-name"}}
+<h1 class="welcome-title" id="welcome-title">What should your agents call you?</h1>
+<p class="welcome-lede">Your agents will address you by this name. We started with the name on your computer’s account.</p>
+<form method="post" action="/welcome/name" class="welcome-form">
+  <label class="field"><span class="label">Your name</span>
+    <input name="name" value="{{.Name}}" required maxlength="100" autocomplete="name" autofocus aria-describedby="name-error"{{if .Fields.name}} aria-invalid="true"{{end}}>
+  </label>
+  <span class="new-field-error" id="name-error">{{.Fields.name}}</span>
+  <div class="welcome-actions"><button class="btn btn-primary" type="submit">Continue{{template "icon" "next"}}</button><a class="btn btn-ghost" href="/welcome?step=folder">Back</a></div>
+</form>
+{{end}}
+
+{{define "welcome-agent"}}
+<h1 class="welcome-title" id="welcome-title">Bring on your first agent</h1>
+<p class="welcome-lede">Give it a name and a job. It starts working right away and writes to you in your inbox.</p>
+{{if not .Creatable}}
+<div class="flash is-warn" role="status">{{template "icon" "alert"}}<div><p>None of the tools that are ready can run lolad agents yet. Get Claude Code to Ready first.</p></div></div>
+<div class="welcome-actions"><a class="btn btn-primary" href="/welcome?step=harnesses">Back to tools</a>
+  <form method="post" action="/welcome/later"><button class="btn btn-ghost" type="submit">I’ll add an agent later</button></form></div>
+{{else}}
+<form method="post" action="/welcome/agent" class="welcome-form welcome-agent-form" hx-disabled-elt="find button[type=submit]">
+  <label class="field"><span class="label">Name</span>
+    <input name="name" value="{{.Agent.Name}}" required maxlength="100" autocomplete="off" autofocus aria-describedby="agent-name-error"{{if .Fields.name}} aria-invalid="true"{{end}}>
+    <span class="new-field-error" id="agent-name-error">{{.Fields.name}}</span>
+  </label>
+  <label class="field"><span class="label">What is its job?</span>
+    <textarea name="mission" rows="4" required aria-describedby="agent-mission-help agent-mission-error"{{if .Fields.mission}} aria-invalid="true"{{end}}>{{.Agent.Mission}}</textarea>
+    <span class="help" id="agent-mission-help">This becomes its instructions and your first message.</span>
+    <span class="new-field-error" id="agent-mission-error">{{.Fields.mission}}</span>
+  </label>
+  {{if gt (len .Creatable) 1}}<label class="field"><span class="label">Runs on</span><select name="harness">{{range .Creatable}}<option value="{{.ID}}"{{if eq .ID $.Agent.Harness}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+  {{else}}{{range .Creatable}}<input type="hidden" name="harness" value="{{.ID}}"><p class="welcome-meta">Runs on <strong>{{.Name}}</strong>.</p>{{end}}{{end}}
+  <span class="new-field-error" id="agent-harness-error">{{.Fields.harness}}</span>
+  <div class="welcome-actions">
+    <button class="btn btn-primary" type="submit">{{template "icon" "plus"}}<span>Create and start</span></button>
+    <a class="btn btn-ghost" href="/welcome?step=name">Back</a>
+  </div>
+  <div class="welcome-progress" role="status" aria-live="polite"><strong>Setting up your agent…</strong><p>Preparing its folder, instructions and mailbox. This can take a minute. Keep this page open.</p><progress aria-label="Agent setup in progress"></progress></div>
+</form>
+<div class="welcome-alt">
+  <form method="post" action="/welcome/later"><button class="btn btn-ghost btn-sm" type="submit">I’ll add an agent later</button></form>
+  <a class="btn btn-ghost btn-sm" href="/new" hx-boost="false">More options</a>
+</div>
+{{end}}
+{{end}}
+
+{{define "welcome-done"}}
+<h1 class="welcome-title" id="welcome-title">{{if .Created}}{{.CreatedName}} is on it{{else}}You’re all set{{end}}</h1>
+<p class="welcome-lede">{{if .Created}}Your agent is starting up. Its first message will arrive in your inbox. You answer there, never in a terminal.{{else}}lolad is ready. Add your first agent whenever you like from <strong>New agent</strong>.{{end}}</p>
+<div class="welcome-actions">
+  {{if .Created}}<a class="btn btn-primary" href="/inbox/{{.Created}}?created=1" hx-boost="false">Open {{.CreatedName}}’s conversation{{template "icon" "next"}}</a><a class="btn" href="/" hx-boost="false">Go to inbox</a>
+  {{else}}<a class="btn btn-primary" href="/new" hx-boost="false">{{template "icon" "plus"}}<span>New agent</span></a><a class="btn" href="/" hx-boost="false">Go to inbox</a>{{end}}
+</div>
+<div class="welcome-notify" data-notify hidden>
+  <p class="welcome-meta">Want a nudge when an agent needs you?</p>
+  <button class="btn btn-sm" type="button" data-notify-ask>Turn on notifications</button>
+  <span class="help" data-notify-state role="status"></span>
+</div>
+{{end}}

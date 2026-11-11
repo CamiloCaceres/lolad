@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Hardened-runtime entitlements for every Mach-O in Lolad.app.
+     Deliberately empty: the Go binaries, the static tmux and the WKWebView
+     window need no exceptions (no JIT, no unsigned memory, no library
+     validation bypass), and the app is NOT sandboxed (docs/desktop.md section 1).
+     Add a key here only with a written reason. -->
+<plist version="1.0"><dict/></plist>

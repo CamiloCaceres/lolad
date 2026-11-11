@@ -22,8 +22,8 @@ The dependency interfaces live in `internal/create`:
 
 Set `TemplateDir` and `AgentsDir` from daemon configuration. Runtime writes are
 delegated to registry's byte-preserving writer through an adapter if needed.
-`SetupEnv` is an optional complete environment override for the setup subprocess;
-normal operation inherits the daemon environment.
+`SetupEnv` is an optional complete environment override for the legacy
+`setup.sh` fallback only; the native scaffold ignores it.
 
 `Registrar` should refresh registry discovery, without starting an unregistered
 agent. Creation writes runtime and harness files, refreshes discovery, ensures
@@ -71,14 +71,80 @@ after its membership update. The source template is
 - The managed section is generated after identity and organization updates so
   its reporting line and contacts reflect the updated policy. All files are
   ready before the explicit starter runs.
-- On macOS, the real upstream setup script needs GNU `realpath -m` and `sed -i`
-  compatibility. Private temporary wrappers translate those spellings to BSD
-  tools; no upstream template file is modified. The target directory already
-  exists before `realpath` resolves it.
-- Setup inputs containing double quotes, backslashes, newlines, `|`, or `&` are
-  rejected to protect upstream YAML and sed interpolation. Optional Python
-  setup runs normally in production; tests replace `uv` with a failing private
-  stub to prevent dependency downloads. Upstream treats that failure as optional.
+- Setup no longer runs a shell. See "Native scaffold" below; the notes about
+  GNU `realpath -m`/`sed -i` wrappers and rejected `| & " \` characters now
+  apply only to the legacy `setup.sh` fallback.
+
+## Native scaffold (no Bash, no git)
+
+`create.Scaffold(templateDir, ScaffoldParams)` is a Go port of lolabot's
+`setup.sh` for a new instance. It needs no Bash, `sed`, `cp`, `git` or Python, so
+creation works on a fresh Windows 11 or Mac with no lolabot checkout. Paths use
+`filepath` throughout.
+
+What it reproduces (same tree, contents and modes as `setup.sh --yes`):
+
+- the directories (`brain memory indexes emails/<account>/{inbox,sent,drafts,attachments}
+  articles/{drafts,published} prompts tools scripts skills tests docs`);
+- `cp -n tools/*`: regular files directly in `tools/`, dotfiles and
+  subdirectories skipped (shell glob and non-recursive `cp`), permission bits
+  kept, never overwriting;
+- `cp -rn skills/*`: recursive, top-level dotfiles skipped, no clobber;
+- only `brain/{eisenhower,agents,README}.md` and `memory/README.md` (a file the
+  template lacks is skipped). `scripts/`, `docs/` and `tests/` are created
+  empty, as upstream does;
+- `lolabot.yaml`, `CLAUDE.md` (the 20 `{{PLACEHOLDER}}`s applied one after
+  another in `setup.sh`'s order), the `{{AGENT_NAME}}`/`{{USER_NAME}}` pass over
+  the two brain files, the starter `memory/<first>-profile.md`, `goals.md`,
+  `journal-<year>.md`, and `.gitignore`;
+- refusal when the target already contains `CLAUDE.md`; the target is resolved
+  like `realpath -m` (symlinks in existing parts resolved).
+
+Differences from `setup.sh` (all intended):
+
+| Difference | Why |
+| --- | --- |
+| No `.venv` (`uv`/`python3 -m venv`, `memvid-sdk`) and no `git init` | They are best-effort warnings upstream and need external tools. The agent can run `pa-onboarding`/its own tooling later; `.gitignore` is still written. |
+| Values are written literally, and `"` and `\` are escaped inside the YAML strings | sed treats `&`, `\` and `|` specially and YAML breaks on `"` and `\`; Windows paths contain `\`. Only newlines are rejected. Identical output for every input `setup.sh` handled correctly. |
+| System facts are detected in Go (`os.Hostname`, sysctl/`/proc`/`GlobalMemoryStatusEx`, `statfs`/`GetDiskFreeSpaceEx`, `/etc/localtime`); `OS` is `Darwin`, `Linux` or `Windows`; RAM and storage read `16 GB` / `1.8 TB` (not `df -h`'s `460Gi`) | Descriptive text for CLAUDE.md only. Environment presets such as `SYSTEM_RAM` are not read. |
+| Timezone falls back to the `/etc/localtime` zone name before `UTC` | `setup.sh` printed `UTC` on macOS. |
+| First name lower-casing uses Unicode, not `tr`; the first-name split is on a space | Same results for ASCII names. |
+| The "Generated … on <time>" comment is RFC 3339 | `date -Iseconds` differs between GNU and BSD. |
+| Nothing is printed and nothing is asked | Creation is always non-interactive. |
+
+`internal/create/scaffold_test.go` runs `setup.sh` and the port into two
+directories with identical inputs and compares the whole tree (names, kinds,
+modes, bytes), masking only the timestamp comment and the temporary root. It
+runs against a synthetic template (every copy rule) and the real lolabot (skips
+when bash or the checkout is unavailable; set `LOLAD_TEST_TEMPLATE`).
+
+### Template resolution
+
+`create.ResolveTemplate(create.TemplateConfig{Configured, StateDir})`:
+
+1. a user-set `lolabot_template` that contains `CLAUDE.TEMPLATE.md` wins;
+2. otherwise `<state>/lolabot/<version>/` (copied atomically on first use from
+   the bundle: `$LOLAD_LOLABOT_BUNDLE`, else `../Resources/lolabot`,
+   `../lolabot` or `lolabot/` relative to the executable, so inside `Lolad.app`
+   or the Windows install directory; `<version>` is the bundle's `VERSION` file,
+   else a 12-hex digest of `CLAUDE.TEMPLATE.md` and `setup.sh`). The bundle is
+   never written to; `.git`, `.venv` and `node_modules` are not copied;
+3. otherwise an error that names the missing pieces and `LOLAD_LOLABOT_BUNDLE`.
+
+Wiring: set `Deps.Template` to a closure over `ResolveTemplate`. Pass
+`Configured` only when the user set it; the registry's built-in default
+(`~/lolabot`) must not be passed, or it counts as user-set. `Deps.TemplateDir`
+still works and is treated as user-set.
+
+### Legacy `setup.sh` fallback
+
+Only a **user-set** template (never the bundle or state copy) whose `setup.sh`
+is not a revision the port was checked against (SHA-256 with CRLF normalised,
+`knownSetupSHA256`) runs its own `setup.sh` through bash, with the old macOS
+`realpath`/`sed` shims. It is skipped on Windows and when bash is missing; the
+Go port is used then. Fields containing `" \ | &` are refused on that path
+only. To teach the port a new upstream revision, port the change, extend the
+conformance test, then add the digest.
 
 ## Verification on 2026-10-25
 

@@ -51,7 +51,7 @@
     const mode = panel.querySelector("[data-term-mode]");
     const toggle = panel.querySelector("[data-term-control]");
     const again = panel.querySelector("[data-term-reconnect]");
-    const s = { control: false, ws: null, term: null, fit: null, ro: null, size: "" };
+    const s = { control: panel.dataset.termControl === "on", ws: null, term: null, fit: null, ro: null, size: "" };
 
     const say = (t) => { status.textContent = t; };
     function paint() {
@@ -91,7 +91,7 @@
       say("Connecting…");
       s.term.reset();
       s.size = "";
-      const url = (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/agents/" + encodeURIComponent(agent) + "/terminal?mode=" + (s.control ? "control" : "watch");
+      const url = (location.protocol === "https:" ? "wss://" : "ws://") + location.host + (panel.dataset.termPath || "/agents/" + encodeURIComponent(agent) + "/terminal") + "?mode=" + (s.control ? "control" : "watch");
       const ws = new WebSocket(url);
       ws.binaryType = "arraybuffer";
       s.ws = ws;
@@ -143,7 +143,7 @@
       if (s.term) s.term.dispose();
     };
     toggle.addEventListener("click", () => {
-      if (!s.control && !confirm("Take control of " + agent + "'s session? Your keystrokes go straight into it; the agent may be mid-turn.")) return;
+      if (!s.control && !panel.dataset.termControl && !confirm("Take control of " + agent + "'s session? Your keystrokes go straight into it; the agent may be mid-turn.")) return;
       s.control = !s.control;
       paint();
       layout();
@@ -162,7 +162,7 @@
       if (sessions.has(panel)) return;
       const s = session(panel);
       sessions.set(panel, s);
-      if (store.get("lolad:term:" + panel.dataset.agent) === "1") panel.open = true; // fires toggle
+      if (panel.hasAttribute("data-autostart") || store.get("lolad:term:" + panel.dataset.agent) === "1") panel.open = true; // fires toggle
     });
   }
   function sweep() {

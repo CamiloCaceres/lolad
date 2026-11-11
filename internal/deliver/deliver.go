@@ -89,14 +89,34 @@ func pause(ctx context.Context, d time.Duration) error {
 
 // ready needs the last hook-reported state to be idle and the pane to show the
 // input box now. Idle never expires: any later turn reports busy first, and the
-// pane check rejects spinners and permission prompts.
+// pane check rejects spinners and permission prompts. A session still
+// "starting" after startGrace with the input box showing is idle too: it was
+// started without a prompt, or the harness sent a SessionStart that no Stop
+// follows, and without this its mail would wait forever.
 func (n *Notifier) ready(a core.Agent, pane string) bool {
 	if n.state == nil {
 		return false
 	}
 	s, at := n.state(a.Name)
-	return s == core.StateIdle && !at.IsZero() && n.launcher.PromptReady(pane)
+	if at.IsZero() {
+		return false
+	}
+	switch s {
+	case core.StateIdle:
+	case core.StateStarting:
+		if time.Since(at) < startGrace {
+			return false
+		}
+	default:
+		return false
+	}
+	return n.launcher.PromptReady(pane)
 }
+
+// startGrace is how long a fresh session may sit at its prompt before mail is
+// typed in: long enough for an initial prompt passed at launch to be submitted.
+const startGrace = 30 * time.Second
+
 func (n *Notifier) Notify(ctx context.Context, a core.Agent, m core.Mail) (result core.NotifyResult, err error) {
 	n.mu.Lock()
 	defer n.mu.Unlock()

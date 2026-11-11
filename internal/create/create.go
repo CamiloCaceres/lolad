@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 
 	"github.com/CamiloCaceres/lolad/internal/core"
@@ -37,7 +38,10 @@ type Starter interface {
 type Registrar interface{ Reload(context.Context) error }
 
 type Deps struct {
+	// TemplateDir is a user-set lolabot template directory (it may be empty).
+	// Template, when set, takes precedence: wire it to ResolveTemplate.
 	TemplateDir, AgentsDir string
+	Template               func() (Template, error)
 	Runtime                RuntimeWriter
 	Identity               IdentityEnsurer
 	Org                    OrgUpdater
@@ -45,7 +49,8 @@ type Deps struct {
 	Mail                   MailSender
 	Starter                Starter
 	Registrar              Registrar
-	// SetupEnv optionally replaces the setup process environment (useful offline).
+	// SetupEnv optionally replaces the environment of the legacy setup.sh
+	// fallback (the native scaffold ignores it).
 	SetupEnv []string
 }
 type Creator struct{ deps Deps }
@@ -144,11 +149,9 @@ func (c *Creator) Create(ctx context.Context, req core.CreateRequest) (core.Agen
 	if req.User == "" {
 		req.User = org.User.Name
 	}
-	// setup.sh interpolates these values into sed and YAML. Refuse metacharacters
-	// rather than letting a display field corrupt generated files.
 	for _, value := range []string{req.Name, req.Role, req.User, dir} {
-		if strings.ContainsAny(value, "\n\r\"\\|&") {
-			return zero, fmt.Errorf("%w: setup fields contain unsupported template characters", core.ErrInvalid)
+		if strings.ContainsAny(value, "\n\r") {
+			return zero, fmt.Errorf("%w: setup fields must be single-line", core.ErrInvalid)
 		}
 	}
 	entries, err := os.ReadDir(dir)
@@ -158,10 +161,14 @@ func (c *Creator) Create(ctx context.Context, req core.CreateRequest) (core.Agen
 	if err != nil && !os.IsNotExist(err) {
 		return zero, err
 	}
+	plan, err := c.plan(req.Name, req.Role, req.User, dir)
+	if err != nil {
+		return zero, err
+	}
 	if err = os.MkdirAll(dir, 0755); err != nil {
 		return zero, err
 	}
-	if err = c.setup(ctx, req.Name, req.Role, req.User, dir); err != nil {
+	if err = c.setup(ctx, plan, req.Name, req.Role, req.User, dir); err != nil {
 		return zero, err
 	}
 	a := core.Agent{Name: slug, Display: req.Name, Role: req.Role, Dir: dir, Runtime: r}
@@ -308,14 +315,67 @@ func (c *Creator) finish(ctx context.Context, a core.Agent, team string, head bo
 	return status, nil
 }
 
-// Run setup with closed stdin. On macOS the upstream script needs two GNU
-// command spellings translated to BSD equivalents; the template is never edited.
-func (c *Creator) setup(ctx context.Context, name, role, user, dir string) error {
-	script := filepath.Join(c.deps.TemplateDir, "setup.sh")
-	if c.deps.TemplateDir == "" {
-		return fmt.Errorf("%w: lolabot template required", core.ErrInvalid)
+// setupPlan says how a new instance is scaffolded.
+type setupPlan struct {
+	template string
+	script   bool // run the template's own setup.sh instead of the Go port
+}
+
+// plan resolves the template and decides between the native scaffold and the
+// legacy setup.sh. The script runs only for a user-set template whose setup.sh
+// the Go port does not recognize (an upstream revision it was not checked
+// against), and only where bash is a real option (not Windows).
+func (c *Creator) plan(name, role, user, dir string) (setupPlan, error) {
+	var t Template
+	switch {
+	case c.deps.Template != nil:
+		var err error
+		if t, err = c.deps.Template(); err != nil {
+			return setupPlan{}, err
+		}
+	case c.deps.TemplateDir != "":
+		t = Template{Dir: c.deps.TemplateDir, UserSet: true}
+	default:
+		return setupPlan{}, fmt.Errorf("%w: lolabot template required", core.ErrInvalid)
 	}
-	cmd := exec.CommandContext(ctx, "/bin/bash", script, "--name", name, "--role", role, "--user", user, "--yes", dir)
+	if t.UserSet && runtime.GOOS != "windows" {
+		recognized, present, err := SetupRecognized(t.Dir)
+		if err != nil {
+			return setupPlan{}, err
+		}
+		if present && !recognized {
+			if _, err := exec.LookPath("bash"); err == nil {
+				// setup.sh interpolates values into sed and YAML.
+				for _, value := range []string{name, role, user, dir} {
+					if strings.ContainsAny(value, "\\\"|&") {
+						return setupPlan{}, fmt.Errorf("%w: setup fields contain characters the template's own setup.sh cannot handle (backslash, quote, | &)", core.ErrInvalid)
+					}
+				}
+				return setupPlan{template: t.Dir, script: true}, nil
+			}
+		}
+	}
+	return setupPlan{template: t.Dir}, nil
+}
+
+func (c *Creator) setup(ctx context.Context, plan setupPlan, name, role, user, dir string) error {
+	if !plan.script {
+		return Scaffold(plan.template, ScaffoldParams{Name: name, Role: role, User: user, Dir: dir})
+	}
+	return c.runSetupScript(ctx, plan.template, name, role, user, dir)
+}
+
+// Run setup.sh with closed stdin. On macOS the upstream script needs two GNU
+// command spellings translated to BSD equivalents; the template is never edited.
+func (c *Creator) runSetupScript(ctx context.Context, templateDir, name, role, user, dir string) error {
+	script := filepath.Join(templateDir, "setup.sh")
+	bash := "/bin/bash"
+	if _, err := os.Stat(bash); err != nil {
+		if bash, err = exec.LookPath("bash"); err != nil {
+			return err
+		}
+	}
+	cmd := exec.CommandContext(ctx, bash, script, "--name", name, "--role", role, "--user", user, "--yes", dir)
 	env := c.deps.SetupEnv
 	if env == nil {
 		env = os.Environ()

@@ -63,7 +63,22 @@ type record struct {
 	LiveEnv bool
 	// NextHotCheck throttles the skills/plugins scan behind hot reload.
 	NextHotCheck time.Time
+	// ResumeLaunch: the running session was launched to resume a saved
+	// conversation. ResumeFailures counts resumes in a row that died before
+	// sending a single hook; see crash.
+	ResumeLaunch   bool
+	ResumeFailures int
+	// ModeKeys counts mode-switch keys sent since launch; see checkStartup.
+	ModeKeys int
 }
+
+// resumeFailLimit is how many resumes in a row may die before their first
+// hook before the next launch starts a fresh conversation instead. A
+// conversation the harness cannot resume (deleted, renamed, an id it does not
+// accept) would otherwise crash-loop the agent into "failed" until someone
+// restarts it by hand.
+const resumeFailLimit = 2
+
 type pending struct {
 	Mail          core.Mail
 	Attempts      int
@@ -360,6 +375,15 @@ func (s *Supervisor) crash(r *record, now time.Time, detail string) {
 	r.Status.Restarts = len(recentRestarts)
 	r.Status.LastError = detail
 	s.event(r.Status.Name, "crashed", detail)
+	if r.ResumeLaunch && r.LastHook == "" {
+		r.ResumeLaunch = false
+		r.ResumeFailures++
+		if r.ResumeFailures >= resumeFailLimit {
+			r.ResumeFailures = 0
+			r.Fresh = true
+			s.event(r.Status.Name, "resume-failed", "the saved conversation could not be resumed; starting a fresh one")
+		}
+	}
 	if len(r.Crashes) >= 6 {
 		s.setState(r, core.StateFailed, "six crashes in 30 minutes")
 		r.Status.NextRestart = time.Time{}
@@ -379,6 +403,7 @@ func (s *Supervisor) launch(r *record) error {
 	}
 	opts := s.opts.Launch
 	opts.Fresh = r.Fresh || !r.EverStarted
+	r.ResumeLaunch = false // set again below once a resume actually starts
 	if !opts.Fresh && opts.FirstPrompt == "" {
 		// Both TUIs can resume at a blank composer without firing an idle
 		// hook. Start one short turn so queued mail and hook-only delivery
@@ -419,6 +444,7 @@ func (s *Supervisor) launch(r *record) error {
 	r.NextHotCheck = time.Time{}
 	now := s.opts.Clock.Now()
 	r.EverStarted = true
+	r.ResumeLaunch = !opts.Fresh
 	r.Fresh = false
 	r.Restarting = false
 	r.Seq = 0
@@ -426,6 +452,7 @@ func (s *Supervisor) launch(r *record) error {
 	r.LastHook = ""
 	r.StartupAt = now
 	r.StartupDialogs = nil
+	r.ModeKeys = 0
 	r.Status.StartedAt = now
 	r.Status.LastActivity = now
 	if opts.Fresh {
@@ -732,6 +759,7 @@ func (s *Supervisor) HandleHook(ctx context.Context, ev core.HookEvent) core.Hoo
 		r.HarnessSession = ev.SessionID
 	}
 	r.LastHook = ev.Event
+	r.ResumeFailures = 0 // the session is alive, so the resume worked
 	r.Status.LastActivity = s.opts.Clock.Now()
 	state := ev.State
 	if state == "" {

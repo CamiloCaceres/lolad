@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -21,11 +22,25 @@ type Adapter struct {
 	Path   string
 }
 
+// GlobalEnvFile is the shared env file's name inside lolad's state dir.
+const GlobalEnvFile = "global.env"
+
 var _ core.Launcher = (*Adapter)(nil)
 
 func New(kind core.Harness, binary string) *Adapter { return &Adapter{Kind: kind, Binary: binary} }
 func (a *Adapter) Harness() core.Harness            { return a.Kind }
 func quote(s string) string                         { return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'" }
+
+// hookCommand is the command a harness runs for a hook event. On Unix it is a
+// shell line. Windows has no POSIX shell guaranteed (Git Bash is not required),
+// so the command is a plain double-quoted executable: LOLAD_AGENT already
+// reaches hooks through the session environment.
+func hookCommand(agent, bin, event string) string {
+	if runtime.GOOS == "windows" {
+		return `"` + strings.ReplaceAll(bin, `"`, "") + `" hook ` + event
+	}
+	return "LOLAD_AGENT=" + quote(agent) + " " + quote(bin) + " hook " + event
+}
 func managed(path string, data []byte) error {
 	if e := os.MkdirAll(filepath.Dir(path), 0700); e != nil {
 		return e
@@ -69,6 +84,19 @@ func (a *Adapter) prepare(agent core.Agent, o core.LaunchOpts, sessionID string)
 	normalizeLaunchEnv(env)
 	if a.Path != "" {
 		env["PATH"] = a.Path
+	}
+	// <state>/global.env holds settings shared by every agent (typically a
+	// provider key such as DEEPSEEK_API_KEY). The agent's own env file and
+	// runtime.env override it. Its keys stay out of LOLAD_ENV_KEYS: live
+	// export must never unset them when the agent's file lacks them.
+	if o.StateDir != "" {
+		shared, _, e := ReadEnvFile(filepath.Join(o.StateDir, GlobalEnvFile), agent.Dir)
+		if e != nil && !os.IsNotExist(e) {
+			return spec, fmt.Errorf("%s: %w", GlobalEnvFile, e)
+		}
+		for k, v := range shared {
+			env[k] = v
+		}
 	}
 	envFile := agent.Runtime.EnvFile
 	if envFile == "" {
@@ -116,6 +144,13 @@ func (a *Adapter) prepare(agent core.Agent, o core.LaunchOpts, sessionID string)
 		}
 	}
 	args := []string{bin}
+	// Codewhale hooks report a runtime id (CODEWHALE_SESSION_ID, "sess_…") that
+	// its --resume rejects ("No session found"); saved sessions are keyed by a
+	// UUID that no hook exposes. Each agent has its own CODEWHALE_HOME, so the
+	// workspace's most recent session (--continue) is that agent's conversation.
+	if a.Kind == core.HarnessCodewhale && strings.HasPrefix(sessionID, "sess_") {
+		sessionID = ""
+	}
 	if !o.Fresh {
 		if sessionID != "" {
 			args = append(args, "--resume", sessionID)
@@ -137,9 +172,15 @@ func (a *Adapter) prepare(agent core.Agent, o core.LaunchOpts, sessionID string)
 		}
 		hooks := map[string]any{}
 		for _, event := range []string{"SessionStart", "UserPromptSubmit", "Stop", "Notification", "PermissionRequest", "SessionEnd", "PreToolUse", "PostToolUse"} {
-			hooks[event] = []any{map[string]any{"hooks": []any{map[string]any{"type": "command", "command": "LOLAD_AGENT=" + quote(agent.Name) + " " + quote(o.LoladBin) + " hook " + event, "timeout": 3}}}}
+			hooks[event] = []any{map[string]any{"hooks": []any{map[string]any{"type": "command", "command": hookCommand(agent.Name, o.LoladBin, event), "timeout": 3}}}}
 		}
 		overlay := map[string]any{"hooks": hooks}
+		if agent.Runtime.Permissions == core.PermBypass || agent.Runtime.Permissions == "" {
+			// --setting-sources project,local hides the user's own consent, and a
+			// Claude Code update can show the bypass disclaimer again, which
+			// leaves the agent stuck at startup. Flag settings count as consent.
+			overlay["skipDangerousModePermissionPrompt"] = true
+		}
 		skillArgs, err := claudeSkills(agent, dir, env, overlay)
 		if err != nil {
 			return spec, err
@@ -203,7 +244,7 @@ func (a *Adapter) prepare(agent core.Agent, o core.LaunchOpts, sessionID string)
 		text = codewhaleSkills(text, agent.Runtime.SkillsMode())
 		text += "\n# lolad managed hook overlay\n"
 		for _, event := range []string{"session_start", "session_end", "message_submit", "tool_call_before", "tool_call_after", "turn_end", "session_idle", "waiting_for_user", "session_busy"} {
-			cmd := "LOLAD_AGENT=" + quote(agent.Name) + " " + quote(o.LoladBin) + " hook " + event
+			cmd := hookCommand(agent.Name, o.LoladBin, event)
 			text += "\n[[hooks.hooks]]\nevent = " + strconv.Quote(event) + "\ncommand = " + strconv.Quote(cmd) + "\ntimeout_secs = 3\ncontinue_on_error = true\n"
 		}
 		path := filepath.Join(dir, "codewhale-config.toml")
@@ -222,7 +263,10 @@ func (a *Adapter) prepare(agent core.Agent, o core.LaunchOpts, sessionID string)
 	if prompt == "" && o.Fresh {
 		prompt = agent.Runtime.OnWake
 	}
-	if prompt != "" {
+	// Codewhale's TUI exits 1 when --resume/--continue comes with a prompt
+	// ("use codewhale exec"), so a resumed Codewhale opens at a blank composer;
+	// mail delivery treats a session still "starting" at its prompt as idle.
+	if prompt != "" && (o.Fresh || a.Kind != core.HarnessCodewhale) {
 		args = append(args, "--", prompt)
 	}
 	spec.Argv = args
@@ -269,6 +313,35 @@ func (a *Adapter) PromptReady(pane string) bool {
 		return strings.HasPrefix(strings.TrimSpace(lines[i]), "│❯") && strings.Contains(strings.Join(lines[i:], "\n"), "╰")
 	}
 	return i > 0 && strings.Contains(lines[i-1], "──") && i+1 < len(lines) && strings.Contains(strings.Join(lines[i+1:], "\n"), "──")
+}
+
+// codewhaleMode reads the permission mode from the status bar under the
+// composer ("● Full Access", "● ask", "● auto", "● never"), ignoring the
+// transcript above it.
+var codewhaleMode = regexp.MustCompile(`● (Full Access|ask|auto|never)\b`)
+
+// StartupModeKeys returns Shift+Tab while a bypass Codewhale session shows a
+// mode other than Full Access. CODEWHALE_YOLO only applies to new sessions: a
+// resumed one reopens in the mode saved with it, "ask" when it began under
+// YOLO, which leaves the agent waiting for approvals nobody is there to give.
+// Shift+Tab cycles ask → auto → Full Access, and the choice is then saved.
+func (a *Adapter) StartupModeKeys(agent core.Agent, pane string) []string {
+	if a.Kind != core.HarnessCodewhale || (agent.Runtime.Permissions != core.PermBypass && agent.Runtime.Permissions != "") {
+		return nil
+	}
+	lines := strings.Split(Plain(pane), "\n")
+	start := 0
+	for i := len(lines) - 1; i >= 0; i-- {
+		if strings.HasPrefix(strings.TrimSpace(lines[i]), "╰") {
+			start = i + 1
+			break
+		}
+	}
+	m := codewhaleMode.FindStringSubmatch(strings.Join(lines[start:], "\n"))
+	if m == nil || m[1] == "Full Access" || m[1] == "never" {
+		return nil // unknown layout, done, or an explicit policy: leave it alone
+	}
+	return []string{"BTab"}
 }
 
 // envValue decodes one .env value. Balanced "…" (with escapes) or '…' quotes

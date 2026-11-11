@@ -220,3 +220,32 @@ func TestFailureRateLimits(t *testing.T) {
 		t.Fatal("login not limited")
 	}
 }
+
+func TestDeviceKinds(t *testing.T) {
+	valid := []string{"browser", "android", "cli", "macos", "ios"}
+	for _, kind := range valid {
+		if e := validate("Milo's Mac", kind); e != nil {
+			t.Errorf("kind %q rejected: %v", kind, e)
+		}
+	}
+	for _, kind := range []string{"", "Mac", "MacOS", "iosx", "windows", " android"} {
+		if e := validate("Milo's Mac", kind); e == nil {
+			t.Errorf("kind %q accepted", kind)
+		}
+	}
+	if e := validate("", "macos"); e == nil {
+		t.Error("empty device name accepted")
+	}
+	s := newStore(t)
+	p, e := s.Pair(t.Context(), "Milo's Mac")
+	if e != nil {
+		t.Fatal(e)
+	}
+	token, d, e := s.Redeem(t.Context(), p.Code, "Milo's Mac", "macos", "127.0.0.1", "")
+	if e != nil || token == "" {
+		t.Fatalf("macos redeem: %v", e)
+	}
+	if d.Kind != "macos" || d.Name != "Milo's Mac" {
+		t.Fatalf("device %q kind %q", d.Name, d.Kind)
+	}
+}

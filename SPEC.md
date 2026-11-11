@@ -615,3 +615,27 @@ terminal.
 - `GOOS=windows go build ./...` and `go vet` pass; Unix-only code sits behind
   build tags. CI (`.github/workflows/ci.yml`): Linux/macOS with tmux, Windows
   with psmux, running `go test ./...` and the conformance suite.
+
+## Desktop app support (daemon contract)
+
+See `docs/desktop.md`. The daemon side:
+
+- `GET /api/health` (no auth on the loopback listener) returns
+  `{"product":"lolad","version","pid","started_at"(RFC3339),"exe","install":"app"|"cli","state_dir"}`.
+  `install` is `app` when `LOLAD_INSTALL=app` or the executable lives inside a
+  `*.app` bundle or a `\Programs\Lolad\` directory, else `cli`.
+- `lolad serve` holds an exclusive lock on `<state>/lolad.lock` (flock /
+  LockFileEx). A second `serve` prints `already running at <url>` and exits 0.
+- `lolad serve --supervised` runs `serve` as a child and restarts it on a
+  crash (backoff 1s doubling to 60s; gives up after 10 crashes in 10 minutes,
+  reason in the daemon log; exit code 0 is not restarted).
+- When stderr is not a terminal, `serve` logs to `<state>/logs/daemon.log`
+  (rotated, 5 files x 5 MB).
+- `lolad service install|uninstall|status|start|stop [--json]`;
+  `status --json` -> `{"installed","running","mechanism","path"}`.
+- `lolad doctor --json` -> array of `{"id","status":"ok|warn|fail","message","fix"}`.
+- `config.yaml` keys (fields only; consumers are harness/registry/hooks):
+  `cli_bin` (console CLI used for `LOLAD_BIN`, the hook command and agents'
+  PATH; `registry.Config.CLIPath(exe)` returns it or `exe`), `path` (PATH
+  string for harness discovery and agents), `claude_bin`, `codex_bin`,
+  `codewhale_bin`.

@@ -65,6 +65,57 @@ func TestStartupDialogWatch(t *testing.T) {
 		t.Fatal("hook did not recover")
 	}
 }
+
+// modeLauncher's sessions open in "ask"; each mode key moves one step toward
+// "full". It models a resumed Codewhale that ignores CODEWHALE_YOLO.
+type modeLauncher struct{ fakeLauncher }
+
+func (m *modeLauncher) PromptReady(p string) bool { return strings.HasPrefix(p, "ready") }
+func (m *modeLauncher) StartupModeKeys(_ core.Agent, pane string) []string {
+	if pane == "ready full" {
+		return nil
+	}
+	return []string{"BTab"}
+}
+
+// A resumed session that comes up in the wrong permission mode is switched
+// before it counts as idle; a mode that never changes is reported, not
+// pressed forever.
+func TestStartupSwitchesPermissionMode(t *testing.T) {
+	m := &modeLauncher{}
+	f := setup(t, func(o *Options) { o.Launchers[core.HarnessClaude] = m })
+	f.tick(t)
+	f.sessions.pane = "ready ask"
+	f.tick(t)
+	if f.state(t).State != core.StateStarting || strings.Join(f.sessions.keys, ",") != "BTab" {
+		t.Fatalf("not switched before idle: %v %v", f.state(t), f.sessions.keys)
+	}
+	f.sessions.pane = "ready full"
+	f.tick(t)
+	if f.state(t).State != core.StateIdle || len(f.sessions.keys) != 1 {
+		t.Fatalf("switched session not idle: %v %v", f.state(t), f.sessions.keys)
+	}
+
+	m = &modeLauncher{}
+	f = setup(t, func(o *Options) { o.Launchers[core.HarnessClaude] = m })
+	f.tick(t)
+	f.sessions.pane = "ready ask" // never changes
+	for i := 0; i < 10; i++ {
+		f.tick(t)
+	}
+	if len(f.sessions.keys) != maxModeKeys || f.state(t).State != core.StateIdle {
+		t.Fatalf("unbounded mode keys or stuck starting: %d %v", len(f.sessions.keys), f.state(t))
+	}
+	events, _ := f.s.Events(ctx, "agent", 100)
+	found := false
+	for _, e := range events {
+		found = found || (e.Kind == "error" && strings.Contains(e.Detail, "permission mode"))
+	}
+	if !found {
+		t.Fatal("failed mode switch not reported", events)
+	}
+}
+
 func TestStartupReadyAndBusy(t *testing.T) {
 	f := setup(t, nil)
 	f.tick(t)

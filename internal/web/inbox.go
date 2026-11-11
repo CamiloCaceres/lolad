@@ -228,6 +228,9 @@ func (s *server) inboxData(ctx context.Context, active string) (inboxView, map[s
 }
 
 func (s *server) inbox(w http.ResponseWriter, r *http.Request) {
+	if s.welcomeRedirect(w, r) { // first run: onboarding, until the user has agents or leaves
+		return
+	}
 	v, _, err := s.inboxData(r.Context(), "")
 	if err != nil {
 		s.fail(w, r, err)

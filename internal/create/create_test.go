@@ -126,14 +126,7 @@ func copyTree(t *testing.T, src, dst string) {
 	}
 }
 func TestRealSetupBothHarnessesAndAdopt(t *testing.T) {
-	source := os.Getenv("LOLAD_TEST_TEMPLATE")
-	if source == "" {
-		home, _ := os.UserHomeDir()
-		source = filepath.Join(home, "lolabot")
-	}
-	if _, err := os.Stat(filepath.Join(source, "setup.sh")); os.IsNotExist(err) {
-		t.Skip("real lolabot template unavailable; set LOLAD_TEST_TEMPLATE")
-	}
+	source := realTemplate(t)
 	templateDir := filepath.Join(t.TempDir(), "template")
 	copyTree(t, source, templateDir)
 	for _, h := range []core.Harness{core.HarnessClaude, core.HarnessCodewhale} {
@@ -256,7 +249,7 @@ func TestValidationAndRefuseOverwrite(t *testing.T) {
 		{"unknown team", core.CreateRequest{Name: "Test", Harness: core.HarnessClaude, Team: "missing"}, core.ErrNotFound},
 		{"head without team", core.CreateRequest{Name: "Test", Harness: core.HarnessClaude, Head: true}, core.ErrInvalid},
 		{"occupied head", core.CreateRequest{Name: "Test", Harness: core.HarnessClaude, Team: "company", Head: true}, core.ErrExists},
-		{"sed metacharacter", core.CreateRequest{Name: "Test & Sons", Harness: core.HarnessClaude}, core.ErrInvalid},
+		{"multi-line name", core.CreateRequest{Name: "Test\nSons", Harness: core.HarnessClaude}, core.ErrInvalid},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c, _ := newTestCreator(t, "")

@@ -1,0 +1,238 @@
+# Release: builds, (optionally) signs and publishes Lolad on a version tag.
+# macOS app + CLI binaries only. Windows packaging lives in desktop/packaging/windows
+# but is not released yet.
+# docs/desktop.md section 10.
+#
+# Signing is optional. Each signing step runs only when its secrets exist, so
+# the workflow also works on a fork or before the certificates are bought; the
+# result is then an unsigned release and the release notes say so.
+#
+# Secrets (all optional):
+#   macOS:    APPLE_CERT_P12 (base64 .p12 of the Developer ID Application cert),
+#             APPLE_CERT_PASSWORD, APPLE_SIGN_IDENTITY ("Developer ID Application: Name (TEAMID)"),
+#             and ONE notarization method:
+#               APPLE_API_KEY (base64 .p8), APPLE_API_KEY_ID, APPLE_API_ISSUER
+#               or APPLE_ID, APPLE_TEAM_ID, APPLE_APP_PASSWORD
+#   Updates:  UPDATE_SIGNING_KEY (PEM from `sign-manifest keygen`). Without it
+#             update.json is published unsigned, which the app ignores.
+#
+# Run by hand (Actions > Release > Run workflow) for a dry run: it builds
+# everything and uploads workflow artifacts but publishes nothing.
+name: Release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version for a dry run (no leading v)
+        default: 0.0.0-test
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  meta:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      tag: ${{ steps.v.outputs.tag }}
+      publish: ${{ steps.v.outputs.publish }}
+    steps:
+      - id: v
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = tag ]; then
+            { echo "version=${GITHUB_REF_NAME#v}"; echo "tag=${GITHUB_REF_NAME}"; echo "publish=true"; } >> "$GITHUB_OUTPUT"
+          else
+            { echo "version=${{ inputs.version }}"; echo "tag=v${{ inputs.version }}"; echo "publish=false"; } >> "$GITHUB_OUTPUT"
+          fi
+
+  # CLI + daemon (pure Go, no cgo). build-release.sh also builds Windows
+  # binaries; the release job leaves them out.
+  cross:
+    needs: meta
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: CLI builds
+        run: bin/build-release.sh "$VERSION"
+      - name: Pinned lolabot
+        run: |
+          . desktop/packaging/versions.env
+          git clone --depth 1 --branch "$LOLABOT_TAG" "$LOLABOT_REPO" "$RUNNER_TEMP/lolabot"
+          echo "LOLABOT_SRC=$RUNNER_TEMP/lolabot" >> "$GITHUB_ENV"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cli
+          path: dist/lolad-*
+          if-no-files-found: error
+
+  macos:
+    needs: meta
+    runs-on: macos-14
+    env:
+      VERSION: ${{ needs.meta.outputs.version }}
+      UPDATE_PUBLIC_KEY: ${{ vars.UPDATE_PUBLIC_KEY }}
+      APPLE_CERT_P12: ${{ secrets.APPLE_CERT_P12 }}
+      APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+      APPLE_SIGN_IDENTITY: ${{ secrets.APPLE_SIGN_IDENTITY }}
+      APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+      APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+      APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+    outputs:
+      signed: ${{ steps.flags.outputs.signed }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Rosetta (to build and test the x86_64 slice)
+        run: softwareupdate --install-rosetta --agree-to-license || true
+      - name: Pinned lolabot
+        run: |
+          . desktop/packaging/versions.env
+          git clone --depth 1 --branch "$LOLABOT_TAG" "$LOLABOT_REPO" "$RUNNER_TEMP/lolabot"
+          echo "LOLABOT_SRC=$RUNNER_TEMP/lolabot" >> "$GITHUB_ENV"
+      - name: Import the Developer ID certificate
+        id: flags
+        run: |
+          if [ -z "$APPLE_CERT_P12" ] || [ -z "$APPLE_SIGN_IDENTITY" ]; then
+            echo "No Apple signing secrets: the app will be ad-hoc signed and not notarized."
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            # the build script treats an empty identity as "unset"; make that true
+            echo "APPLE_SIGN_IDENTITY=" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          kc="$RUNNER_TEMP/build.keychain-db"
+          pw=$(uuidgen)
+          echo "$APPLE_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$pw" "$kc"
+          security set-keychain-settings -lut 21600 "$kc"
+          security unlock-keychain -p "$pw" "$kc"
+          security import "$RUNNER_TEMP/cert.p12" -k "$kc" -P "$APPLE_CERT_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$pw" "$kc"
+          security list-keychains -d user -s "$kc" login.keychain-db
+          rm -f "$RUNNER_TEMP/cert.p12"
+          if [ -n "$APPLE_API_KEY" ]; then
+            echo "$APPLE_API_KEY" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
+            echo "APPLE_API_KEY_PATH=$RUNNER_TEMP/AuthKey.p8" >> "$GITHUB_ENV"
+          fi
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+      - name: Build, sign, notarize, pack
+        run: RELEASE=1 desktop/build.sh --release
+      - name: Name the artifacts
+        run: |
+          cd desktop/dist
+          mv Lolad.dmg "Lolad-$VERSION.dmg"
+          mv Lolad.app.zip "Lolad-$VERSION.app.zip"
+      - name: Gatekeeper check (informational)
+        run: |
+          spctl --assess --type execute --verbose=4 desktop/dist/Lolad.app || echo "spctl rejects the app (expected when it is not notarized)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: |
+            desktop/dist/Lolad-*.dmg
+            desktop/dist/Lolad-*.app.zip
+          if-no-files-found: error
+
+  release:
+    needs: [meta, cross, macos]
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.meta.outputs.version }}
+      TAG: ${{ needs.meta.outputs.tag }}
+      UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: desktop/go.mod
+      - uses: actions/download-artifact@v4
+        with:
+          path: art
+      - name: Collect files
+        run: |
+          mkdir -p release
+          cp art/macos/* release/
+          for f in art/cli/lolad-*; do case "$f" in *windows*) ;; *) cp "$f" release/ ;; esac; done
+          # stable names for "latest" download links (docs/install.md)
+          cp "release/Lolad-$VERSION.dmg" release/Lolad.dmg
+          ls -la release
+      - name: update.json (generate, then sign with Ed25519)
+        run: |
+          . desktop/packaging/versions.env
+          cd desktop
+          base="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/"
+          go run ./tools/sign-manifest generate \
+            --version "$VERSION" \
+            --multiplexer-version "$MULTIPLEXER_VERSION" \
+            --notes-url "https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}" \
+            --url-base "$base" \
+            --darwin-arm64 "../release/Lolad-$VERSION.app.zip" \
+            --darwin-amd64 "../release/Lolad-$VERSION.app.zip" \
+            --out ../release/update.json
+          if [ -n "$UPDATE_SIGNING_KEY" ]; then
+            umask 077
+            printf '%s\n' "$UPDATE_SIGNING_KEY" > "$RUNNER_TEMP/update-key.pem"
+            go run ./tools/sign-manifest sign --key "$RUNNER_TEMP/update-key.pem" --in ../release/update.json
+            rm -f "$RUNNER_TEMP/update-key.pem"
+          else
+            echo "::warning::UPDATE_SIGNING_KEY is not set: update.json is unsigned and installed apps will ignore it."
+          fi
+      - name: Package manifests (Homebrew cask)
+        run: |
+          date_iso=$(date -u +%Y-%m-%d)
+          dmg_sha=$(sha256sum "release/Lolad-$VERSION.dmg" | cut -d' ' -f1)
+          url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}"
+          fill() { sed -e "s|@VERSION@|$VERSION|g" -e "s|@DMG_SHA256@|$dmg_sha|g" \
+            -e "s|@DOWNLOAD_BASE@|$url|g" -e "s|@DATE@|$date_iso|g" "$1" > "$2"; }
+          fill desktop/packaging/homebrew/lolad.rb release/lolad.rb
+          if grep -rn '@[A-Z0-9_]*@' release/lolad.rb; then echo "unfilled placeholder"; exit 1; fi
+      - name: checksums.txt
+        run: |
+          cd release
+          sha256sum Lolad-* lolad-* update.json lolad.rb > checksums.txt
+          cat checksums.txt
+      - name: Release notes
+        env:
+          MAC_SIGNED: ${{ needs.macos.outputs.signed }}
+        run: |
+          {
+            echo "Install guide: https://github.com/${GITHUB_REPOSITORY}/blob/main/docs/install.md"
+            echo
+            echo "- **Mac:** download \`Lolad.dmg\`, drag Lolad to Applications."
+            echo "- **Terminal only:** the \`lolad-*\` files are the command-line program."
+            echo
+            if [ "$MAC_SIGNED" != true ]; then echo "> The Mac app in this release is not notarized: the first open needs right-click, Open (see the install guide)."; fi
+          } > notes.md
+      - name: Publish the GitHub release
+        if: needs.meta.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pre=""
+          case "$VERSION" in *-*) pre="--prerelease" ;; esac
+          files=$(find release -type f)
+          # shellcheck disable=SC2086
+          gh release create "$TAG" $files --title "Lolad $VERSION" --notes-file notes.md --verify-tag $pre
+      - name: Keep the files from a dry run
+        if: needs.meta.outputs.publish != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-dry-run
+          path: |
+            release
+            notes.md

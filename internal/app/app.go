@@ -43,6 +43,7 @@ type App struct {
 	DB         *sql.DB
 	Config     registry.Config
 	configPath string
+	sessions   *tmux.Sessions
 	mutate     sync.Mutex
 }
 
@@ -99,6 +100,8 @@ func New(ctx context.Context, configPath string) (_ *App, err error) {
 	}
 	if a.Config.TmuxBin != "" {
 		sessions.Binary = a.Config.TmuxBin
+	} else if p := bundledMultiplexer(); p != "" {
+		sessions.Binary = p
 	}
 	claudeBin := a.Config.ClaudeBin
 	if claudeBin == "" {
@@ -114,7 +117,9 @@ func New(ctx context.Context, configPath string) (_ *App, err error) {
 	if err != nil {
 		return nil, err
 	}
+	bin = cliBinary(a.Config, bin)
 	sessions.Exec = bin
+	a.sessions = sessions
 	a.Supervisor, err = supervisor.New(supervisor.Options{DB: a.DB, Agents: r.List(), Sessions: sessions, Launchers: launchers, Notifier: deliver.NewRouter(sessions, launchers, a.Tracker.State), Mailer: a.Provider, Launch: core.LaunchOpts{StateDir: a.Config.StateDir, LoladBin: bin, LoladURL: URL(a.Config.Listen)}, ReloadAgents: a.reloadRegistry, MailWatch: agentcfg.MailWatcher{StateDir: a.Config.StateDir, Fallback: supervisor.ExecMailWatch{}}})
 	if err != nil {
 		return nil, err
@@ -126,7 +131,7 @@ func New(ctx context.Context, configPath string) (_ *App, err error) {
 	if err = a.initFederation(); err != nil {
 		return nil, err
 	}
-	a.Creator = create.New(create.Deps{TemplateDir: a.Config.LolabotTemplate, AgentsDir: a.Config.NewAgentsDir, Runtime: runtimeWriter{a}, Identity: a.Provider, Org: a, Contacts: a.Policy, Mail: a.Provider, Starter: deferredStarter{}, Registrar: registrar{a}})
+	a.Creator = create.New(create.Deps{Template: a.createTemplate, AgentsDir: a.Config.NewAgentsDir, Runtime: runtimeWriter{a}, Identity: a.Provider, Org: a, Contacts: a.Policy, Mail: a.Provider, Starter: deferredStarter{}, Registrar: registrar{a}})
 	for _, e := range r.Diagnostics() {
 		a.RecordEvent(e)
 	}

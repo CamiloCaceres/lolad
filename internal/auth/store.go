@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -80,12 +81,17 @@ func (s *Store) Pair(ctx context.Context, name string) (Pairing, error) {
 	_, e = s.db.ExecContext(ctx, `INSERT INTO auth_pairings(hash,name,expires) VALUES(?,?,?)`, hash(p.Code), strings.TrimSpace(name), p.Expires.Unix())
 	return p, e
 }
+
+// deviceKinds are the clients that may exchange a pairing code for a device
+// token. Browsers get a cookie instead of a token, but share the same vocabulary.
+var deviceKinds = []string{"browser", "android", "cli", "macos", "ios"}
+
 func validate(name, kind string) error {
 	if strings.TrimSpace(name) == "" || len(name) > 120 {
 		return fmt.Errorf("device name is required (maximum 120 bytes)")
 	}
-	if kind != "browser" && kind != "android" && kind != "cli" {
-		return fmt.Errorf("kind must be browser, android or cli")
+	if !slices.Contains(deviceKinds, kind) {
+		return fmt.Errorf("kind must be one of %s", strings.Join(deviceKinds, ", "))
 	}
 	return nil
 }

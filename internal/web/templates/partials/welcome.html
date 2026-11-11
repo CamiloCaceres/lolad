@@ -1,0 +1,47 @@
+{{define "welcome-state"}}{{if .Ready}}<span class="state st-idle"><i></i>Ready</span>{{else if .Problem}}<span class="state st-crashed"><i></i>Needs attention</span>{{else if .Installed}}<span class="state st-waiting"><i></i>Not signed in</span>{{else}}<span class="state st-stopped"><i></i>Not installed</span>{{end}}{{end}}
+
+{{define "welcome-row"}}{{$h := .H}}<li class="wh-row" data-harness="{{$h.ID}}">
+  <div class="wh-main">
+    <div class="wh-title"><strong>{{$h.Name}}</strong>{{template "welcome-state" $h}}</div>
+    {{if $h.Installed}}<p class="wh-meta">{{if $h.Version}}Version {{$h.Version}} · {{end}}<code>{{$h.Path}}</code></p>{{end}}
+    {{if $h.Problem}}<p class="wh-note">{{$h.Problem}}</p>
+    {{else if and $h.Installed (not $h.LoggedIn) $h.LoginChecked}}<p class="wh-note">Installed. Sign in with your {{if eq $h.ID "codex"}}OpenAI or ChatGPT{{else}}Anthropic{{end}} account so it can work for you.</p>
+    {{else if and $h.Installed (not $h.LoginChecked) (not $h.Ready)}}<p class="wh-note">lolad can’t tell whether it is signed in.</p>
+    {{else if and $h.Installed (not $h.LoginChecked)}}<p class="wh-meta">lolad can’t check its sign-in; if it asks you to sign in, use the button.</p>
+    {{else if not $h.Installed}}<p class="wh-meta">{{$h.InstallHint}}</p>{{end}}
+  </div>
+  <div class="wh-actions">
+    {{if not $h.Installed}}{{if $h.CanInstall}}<form method="post" action="/welcome/terminal"><input type="hidden" name="action" value="install-{{$h.ID}}"><button class="btn btn-sm{{if and (not .AnyReady) (eq $h.ID "claude")}} btn-primary{{end}}" type="submit">Install</button></form>{{end}}
+    {{else if and $h.CanLogin (or (not $h.Ready) (not $h.LoginChecked))}}<form method="post" action="/welcome/terminal"><input type="hidden" name="action" value="login-{{$h.ID}}"><button class="btn btn-sm{{if not .AnyReady}} btn-primary{{end}}" type="submit">Sign in</button></form>
+    {{else if $h.Ready}}{{template "icon" "check"}}{{end}}
+  </div>
+</li>{{end}}
+
+{{define "welcome-next"}}<div id="wh-next" class="welcome-actions"{{if .OOB}} hx-swap-oob="true"{{end}}>
+  {{if .Ready}}<a class="btn btn-primary" href="/welcome?step=folder">Continue{{template "icon" "next"}}</a>{{else}}<button class="btn btn-primary" type="button" disabled aria-describedby="wh-need">Continue{{template "icon" "next"}}</button><span class="help" id="wh-need">Get at least one tool to Ready to continue.</span>{{end}}
+</div>{{end}}
+
+{{define "welcome-harnesses-list"}}<ul class="wh-list" id="wh-list" aria-label="Agent tools"{{if .Poll}} hx-get="/welcome/harnesses{{if .Terminal}}?terminal={{.Terminal.Session}}{{end}}" hx-trigger="every 3s" hx-swap="outerHTML" hx-push-url="false"{{end}}>
+{{range .S.Harnesses}}{{template "welcome-row" (dict "H" . "AnyReady" $.AnyReady)}}{{end}}
+</ul>{{end}}
+
+{{define "welcome-harnesses-live"}}{{template "welcome-harnesses-list" .}}{{template "welcome-next" (dict "Ready" .AnyReady "OOB" true)}}{{end}}
+
+{{define "welcome-folder-check"}}{{if .Warning}}<div class="flash is-warn" role="status">{{template "icon" "alert"}}<div><p>{{.Warning}}</p></div></div>{{end}}{{if .Path}}<p class="help">Agents will live in <code>{{.Path}}</code>. It is created if it does not exist.</p>{{end}}{{end}}
+
+{{define "welcome-terminal"}}<details class="term-panel welcome-term" id="term-panel" data-terminal data-autostart data-term-control="on" data-agent="{{.Session}}" data-term-path="/welcome/terminal/{{.Session}}"
+  data-xterm-js="{{asset "vendor/xterm.js"}}" data-xterm-css="{{asset "vendor/xterm.css"}}" data-fit-js="{{asset "vendor/addon-fit.js"}}">
+  <summary>
+    {{template "icon" "terminal"}}<span class="term-title">{{.Title}}</span>
+    <span class="term-sub">Exactly what runs on your computer. Type here if it asks you something.</span>
+    {{template "icon" "down"}}
+  </summary>
+  <div class="term-bar">
+    <span class="term-mode" data-term-mode>{{template "icon" "lock"}}<span>Read-only</span></span>
+    <span class="term-status" data-term-status role="status">Not connected</span>
+    <span class="term-spacer"></span>
+    <button class="btn btn-sm" type="button" data-term-reconnect hidden>{{template "icon" "restart"}}<span>Reconnect</span></button>
+    <button class="btn btn-sm" type="button" data-term-control aria-pressed="false">{{template "icon" "unlock"}}<span>Take control</span></button>
+  </div>
+  <div class="term" data-term></div>
+</details>{{end}}

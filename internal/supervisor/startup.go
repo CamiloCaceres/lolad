@@ -13,6 +13,16 @@ type startupDialogs interface {
 	StartupDialog(pane string) (name string, keys []string)
 }
 
+// Optional capability: keys that bring a ready session into the mode its
+// runtime asks for (a resumed Codewhale reopens in "ask" even under bypass).
+// Nil once the session is in that mode.
+type startupModes interface {
+	StartupModeKeys(a core.Agent, pane string) []string
+}
+
+// maxModeKeys bounds blind mode switching: one full cycle of a TUI's modes.
+const maxModeKeys = 4
+
 func (s *Supervisor) checkStartup(r *record, now time.Time) error {
 	if r.StartupAt.IsZero() {
 		r.StartupAt = now
@@ -26,6 +36,24 @@ func (s *Supervisor) checkStartup(r *record, now time.Time) error {
 		return nil
 	}
 	if launcher.PromptReady(pane) {
+		if modes, ok := launcher.(startupModes); ok {
+			if keys := modes.StartupModeKeys(r.Status.Agent, pane); len(keys) > 0 {
+				if r.ModeKeys < maxModeKeys {
+					if err = s.opts.Sessions.SendKeys(r.Status.Name, keys...); err != nil {
+						return err
+					}
+					r.ModeKeys++
+					return nil // re-check the mode on the next tick
+				}
+				if r.ModeKeys == maxModeKeys {
+					r.ModeKeys++
+					s.event(r.Status.Name, "error", "could not switch the session to its permission mode")
+				}
+			} else if r.ModeKeys > 0 && r.ModeKeys <= maxModeKeys {
+				s.event(r.Status.Name, "mode", "switched the resumed session to its permission mode")
+				r.ModeKeys = 0
+			}
+		}
 		s.setState(r, core.StateIdle, "")
 		return nil
 	}

@@ -13,6 +13,8 @@ different packages:
 | create | `internal/create`, `README.md`, `docs/` |
 | dashboard | `internal/web` |
 | integrate (later) | `main.go`, `internal/app`, `internal/api`, `internal/cli` |
+| desktop | `desktop/` (own Go module, Wails app), `.github/workflows/release.yml`, `docs/install.md` |
+| setup | `internal/setup` (new), onboarding screens in `internal/web` (`welcome*`) |
 | coordinator | `internal/core`, `internal/store`, `SPEC.md`, `AGENTS.md`, `go.mod` |
 
 Rules:

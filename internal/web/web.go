@@ -25,6 +25,7 @@ import (
 
 	"github.com/CamiloCaceres/lolad/internal/auth"
 	"github.com/CamiloCaceres/lolad/internal/core"
+	"github.com/CamiloCaceres/lolad/internal/setup"
 )
 
 //go:embed templates static
@@ -44,6 +45,8 @@ type Options struct {
 	// MaxUpload is the per-file cap for files sent from the inbox; default
 	// DefaultMaxUpload (the provider's local limit).
 	MaxUpload int64
+	// Setup serves first-run onboarding (/welcome); nil turns it off. See WELCOME.md.
+	Setup setup.Service
 }
 
 type server struct {
@@ -56,6 +59,7 @@ type server struct {
 	files         fs.FS // holds templates/ and static/
 	reload        bool
 	maxUpload     int64
+	setup         setup.Service
 	uploads       pending // files uploaded in a conversation, not sent yet
 
 	mu     sync.Mutex
@@ -67,7 +71,7 @@ type server struct {
 
 // New returns the dashboard handler, to be mounted at "/".
 func New(svc core.Service, opts Options) http.Handler {
-	s := &server{svc: svc, log: opts.Logger, files: embedded, auth: opts.Auth, publicURL: opts.PublicURL, trustedOrigin: opts.TrustedOrigin, version: opts.Version, maxUpload: opts.MaxUpload}
+	s := &server{svc: svc, log: opts.Logger, files: embedded, auth: opts.Auth, publicURL: opts.PublicURL, trustedOrigin: opts.TrustedOrigin, version: opts.Version, maxUpload: opts.MaxUpload, setup: opts.Setup}
 	if s.log == nil {
 		s.log = slog.Default()
 	}
@@ -80,6 +84,7 @@ func New(svc core.Service, opts Options) http.Handler {
 
 	mux := http.NewServeMux()
 	s.remoteRoutes(mux)
+	s.welcomeRoutes(mux)
 	mux.HandleFunc("GET /connections", s.connectionsPage)
 	mux.HandleFunc("POST /connections/invite", s.connectionInvite)
 	mux.HandleFunc("POST /connections/accept", s.connectionAccept)

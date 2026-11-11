@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"github.com/CamiloCaceres/lolad/internal/setup"
 	"github.com/CamiloCaceres/lolad/internal/web"
 	"github.com/CamiloCaceres/lolad/internal/web/fake"
 )
@@ -29,7 +30,7 @@ func main() {
 	svc := fake.New(fake.Options{Simulate: !*quiet, Empty: *empty})
 	defer svc.Close()
 
-	opts := web.Options{Logger: log}
+	opts := web.Options{Logger: log, Setup: setup.NewDemo()} // /welcome with canned detection
 	if *live {
 		_, file, _, _ := runtime.Caller(0)
 		opts.Dir = filepath.Join(filepath.Dir(file), "..", "..")

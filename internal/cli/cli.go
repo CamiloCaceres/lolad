@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -31,10 +32,11 @@ import (
 var Version = "0.1.0"
 
 const help = `lolad — agent daemon and mail
-  serve                         run the daemon
+  serve [--supervised]          run the daemon (--supervised restarts it after crashes)
+  service install|uninstall|status|start|stop [--json]   start lolad at login
   pair [--name device]           create a single-use pairing code
   devices [ls|rm <id>]           list or revoke devices
-  doctor                        check daemon setup
+  doctor [--json]               check daemon setup
   connect invite|accept         pair with another lolad (accept reads stdin)
   connections | approvals       list peers or sender approvals
   connect share|unshare|pause|resume|rm <provider> [agent] [--with address]...
@@ -54,6 +56,7 @@ const help = `lolad — agent daemon and mail
   model <agent> [<model>]        inspect or set the model
   skills <agent> [mode inherit|barebones | add <id> | rm <id>]
   env <agent> [ls | set KEY | rm KEY]  set reads the value from stdin
+  global-env [ls | set KEY | rm KEY]   env shared by all agents (e.g. DEEPSEEK_API_KEY); value on stdin
   email <agent> [show | test <address> | provision [address] | rotate | detach]
   email ls | provider [set-token]  set-token reads the token from stdin
   reload | version
@@ -159,7 +162,11 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	}
 	var e error
 	if args[0] == "serve" {
-		e = serve(ctx, stderr)
+		e = serveCommand(ctx, args[1:], stdout, stderr)
+	} else if args[0] == "service" {
+		e = serviceCommand(ctx, args[1:], stdout)
+	} else if args[0] == "doctor" && wantsJSON(args[1:]) {
+		e = doctorJSON(ctx, stdout)
 	} else {
 		e = command(ctx, args, stdin, stdout)
 	}
@@ -173,6 +180,9 @@ func command(ctx context.Context, args []string, stdin io.Reader, out io.Writer)
 	c, e := registry.LoadConfig("")
 	if e != nil {
 		return e
+	}
+	if args[0] == "global-env" {
+		return globalEnvCommand(c.StateDir, args[1:], stdin, out)
 	}
 	base := strings.TrimRight(os.Getenv("LOLAD_URL"), "/")
 	if base == "" {
@@ -333,6 +343,72 @@ func command(ctx context.Context, args []string, stdin io.Reader, out io.Writer)
 	}
 	return request(ctx, base, method, path, body, out)
 }
+
+// serveCommand wires single-instance, logging and the optional watchdog around serve.
+func serveCommand(ctx context.Context, args []string, stdout, stderr io.Writer) error {
+	supervised := false
+	for _, a := range args {
+		if a != "--supervised" {
+			return fmt.Errorf("usage: lolad serve [--supervised]")
+		}
+		supervised = true
+	}
+	c, e := registry.LoadConfig("")
+	if e != nil {
+		return e
+	}
+	log, closeLog := daemonLog(c.StateDir, stderr)
+	defer closeLog()
+	if supervised {
+		ctx, cancel := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+		defer cancel()
+		defer writePIDFile(filepath.Join(c.StateDir, "supervisor.pid"))()
+		if rc := supervise(ctx, defaultSuperviseOptions(serveChild, log)); rc != 0 {
+			return fmt.Errorf("supervisor gave up; see %s", filepath.Join(app.LogDir(c.StateDir), "daemon.log"))
+		}
+		return nil
+	}
+	lock, e := acquireInstanceLock(filepath.Join(c.StateDir, "lolad.lock"))
+	if errors.Is(e, errLocked) {
+		fmt.Fprintln(stdout, "already running at", serveURL(c))
+		return nil
+	}
+	if e != nil {
+		return e
+	}
+	defer lock.Release()
+	return serve(ctx, log)
+}
+
+// serveURL is the URL to report for a running daemon.
+func serveURL(c registry.Config) string { return app.URL(c.Listen) }
+
+// daemonLog returns stderr on a terminal (or for non-file writers) and a
+// rotated <state>/logs/daemon.log otherwise.
+func daemonLog(stateDir string, stderr io.Writer) (io.Writer, func()) {
+	f, ok := stderr.(*os.File)
+	if !ok || isTerminal(f) {
+		return stderr, func() {}
+	}
+	l, err := app.OpenLog(app.LogDir(stateDir), "daemon.log", app.LogMaxBytes, app.LogFiles)
+	if err != nil {
+		return stderr, func() {}
+	}
+	return l, func() { l.Close() }
+}
+
+// isTerminal reports whether f is an interactive character device (not /dev/null).
+func isTerminal(f *os.File) bool {
+	info, err := f.Stat()
+	if err != nil || info.Mode()&os.ModeCharDevice == 0 {
+		return false
+	}
+	if null, err := os.Stat(os.DevNull); err == nil && os.SameFile(info, null) {
+		return false
+	}
+	return true
+}
+
 func serve(parent context.Context, log io.Writer) error {
 	ctx, cancel := signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM)
 	defer cancel()

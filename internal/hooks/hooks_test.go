@@ -55,6 +55,16 @@ func TestMappings(t *testing.T) {
 		}
 	}
 }
+
+// Claude Code fires SessionStart for /clear and compaction too. Only a real
+// start may report "starting": nothing marks an idle compaction idle again.
+func TestSessionStartSource(t *testing.T) {
+	for source, want := range map[string]core.State{"startup": core.StateStarting, "resume": core.StateStarting, "": core.StateStarting, "clear": core.StateIdle, "compact": ""} {
+		if e := Map("SessionStart", map[string]any{"source": source}, "a"); e.Event != "session_start" || e.State != want {
+			t.Fatalf("source %q => %q, want %q", source, e.State, want)
+		}
+	}
+}
 func TestFailOpen(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -83,5 +84,27 @@ func TestSettingsCommands(t *testing.T) {
 	}
 	if strings.Contains(err.String(), "must-never-be-argv") {
 		t.Fatal("secret argument echoed")
+	}
+}
+
+func TestGlobalEnvCommand(t *testing.T) {
+	state := t.TempDir()
+	var out bytes.Buffer
+	if e := globalEnvCommand(state, []string{"set", "DEEPSEEK_API_KEY"}, strings.NewReader("sk-secret\n"), &out); e != nil {
+		t.Fatal(e)
+	}
+	b, e := os.ReadFile(filepath.Join(state, "global.env"))
+	if e != nil || strings.TrimSpace(string(b)) != "DEEPSEEK_API_KEY=sk-secret" {
+		t.Fatalf("%q %v", b, e)
+	}
+	if st, _ := os.Stat(filepath.Join(state, "global.env")); st.Mode().Perm() != 0600 {
+		t.Fatal(st.Mode())
+	}
+	out.Reset()
+	if e := globalEnvCommand(state, []string{"ls"}, nil, &out); e != nil || strings.Contains(out.String(), "sk-secret") || !strings.Contains(out.String(), "DEEPSEEK_API_KEY") {
+		t.Fatalf("%s %v", out.String(), e)
+	}
+	if e := globalEnvCommand(state, []string{"rm", "DEEPSEEK_API_KEY"}, nil, &out); e != nil {
+		t.Fatal(e)
 	}
 }

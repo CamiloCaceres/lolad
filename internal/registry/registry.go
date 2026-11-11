@@ -43,7 +43,15 @@ type Config struct {
 	LolabotTemplate string           `yaml:"lolabot_template"`
 	NewAgentsDir    string           `yaml:"new_agents_dir"`
 	ClaudeBin       string           `yaml:"claude_bin"`
-	StateDir        string           `yaml:"-"`
+	CodexBin        string           `yaml:"codex_bin"`
+	CodewhaleBin    string           `yaml:"codewhale_bin"`
+	// CLIBin is the console CLI agents run (LOLAD_BIN, the hook command and
+	// the agents' PATH). On Windows the daemon is lolad-daemon.exe, not this.
+	CLIBin string `yaml:"cli_bin"`
+	// Path is the PATH string the daemon uses to discover harnesses and
+	// hands to agents, instead of the (minimal) service environment.
+	Path     string `yaml:"path"`
+	StateDir string `yaml:"-"`
 }
 
 func DefaultConfig() Config {
@@ -53,6 +61,15 @@ func DefaultConfig() Config {
 		state = filepath.Join(home, ".local/share/lolad")
 	}
 	return Config{Federation: FederationConfig{Enabled: true}, TmuxSocket: "lolad", Listen: "127.0.0.1:4100", AgentsDirs: []string{filepath.Join(home, "agents")}, LolabotTemplate: filepath.Join(home, "lolabot"), NewAgentsDir: filepath.Join(home, "agents"), StateDir: state}
+}
+
+// CLIPath is the console CLI path: cli_bin when set, otherwise exe (normally
+// os.Executable of the running daemon).
+func (c Config) CLIPath(exe string) string {
+	if c.CLIBin != "" {
+		return c.CLIBin
+	}
+	return exe
 }
 func ConfigPath() string {
 	if p := os.Getenv("LOLAD_CONFIG"); p != "" {

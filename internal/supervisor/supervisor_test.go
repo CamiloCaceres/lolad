@@ -166,6 +166,8 @@ func TestCrashBackoffAndFailure(t *testing.T) {
 		t.Fatal("first launch must be fresh")
 	}
 	for i := 0; i < 6; i++ {
+		// The session ran (it sent a hook) before dying: resume it again.
+		f.s.HandleHook(ctx, core.HookEvent{Agent: "agent", Event: "stop", Seq: 1})
 		f.sessions.dead = true
 		f.tick(t)
 		a := f.state(t)
@@ -203,6 +205,45 @@ func TestCrashBackoffAndFailure(t *testing.T) {
 	f.tick(t)
 	if f.sessions.starts != starts+1 {
 		t.Fatal("Start did not clear failure")
+	}
+}
+
+// A conversation the harness cannot resume (Codewhale given an id it rejects,
+// a deleted session) dies before its first hook every time. After two such
+// resumes the agent must start fresh instead of crash-looping into "failed".
+func TestUnresumableConversationStartsFresh(t *testing.T) {
+	f := setup(t, func(o *Options) { o.Agents[0].Runtime.OnWake = "wake up" })
+	f.tick(t) // fresh first launch
+	f.s.HandleHook(ctx, core.HookEvent{Agent: "agent", Event: "stop", Seq: 1})
+	relaunch := func() core.LaunchOpts {
+		t.Helper()
+		f.sessions.dead = true
+		f.tick(t)
+		f.c.advance(10 * time.Minute)
+		f.tick(t)
+		return f.l.opts[len(f.l.opts)-1]
+	}
+	if relaunch().Fresh {
+		t.Fatal("a session that ran must be resumed after a crash")
+	}
+	if relaunch().Fresh {
+		t.Fatal("one hookless crash may be transient; resume once more")
+	}
+	o := relaunch()
+	if !o.Fresh || o.FirstPrompt != "wake up" {
+		t.Fatalf("second failed resume must start fresh: %+v", o)
+	}
+	if a := f.state(t); a.State == core.StateFailed {
+		t.Fatalf("agent gave up: %+v", a)
+	}
+	// A hook from a resumed session clears the count.
+	f.s.HandleHook(ctx, core.HookEvent{Agent: "agent", Event: "stop", Seq: 1})
+	if relaunch().Fresh {
+		t.Fatal("crash after a working session resumed fresh")
+	}
+	f.s.HandleHook(ctx, core.HookEvent{Agent: "agent", Event: "stop", Seq: 1})
+	if relaunch().Fresh || relaunch().Fresh {
+		t.Fatal("hook did not reset the failed-resume count")
 	}
 }
 

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>dev.caceres.lolad</string>
+  <key>BundleProgram</key><string>Contents/Helpers/lolad</string>
+  <key>ProgramArguments</key>
+  <array><string>lolad</string><string>serve</string></array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key>
+  <dict><key>SuccessfulExit</key><false/></dict>
+  <key>ProcessType</key><string>Interactive</string>
+  <key>EnvironmentVariables</key>
+  <dict><key>LOLAD_INSTALL</key><string>app</string></dict>
+  <key>StandardOutPath</key><string>~/.local/share/lolad/logs/daemon.log</string>
+  <key>StandardErrorPath</key><string>~/.local/share/lolad/logs/daemon.log</string>
+</dict>
+</plist>

@@ -67,7 +67,12 @@ long-running assistants:
 
 ## Install
 
-Requires Go 1.26+, tmux (psmux on Windows), a
+**Mac app (easiest):** download `Lolad.dmg` from the
+[latest release](https://github.com/CamiloCaceres/lolad/releases/latest) and
+follow the [install guide](docs/install.md). The app is not notarized yet, so
+the first open needs right-click, Open. A Windows app is not released yet.
+
+**From source:** requires Go 1.26+, tmux (psmux on Windows), a
 [lolabot](https://github.com/23blocks-OS/lolabot) checkout for creating new
 agents, and the `claude` or `codewhale` executable for each agent.
 

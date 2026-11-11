@@ -50,7 +50,18 @@ func Map(event string, payload map[string]any, agent string) core.HookEvent {
 	case "stop":
 		e.State = core.StateIdle
 	case "session_start":
-		e.State = core.StateStarting
+		// Claude Code also fires SessionStart for /clear and for compaction,
+		// including idle compaction with no turn around it. Neither is a
+		// startup: after /clear the session waits at the prompt, and compaction
+		// keeps whatever state the session was in. Reporting "starting" there
+		// left agents stuck, since no Stop follows to mark them idle again.
+		switch str("source") {
+		case "clear":
+			e.State = core.StateIdle
+		case "compact":
+		default:
+			e.State = core.StateStarting
+		}
 	case "permission":
 		e.State = core.StateWaiting
 	case "session_end":

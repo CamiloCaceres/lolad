@@ -1,0 +1,9 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.version.1.6.0.schema.json
+# winget manifest templates: the release workflow fills its placeholders and
+# attaches winget/*.yaml to the release. Submit them to microsoft/winget-pkgs
+# under manifests/c/CamiloCaceres/Lolad/<version>/.
+PackageIdentifier: CamiloCaceres.Lolad
+PackageVersion: "@VERSION@"
+DefaultLocale: en-US
+ManifestType: version
+ManifestVersion: 1.6.0

@@ -15,6 +15,7 @@ import (
 
 	"github.com/CamiloCaceres/lolad/internal/api"
 	"github.com/CamiloCaceres/lolad/internal/auth"
+	"github.com/CamiloCaceres/lolad/internal/setup"
 	"github.com/CamiloCaceres/lolad/internal/web"
 )
 
@@ -58,6 +59,12 @@ func (a *App) Handler(remote bool, version string, logger *slog.Logger) http.Han
 		public = strings.TrimRight(a.Config.Remote.PublicURL, "/")
 	}
 	rest := api.New(a, api.Options{Auth: a.Auth, Remote: remote, Version: version, PublicURL: public, HookSink: a.Tracker, StateDir: a.Config.StateDir, Trigger: func(r *http.Request, ag, n, b string) error { return a.Trigger(r.Context(), ag, n, b) }})
+	var onboarding *setup.Manager
+	if !remote {
+		onboarding = a.setupManager()
+		mux.Handle("/api/setup", setup.Handler(onboarding))
+		mux.Handle("/api/setup/", setup.Handler(onboarding))
+	}
 	mux.Handle("/api/", rest)
 	mux.Handle("/hook/", rest)
 	if !remote {
@@ -68,7 +75,7 @@ func (a *App) Handler(remote bool, version string, logger *slog.Logger) http.Han
 		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "version": version})
 	})
 	mux.HandleFunc("GET /download/{file}", a.download)
-	mux.Handle("/", web.New(a, web.Options{Auth: a.Auth, PublicURL: a.Config.Remote.PublicURL, TrustedOrigin: public, Version: version}))
+	mux.Handle("/", web.New(a, web.Options{Auth: a.Auth, PublicURL: a.Config.Remote.PublicURL, TrustedOrigin: public, Version: version, Setup: setupService(onboarding)}))
 	protection := http.NewCrossOriginProtection()
 	if public != "" {
 		_ = protection.AddTrustedOrigin(public)
@@ -181,4 +188,12 @@ func harden(next http.Handler, remote bool, logger *slog.Logger) http.Handler {
 		rw.Header().Set("X-Content-Type-Options", "nosniff")
 		next.ServeHTTP(rw, r)
 	})
+}
+
+// setupService avoids a typed-nil interface when onboarding is off.
+func setupService(m *setup.Manager) setup.Service {
+	if m == nil {
+		return nil
+	}
+	return m
 }

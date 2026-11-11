@@ -27,6 +27,7 @@ type Options struct {
 	HookSink  core.HookSink
 	StateDir  string
 	Trigger   func(*http.Request, string, string, string) error
+	StartedAt time.Time // zero: the time New was called
 }
 
 func write(w http.ResponseWriter, v any, e error) {
@@ -42,6 +43,8 @@ func write(w http.ResponseWriter, v any, e error) {
 			status = 409
 		case errors.Is(e, core.ErrInvalid), errors.Is(e, core.ErrNotRunning):
 			status = 422
+		case errors.Is(e, core.ErrTooLarge):
+			status = http.StatusRequestEntityTooLarge
 		}
 		w.WriteHeader(status)
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": http.StatusText(status), "message": e.Error()})
@@ -79,6 +82,9 @@ func before(r *http.Request) time.Time {
 }
 func New(s core.Service, o Options) http.Handler {
 	m := http.NewServeMux()
+	healthRoute(m, o)
+	// Files ride the same authenticated tree as the rest of /api.
+	attachments := attachmentRoutes(m, s)
 	settingsRoutes(m, s)
 	federationRoutes(m, s)
 	// Creation metadata stays behind the same authentication boundary as the service.
@@ -162,7 +168,14 @@ func New(s core.Service, o Options) http.Handler {
 			write(w, nil, e)
 			return
 		}
+		if e := checkSendAttachments(v.Attachments); e != nil {
+			write(w, nil, e)
+			return
+		}
 		mail, e := s.UserSend(r.Context(), v)
+		if e == nil {
+			attachments.done(v.Attachments)
+		}
 		write(w, mail, e)
 	})
 	m.HandleFunc("POST /api/mail/{id}/read", func(w http.ResponseWriter, r *http.Request) {

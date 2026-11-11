@@ -1,0 +1,18 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
+PackageIdentifier: CamiloCaceres.Lolad
+PackageVersion: "@VERSION@"
+PackageLocale: en-US
+Publisher: Camilo Caceres
+PublisherUrl: https://github.com/CamiloCaceres
+PackageName: Lolad
+PackageUrl: https://github.com/CamiloCaceres/lolad
+License: MIT
+LicenseUrl: https://github.com/CamiloCaceres/lolad/blob/main/LICENSE
+ShortDescription: Keeps a team of AI agents running, with a window to talk to them.
+Moniker: lolad
+Tags:
+  - agents
+  - ai
+ReleaseNotesUrl: "https://github.com/CamiloCaceres/lolad/releases/tag/v@VERSION@"
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0

@@ -116,6 +116,19 @@ func TestReadinessGuards(t *testing.T) {
 	if n.ready(core.Agent{Name: "a"}, "✻ Working… (esc to interrupt)\n"+pane) {
 		t.Fatal("busy pane accepted")
 	}
+	// A session left "starting" at its prompt (no Stop ever follows) must
+	// still get mail once the launch prompt had time to go in.
+	n = New(nil, l, func(string) (core.State, time.Time) { return core.StateStarting, time.Now() })
+	if n.ready(core.Agent{Name: "a"}, pane) {
+		t.Fatal("fresh start accepted before its launch prompt")
+	}
+	n = New(nil, l, func(string) (core.State, time.Time) { return core.StateStarting, time.Now().Add(-time.Hour) })
+	if !n.ready(core.Agent{Name: "a"}, pane) {
+		t.Fatal("stale starting agent never receives mail")
+	}
+	if n.ready(core.Agent{Name: "a"}, pane+"\nEnter to confirm") {
+		t.Fatal("startup dialog accepted")
+	}
 }
 
 func TestTrackerSequence(t *testing.T) {
