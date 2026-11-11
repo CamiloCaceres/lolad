@@ -1,6 +1,6 @@
 # lolad clients
 
-Native clients for a lolad daemon. Each one is a thin client over the same
+Clients for a lolad daemon. The desktop app is one shared web UI in a thin native shell; the native SwiftUI client was retired. Each one is a thin client over the same
 documented contract, [`docs/client-api.md`](../docs/client-api.md). The daemon
 owns every agent, all mail and all policy. Clients render state and send
 operator actions.
@@ -8,8 +8,7 @@ operator actions.
 | Directory | Platform | Toolkit | Status |
 |---|---|---|---|
 | `android/` | Android 8+ | Kotlin, Android Views, Material 3 | shipping |
-| `apple/` | macOS 14+ (iOS later) | Swift, SwiftUI with AppKit where needed | shipping |
-| `windows/` | Windows 11 | to be decided (WinUI 3 is the likely choice) | not started |
+| `../desktop/` | macOS (Windows planned) | Wails shell around the dashboard | see [docs/desktop.md](../docs/desktop.md) |
 
 ## Rules
 
