@@ -20,8 +20,8 @@
 # everything and uploads workflow artifacts but publishes nothing.
 name: Release
 on:
-  push:
-    tags: ['v*']
+  # Manual only (Actions > Release > Run workflow). Releases are normally built
+  # locally: desktop/build.sh --release and desktop/packaging/windows/build.sh.
   workflow_dispatch:
     inputs:
       version:
