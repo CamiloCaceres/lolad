@@ -74,6 +74,7 @@ type Engine struct {
 	approvals []func(core.Grant)
 	changes   []func(core.Mail)
 	wake      chan struct{}
+	urlMu     sync.RWMutex // guards o.URL, which SetURL changes at runtime
 }
 
 var _ core.Federator = (*Engine)(nil)
@@ -304,7 +305,7 @@ func (f *Engine) mutate(fn func() error) error {
 }
 func (f *Engine) Enabled() bool { return f.o.Enabled }
 func (f *Engine) Info(context.Context) core.FederationInfo {
-	v := core.FederationInfo{Enabled: f.o.Enabled, Provider: f.o.Provider.Name(), Display: f.o.Display, URL: f.o.URL, Fingerprint: fingerprint(f.pub)}
+	v := core.FederationInfo{Enabled: f.o.Enabled, Provider: f.o.Provider.Name(), Display: f.o.Display, URL: f.selfURL(), Fingerprint: fingerprint(f.pub)}
 	if !v.Enabled {
 		v.Problem = "Federation is disabled"
 	} else if v.URL == "" {

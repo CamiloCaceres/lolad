@@ -35,12 +35,41 @@ const (
 
 // FederationInfo is this lolad as other lolads see it.
 type FederationInfo struct {
-	Enabled     bool   `json:"enabled"`
-	Provider    string `json:"provider"`    // e.g. "milo.lolad.local"
-	Display     string `json:"display"`     // "Milo"; shown on the other side as "Milo's lolad"
-	URL         string `json:"url"`         // base URL peers deliver to; "" = not reachable, invites disabled
-	Fingerprint string `json:"fingerprint"` // SHA256:… of the provider key
-	Problem     string `json:"problem,omitempty"`
+	Enabled     bool       `json:"enabled"`
+	Provider    string     `json:"provider"`    // e.g. "milo.lolad.local"
+	Display     string     `json:"display"`     // "Milo"; shown on the other side as "Milo's lolad"
+	URL         string     `json:"url"`         // base URL peers deliver to; "" = not reachable, invites disabled
+	Fingerprint string     `json:"fingerprint"` // SHA256:… of the provider key
+	Problem     string     `json:"problem,omitempty"`
+	Hub         *HubStatus `json:"hub,omitempty"` // nil = not on a hub
+}
+
+// Hub states (SPEC.md "Hub (v5)").
+const (
+	HubConnected  = "connected"
+	HubConnecting = "connecting"
+	HubError      = "error"    // last attempt failed; retrying
+	HubDisabled   = "disabled" // the hub operator disabled this handle
+)
+
+// HubStatus is this lolad's membership of a hub: the relay that gives it a
+// public federation URL (<url>/p/<handle>) without a shared network.
+type HubStatus struct {
+	URL    string    `json:"url"`    // hub base URL, e.g. "https://hub.example.com"
+	Handle string    `json:"handle"` // unique on that hub
+	State  string    `json:"state"`
+	Error  string    `json:"error,omitempty"`
+	Since  time.Time `json:"since,omitzero"` // when State last changed
+}
+
+// Hubber manages hub membership. Optional on a Service: the API mounts
+// /api/hub only when the service implements it.
+type Hubber interface {
+	Hub(ctx context.Context) (*HubStatus, error) // nil = not joined
+	// JoinHub registers this lolad with a sign-up code (a secret: never logged
+	// or echoed) and starts the tunnel.
+	JoinHub(ctx context.Context, url, handle, code string) (*HubStatus, error)
+	LeaveHub(ctx context.Context) error // releases the handle and closes the tunnel
 }
 
 // Connection is one paired lolad.

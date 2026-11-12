@@ -88,6 +88,8 @@ func New(svc core.Service, opts Options) http.Handler {
 	mux.HandleFunc("GET /connections", s.connectionsPage)
 	mux.HandleFunc("POST /connections/invite", s.connectionInvite)
 	mux.HandleFunc("POST /connections/accept", s.connectionAccept)
+	mux.HandleFunc("POST /connections/hub/join", s.hubJoin)
+	mux.HandleFunc("POST /connections/hub/leave", s.hubLeave)
 	mux.HandleFunc("POST /connections/{provider}", s.connectionUpdate)
 	mux.HandleFunc("POST /connections/{provider}/remove", s.connectionRemove)
 	mux.HandleFunc("POST /grants/decide", s.grantDecide)

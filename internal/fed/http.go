@@ -50,7 +50,7 @@ type receiptBody struct {
 }
 
 func (f *Engine) CreateInvite(ctx context.Context) (core.Invite, error) {
-	if !f.Enabled() || f.o.URL == "" {
+	if !f.Enabled() || f.selfURL() == "" {
 		return core.Invite{}, fmt.Errorf("%w: %s", core.ErrInvalid, f.Info(ctx).Problem)
 	}
 	b := make([]byte, 32)
@@ -62,7 +62,7 @@ func (f *Engine) CreateInvite(ctx context.Context) (core.Invite, error) {
 	if _, e := f.o.DB.ExecContext(ctx, `INSERT INTO fed_invites(secret_hash,expires) VALUES(?,?)`, hashSecret(secret), expires.Unix()); e != nil {
 		return core.Invite{}, e
 	}
-	raw, _ := json.Marshal(inviteCode{V: 1, Provider: f.o.Provider.Name(), Display: f.o.Display, URL: f.o.URL, PublicKey: f.pub, Secret: secret})
+	raw, _ := json.Marshal(inviteCode{V: 1, Provider: f.o.Provider.Name(), Display: f.o.Display, URL: f.selfURL(), PublicKey: f.pub, Secret: secret})
 	return core.Invite{Code: "lolad-invite:" + base64.RawURLEncoding.EncodeToString(raw), ExpiresAt: expires}, nil
 }
 func (f *Engine) AcceptInvite(ctx context.Context, code string) (core.Connection, error) {
@@ -92,7 +92,7 @@ func (f *Engine) AcceptInvite(ctx context.Context, code string) (core.Connection
 	}
 	f.mu.Unlock()
 	target := peer{Connection: core.Connection{Provider: c.Provider, Display: c.Display, URL: c.URL}, PublicKey: c.PublicKey}
-	status, b, e := f.request(ctx, target, "POST", "pair", pairBody{Version: 1, Provider: f.o.Provider.Name(), Display: f.o.Display, URL: f.o.URL, PublicKey: f.pub, Secret: c.Secret})
+	status, b, e := f.request(ctx, target, "POST", "pair", pairBody{Version: 1, Provider: f.o.Provider.Name(), Display: f.o.Display, URL: f.selfURL(), PublicKey: f.pub, Secret: c.Secret})
 	if e != nil {
 		return core.Connection{}, fmt.Errorf("pairing peer unreachable")
 	}
@@ -113,6 +113,9 @@ func (f *Engine) AcceptInvite(ctx context.Context, code string) (core.Connection
 			if p.PublicKey != target.PublicKey {
 				return core.ErrDenied
 			}
+			// Pairing again with the same key moves the peer to its current URL
+			// (for example after it joined a hub).
+			p.URL, p.Display = target.URL, target.Display
 			target = *p
 		} else {
 			f.doc.Peers = append(f.doc.Peers, target)
@@ -375,7 +378,21 @@ func (f *Engine) pair(w http.ResponseWriter, r *http.Request, raw []byte) {
 				return
 			}
 		}
-		jsonResponse(w, 200, pairBody{Version: 1, Provider: f.o.Provider.Name(), Display: f.o.Display, URL: f.o.URL, PublicKey: f.pub})
+		if b.URL != "" && b.URL != old.URL || b.Display != "" && b.Display != old.Display {
+			if e = f.mutate(func() error {
+				if b.URL != "" {
+					old.URL = b.URL
+				}
+				if b.Display != "" {
+					old.Display = b.Display
+				}
+				return nil
+			}); e != nil {
+				reject(w, 500, "internal_error", "Cannot save connection")
+				return
+			}
+		}
+		jsonResponse(w, 200, pairBody{Version: 1, Provider: f.o.Provider.Name(), Display: f.o.Display, URL: f.selfURL(), PublicKey: f.pub})
 		return
 	}
 	var hash string
@@ -425,5 +442,5 @@ func (f *Engine) pair(w http.ResponseWriter, r *http.Request, raw []byte) {
 		return
 	}
 	go f.event("Paired " + p.Provider)
-	jsonResponse(w, 200, pairBody{Version: 1, Provider: f.o.Provider.Name(), Display: f.o.Display, URL: f.o.URL, PublicKey: f.pub})
+	jsonResponse(w, 200, pairBody{Version: 1, Provider: f.o.Provider.Name(), Display: f.o.Display, URL: f.selfURL(), PublicKey: f.pub})
 }

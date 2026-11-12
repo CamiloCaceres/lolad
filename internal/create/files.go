@@ -82,7 +82,16 @@ func writeHarness(a core.Agent) error {
 		}
 		link := filepath.Join(a.Dir, "AGENTS.md")
 		if _, err = os.Lstat(link); os.IsNotExist(err) {
-			return os.Symlink("CLAUDE.md", link)
+			if err = os.Symlink("CLAUDE.md", link); err != nil {
+				// Windows without Developer Mode or admin cannot create symlinks.
+				// AGENTS.md is a convenience alias, so a copy is good enough.
+				data, rerr := os.ReadFile(filepath.Join(a.Dir, "CLAUDE.md"))
+				if rerr != nil {
+					return rerr
+				}
+				return atomicWrite(link, data, 0644)
+			}
+			return nil
 		} else {
 			return err
 		}

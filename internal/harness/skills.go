@@ -77,7 +77,9 @@ func claudeSkills(agent core.Agent, dir string, env map[string]string, overlay m
 		return nil, fmt.Errorf("managed user skills projection is not a symlink")
 	}
 	if e := os.Symlink(source, target); e != nil {
-		return nil, e
+		if e = linkDirFallback(source, target, e); e != nil {
+			return nil, e
+		}
 	}
 	return []string{"--add-dir", projection}, nil
 }

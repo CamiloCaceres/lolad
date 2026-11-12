@@ -26,11 +26,24 @@ type connectionsView struct {
 	Connections []connectionView
 	Invite      *core.Invite
 	Error       string
+	// Hub (SPEC.md "Hub (v5)"): shown when the service supports it.
+	HubAvailable bool
+	Hub          *core.HubStatus
+	HubURL       string // join form values kept after an error (never the code)
+	HubHandle    string
 }
 
 func (s *server) connectionData(r *http.Request) (connectionsView, error) {
 	ctx := r.Context()
 	v := connectionsView{Info: s.svc.Info(ctx)}
+	if h, ok := s.svc.(core.Hubber); ok {
+		v.HubAvailable = true
+		st, err := h.Hub(ctx)
+		if err != nil {
+			return v, err
+		}
+		v.Hub = st
+	}
 	cs, err := s.svc.Connections(ctx)
 	if err != nil {
 		return v, err
@@ -256,4 +269,46 @@ func remoteLabel(name string, cs []core.Connection) string {
 		}
 	}
 	return p
+}
+
+func (s *server) hubJoin(w http.ResponseWriter, r *http.Request) {
+	h, ok := s.svc.(core.Hubber)
+	if !ok {
+		s.fail(w, r, core.ErrNotFound)
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 16<<10)
+	url, handle, code := strings.TrimSpace(r.FormValue("url")), strings.ToLower(strings.TrimSpace(r.FormValue("handle"))), r.FormValue("code")
+	fail := func(msg string) {
+		v, e := s.connectionData(r)
+		if e != nil {
+			s.fail(w, r, e)
+			return
+		}
+		v.Error, v.HubURL, v.HubHandle = msg, url, handle
+		s.page(w, r, 422, "connections", layout{Title: "Connections", Data: v})
+	}
+	if url == "" || handle == "" || strings.TrimSpace(code) == "" {
+		fail("Enter the hub address, a handle and the sign-up code.")
+		return
+	}
+	if _, e := h.JoinHub(r.Context(), url, handle, code); e != nil {
+		// Hub refusals are fixed messages (never the submitted code).
+		msg := strings.TrimPrefix(strings.TrimPrefix(e.Error(), core.ErrInvalid.Error()+": "), "hub: ")
+		fail("Could not join the hub: " + msg + ".")
+		return
+	}
+	s.redirect(w, r, "/connections")
+}
+func (s *server) hubLeave(w http.ResponseWriter, r *http.Request) {
+	h, ok := s.svc.(core.Hubber)
+	if !ok || r.FormValue("confirm") != "leave" {
+		s.fail(w, r, fmt.Errorf("%w: confirm leaving first", core.ErrInvalid))
+		return
+	}
+	if e := h.LeaveHub(r.Context()); e != nil {
+		s.fail(w, r, e)
+		return
+	}
+	s.redirect(w, r, "/connections")
 }

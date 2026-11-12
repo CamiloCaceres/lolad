@@ -812,3 +812,57 @@ func TestPairWithoutOwnURLAndLoginPin(t *testing.T) {
 		t.Fatal("pair retry bypassed pinned login", code)
 	}
 }
+
+func TestRepairMovesPeerURLAndRetryURL(t *testing.T) {
+	a, b := setup(t, "milo"), setup(t, "jugui")
+	pair(t, a, b)
+	// Milo moves (for example onto a hub) and pairs again with a new invite.
+	moved := a.server.URL + "/moved"
+	if e := a.f.SetURL(moved); e != nil {
+		t.Fatal(e)
+	}
+	if e := a.f.SetURL("http://example.com"); e == nil {
+		t.Fatal("plain http accepted")
+	}
+	i, e := a.f.CreateInvite(t.Context())
+	if e != nil {
+		t.Fatal(e)
+	}
+	// Serve the moved prefix too.
+	a.server.Config.Handler = http.StripPrefix("/moved", a.server.Config.Handler)
+	if _, e = b.f.AcceptInvite(t.Context(), i.Code); e != nil {
+		t.Fatal(e)
+	}
+	cs, _ := b.f.Connections(t.Context())
+	if len(cs) != 1 || cs[0].URL != moved {
+		t.Fatal("acceptor kept the old URL", cs)
+	}
+	urls := b.f.PeerURLs()
+	if len(urls) != 1 || urls[0] != moved {
+		t.Fatal(urls)
+	}
+	// RetryURL makes that peer's queued entries due now.
+	if _, e = b.db.Exec(`INSERT INTO fed_outbox(id,peer,next_at,created_at) VALUES('x',?,?,?)`, a.p.Name(), time.Now().Add(time.Hour).UnixMilli(), time.Now().UnixMilli()); e != nil {
+		t.Fatal(e)
+	}
+	if e = b.f.RetryURL(t.Context(), moved+"/"); e != nil {
+		t.Fatal(e)
+	}
+	var next int64
+	_ = b.db.QueryRow(`SELECT next_at FROM fed_outbox WHERE id='x'`).Scan(&next)
+	if next > time.Now().UnixMilli() {
+		t.Fatal("not made due")
+	}
+	if pub := a.f.ProviderPublicKey(); !ed25519.Verify(mustKey(t, pub), []byte("m"), a.f.ProviderSign([]byte("m"))) {
+		t.Fatal("provider signer")
+	}
+}
+
+func mustKey(t *testing.T, pub string) ed25519.PublicKey {
+	t.Helper()
+	k, e := amp.ParsePublicKey(pub)
+	if e != nil {
+		t.Fatal(e)
+	}
+	return k
+}

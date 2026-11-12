@@ -42,6 +42,18 @@ All `core.Federator` methods are available. Additional methods:
 - `Reload() error`: reload `connections.yaml`, retaining the last valid snapshot
   if parsing or validation fails. YAML changes are serialized with API writes.
 
+Hub hooks (SPEC.md "Hub (v5)"; used by `internal/hub` through `internal/app`):
+
+- `SetURL(url) error`: change the advertised URL at runtime (joining or leaving
+  a hub). Already-paired peers learn it when they pair again, which updates
+  `url` and `display` on both sides.
+- `ProviderSign([]byte) []byte`, `ProviderPublicKey() string`: sign with the
+  provider key without exposing it.
+- `PeerURLs() []string`: URLs of connected peers (the hub client watches those
+  on its hub).
+- `RetryURL(ctx, url) error`: make queued outbox entries for peers at `url` due
+  now, for example when the hub reports that such a peer reconnected.
+
 Provider key files live in `<state>/federation/`; the private key is created
 once with mode 0600 and is never returned by an API. `connections.yaml` uses
 snake_case field names, atomic mode-0600 replacement, and preserves public-key

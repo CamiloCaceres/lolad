@@ -41,6 +41,8 @@ const help = `lolad — agent daemon and mail
   connections | approvals       list peers or sender approvals
   connect share|unshare|pause|resume|rm <provider> [agent] [--with address]...
   approve|block <peer> <remote> <local>
+  hub join <url> --handle <name>  join a hub (sign-up code on stdin)
+  hub status | hub leave        hub membership
   ls | status <agent>           inspect the fleet
   start|stop|interrupt <agent>  control an agent
   restart [--fresh] <agent>     restart/resume or start fresh
@@ -191,6 +193,8 @@ func command(ctx context.Context, args []string, stdin io.Reader, out io.Writer)
 	switch args[0] {
 	case "connect", "connections", "approvals", "approve", "block":
 		return federationCommand(ctx, base, args, stdin, out)
+	case "hub":
+		return hubCommand(ctx, base, args, stdin, out)
 	case "pair", "devices", "doctor":
 		return remoteCommand(ctx, base, c, args, out)
 	case "model", "skills", "env", "email":

@@ -45,6 +45,7 @@ type App struct {
 	configPath string
 	sessions   *tmux.Sessions
 	mutate     sync.Mutex
+	hub        *hubRuntime
 }
 
 var _ core.Service = (*App)(nil)

@@ -63,8 +63,35 @@ func federationRoutes(m *http.ServeMux, s core.Federator) {
 		v, e := s.DecideGrant(r.Context(), b.Peer, b.Remote, b.Local, *b.Allow)
 		write(w, v, e)
 	})
+	if h, ok := s.(core.Hubber); ok {
+		hubRoutes(m, h)
+	}
 	m.HandleFunc("GET /api/remote-contacts", func(w http.ResponseWriter, r *http.Request) {
 		v, e := s.RemoteContacts(r.Context(), r.URL.Query().Get("local"))
 		write(w, v, e)
 	})
+}
+
+// hubRoutes: SPEC.md "Hub (v5)". GET returns null when not joined.
+func hubRoutes(m *http.ServeMux, h core.Hubber) {
+	m.HandleFunc("GET /api/hub", func(w http.ResponseWriter, r *http.Request) { v, e := h.Hub(r.Context()); write(w, v, e) })
+	m.HandleFunc("POST /api/hub/join", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		var b struct {
+			URL    string `json:"url"`
+			Handle string `json:"handle"`
+			Code   string `json:"code"`
+		}
+		if e := decode(w, r, &b); e != nil {
+			write(w, nil, e)
+			return
+		}
+		if b.URL == "" || b.Handle == "" {
+			write(w, nil, fmt.Errorf("%w: url and handle are required", core.ErrInvalid))
+			return
+		}
+		v, e := h.JoinHub(r.Context(), b.URL, b.Handle, b.Code)
+		write(w, v, e)
+	})
+	m.HandleFunc("DELETE /api/hub", func(w http.ResponseWriter, r *http.Request) { write(w, nil, h.LeaveHub(r.Context())) })
 }

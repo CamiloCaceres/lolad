@@ -29,7 +29,7 @@ func (a *App) initFederation() error {
 		a.RecordEvent(core.Event{Agent: m.FromName, Kind: "mail", Detail: m.ID + ": " + m.Delivery})
 	})
 	engine.OnApproval(a.federationApproval)
-	return nil
+	return a.initHub()
 }
 
 // Run owns both background loops and waits for the outbox before DB shutdown.
@@ -38,8 +38,11 @@ func (a *App) Run(ctx context.Context) error {
 	defer cancel()
 	done := make(chan struct{})
 	go func() { defer close(done); a.Engine.Run(ctx) }()
+	hubDone := make(chan struct{})
+	go func() { defer close(hubDone); a.runHub(ctx) }()
 	err := a.Supervisor.Run(ctx)
 	cancel()
+	<-hubDone
 	<-done
 	return err
 }
