@@ -7,6 +7,7 @@ import (
 	"github.com/CamiloCaceres/lolad/internal/app"
 	"github.com/CamiloCaceres/lolad/internal/auth"
 	"github.com/CamiloCaceres/lolad/internal/registry"
+	"github.com/CamiloCaceres/lolad/internal/winproc"
 	"io"
 	"net"
 	"net/http"
@@ -96,7 +97,7 @@ func doctor(ctx context.Context, c registry.Config, out io.Writer) error {
 		} else {
 			tsctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 			defer cancel()
-			b, e := exec.CommandContext(tsctx, path, "serve", "status", "--json").Output()
+			b, e := winproc.Hide(exec.CommandContext(tsctx, path, "serve", "status", "--json")).Output()
 			// Inspect the exact public host and root proxy without echoing tailnet data.
 			mapped := e == nil && serveMapped(b, c.Remote.PublicURL, c.Remote.Listen)
 			check(mapped, "Tailscale Serve mapping", "run tailscale serve --bg --https=<public URL port> http://"+c.Remote.Listen)

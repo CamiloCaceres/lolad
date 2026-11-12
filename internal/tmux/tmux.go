@@ -4,6 +4,7 @@ package tmux
 import (
 	"context"
 	"fmt"
+	"github.com/CamiloCaceres/lolad/internal/winproc"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -40,7 +41,7 @@ func New(stateDir, socket string) (*Sessions, error) {
 	return &Sessions{Socket: socket, Config: path, Binary: DefaultBinary(), Exec: currentExecutable(), RunDir: filepath.Join(stateDir, "run")}, nil
 }
 func (s *Sessions) command(ctx context.Context, args ...string) *exec.Cmd {
-	return exec.CommandContext(ctx, s.Binary, append([]string{"-L", s.Socket, "-f", s.Config}, args...)...)
+	return winproc.Hide(exec.CommandContext(ctx, s.Binary, append([]string{"-L", s.Socket, "-f", s.Config}, args...)...))
 }
 func (s *Sessions) run(args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/CamiloCaceres/lolad/internal/winproc"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -26,7 +27,7 @@ type ExecMailWatch struct{}
 func (ExecMailWatch) Watch(ctx context.Context, dir, account string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, filepath.Join(dir, "tools/email.sh"), "watch", account)
+	cmd := winproc.Hide(exec.CommandContext(ctx, filepath.Join(dir, "tools/email.sh"), "watch", account))
 	cmd.Dir = dir
 	return cmd.Output()
 }

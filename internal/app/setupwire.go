@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"github.com/CamiloCaceres/lolad/internal/winproc"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -44,7 +45,7 @@ func (execService) run(ctx context.Context, args ...string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return exec.CommandContext(ctx, exe, append([]string{"service"}, args...)...).Output()
+	return winproc.Hide(exec.CommandContext(ctx, exe, append([]string{"service"}, args...)...)).Output()
 }
 
 func (s execService) Install(ctx context.Context) error {

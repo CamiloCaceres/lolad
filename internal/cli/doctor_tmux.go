@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"github.com/CamiloCaceres/lolad/internal/winproc"
 	"io"
 	"os"
 	"os/exec"
@@ -55,7 +56,7 @@ func doctorTmux(ctx context.Context, c registry.Config, out io.Writer) {
 	defer func() {
 		cleanup, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
-		_ = exec.CommandContext(cleanup, bin, "-L", s.Socket, "kill-server").Run()
+		_ = winproc.Hide(exec.CommandContext(cleanup, bin, "-L", s.Socket, "kill-server")).Run()
 	}()
 	await := func(fn func() bool) bool {
 		deadline := time.Now().Add(4 * time.Second)
