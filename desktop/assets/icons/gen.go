@@ -19,11 +19,17 @@ import (
 	"path/filepath"
 )
 
-// The mark is an assistant orb with a silk band of light across it, and the
-// amber "your turn" moon at its top right, on a 100-unit square. It is the
-// same drawing as internal/web/static/logo.svg.
-const orbX, orbY, orbR = 44.0, 56.0, 34.0
-const moonX, moonY, moonR = 81.0, 21.0, 9.0
+// The mark is a periwinkle ring with a dot, on a 100-unit square: the same
+// drawing as internal/web/static/logo.svg (viewBox 64: ring r 22, stroke 4.5,
+// dot r 6.5, #7AA2FF with a soft glow), scaled by 100/64.
+const logoR, logoHalf, logoDot = 22 * 100 / 64.0, 2.25 * 100 / 64.0, 6.5 * 100 / 64.0
+
+// Tray geometry. The ring is thicker than the logo's so it stays a ring at
+// 16 px (a 2 px stroke, a 4 px dot, a 2 px gap between them), and it sits a
+// little low and left to leave the top right corner for the state badge, as
+// the old orb did.
+const trayX, trayY, trayR, trayHalf, trayDot = 46.0, 54.0, 33.0, 6.5, 12.0
+const badgeX, badgeY = 80.0, 20.0
 
 func sdRRect(x, y, x0, y0, x1, y1, r float64) float64 {
 	cx, cy := (x0+x1)/2, (y0+y1)/2
@@ -34,48 +40,10 @@ func sdRRect(x, y, x0, y0, x1, y1, r float64) float64 {
 	return out + in - r
 }
 
-// curve samples a cubic Bézier into a polyline.
-func curve(x0, y0, x1, y1, x2, y2, x3, y3 float64) [][2]float64 {
-	var pts [][2]float64
-	for i := 0; i <= 48; i++ {
-		t := float64(i) / 48
-		u := 1 - t
-		pts = append(pts, [2]float64{
-			u*u*u*x0 + 3*u*u*t*x1 + 3*u*t*t*x2 + t*t*t*x3,
-			u*u*u*y0 + 3*u*u*t*y1 + 3*u*t*t*y2 + t*t*t*y3,
-		})
-	}
-	return pts
-}
-
-var (
-	band1 = curve(6, 78, 26, 58, 52, 54, 84, 62)
-	band2 = curve(10, 92, 32, 74, 58, 72, 86, 80)
-)
-
-// distLine is the distance from (x, y) to a polyline, and how far along it
-// (0..1) the nearest point lies.
-func distLine(pts [][2]float64, x, y float64) (float64, float64) {
-	best, at := math.Inf(1), 0.0
-	for i := 1; i < len(pts); i++ {
-		ax, ay, bx, by := pts[i-1][0], pts[i-1][1], pts[i][0], pts[i][1]
-		dx, dy := bx-ax, by-ay
-		t := math.Max(0, math.Min(1, ((x-ax)*dx+(y-ay)*dy)/(dx*dx+dy*dy)))
-		if d := math.Hypot(x-ax-t*dx, y-ay-t*dy); d < best {
-			best, at = d, (float64(i-1)+t)/float64(len(pts)-1)
-		}
-	}
-	return best, at
-}
-
-// inMark is the one-colour silhouette for tray icons: the orb with the band
-// cut out of it, so the band still reads at 22 points.
+// inMark is the one-colour silhouette for tray icons: ring and dot.
 func inMark(x, y float64) bool {
-	if math.Hypot(x-orbX, y-orbY) >= orbR {
-		return false
-	}
-	d, _ := distLine(band1, x, y)
-	return d > 4.2
+	d := math.Hypot(x-trayX, y-trayY)
+	return math.Abs(d-trayR) < trayHalf || d < trayDot
 }
 
 func inCircle(x, y, cx, cy, r float64) bool { return math.Hypot(x-cx, y-cy) < r }
@@ -118,7 +86,6 @@ var (
 	none  = rgba{}
 	black = rgba{0, 0, 0, 1}
 	white = rgba{1, 1, 1, 1}
-	amber = rgba{1, 0.71, 0.28, 1} // --you #FFB547
 	red   = rgba{1, 0.36, 0.48, 1} // --st-failed #FF5C7A
 	slate = rgba{0.09, 0.10, 0.13, 1}
 )
@@ -136,89 +103,64 @@ func over(base, c rgba) rgba {
 	return rgba{base.r + (c.r-base.r)*c.a, base.g + (c.g-base.g)*c.a, base.b + (c.b-base.b)*c.a, base.a + (1-base.a)*c.a}
 }
 
-type stop struct {
-	at float64
-	c  rgba
-}
-
-func ramp(stops []stop, t float64) rgba {
-	if t <= stops[0].at {
-		return stops[0].c
-	}
-	for i := 1; i < len(stops); i++ {
-		if t <= stops[i].at {
-			return mix(stops[i-1].c, stops[i].c, (t-stops[i-1].at)/(stops[i].at-stops[i-1].at))
-		}
-	}
-	return stops[len(stops)-1].c
-}
-
-var (
-	orbStops  = []stop{{0, hex(0xEEF3FF)}, {.2, hex(0x9FB8FF)}, {.5, hex(0x6C7DFF)}, {.78, hex(0x7B4FE0)}, {1, hex(0x241A5E)}}
-	moonStops = []stop{{0, hex(0xFFE7BD)}, {.5, hex(0xFFB547)}, {1, hex(0xE5841A)}}
-	aqua      = hex(0x3DE8D0)
-	frost     = hex(0xDCE6FF)
-)
+var periwinkle = hex(0x7AA2FF)
 
 // smooth is a soft step for antialiased edges in mark units.
 func smooth(d, w float64) float64 { return math.Max(0, math.Min(1, 0.5-d/w)) }
 
-// mark paints the full-colour mark over base at (x, y).
-func mark(base rgba, x, y float64) rgba {
-	c := base
-	// moon glow, then the orb, then the moon itself
-	if g := math.Hypot(x-moonX, y-moonY); g < 14 {
-		c = over(c, rgba{1, 0.71, 0.28, 0.16 * smooth(g-14, 1.2)})
+// glow is a soft falloff outside a shape, for the SVG's feGaussianBlur.
+func glow(d, reach float64) float64 {
+	if d <= 0 {
+		return 1
 	}
-	if d := math.Hypot(x-orbX, y-orbY); d < orbR+1 {
-		// radial light from the upper left, like the SVG's radialGradient
-		t := math.Hypot(x-(orbX-orbR*0.32), y-(orbY-orbR*0.4)) / (1.6 * orbR)
-		o := ramp(orbStops, t)
-		for _, b := range []struct {
-			pts         [][2]float64
-			half, alpha float64
-		}{{band1, 4.5, 0.85}, {band2, 2, 0.47}} {
-			bd, along := distLine(b.pts, x, y)
-			// fade in from the left end, out towards the right end
-			a := b.alpha * smooth(bd-b.half, 1.6) * math.Min(along/0.45, (1-along)/0.55)
-			col := mix(aqua, frost, math.Max(0, along-0.45)/0.55)
-			o = over(o, rgba{col.r, col.g, col.b, math.Max(0, a)})
-		}
-		o = over(o, rgba{frost.r, frost.g, frost.b, 0.18 * smooth(math.Abs(d-(orbR-0.8))-0.8, 0.8)})
-		o.a = smooth(d-orbR, 1.0)
-		c = over(c, o)
+	if d >= reach {
+		return 0
 	}
-	if d := math.Hypot(x-moonX, y-moonY); d < moonR+1 {
-		m := ramp(moonStops, math.Hypot(x-(moonX-moonR*0.24), y-(moonY-moonR*0.28))/(1.24*moonR))
-		m.a = smooth(d-moonR, 1.0)
-		c = over(c, m)
-	}
-	return c
+	t := 1 - d/reach
+	return t * t
 }
 
-// tray draws the orb in ink. Needing you adds the moon; a problem adds a "!"
-// badge in the same place. A clear ring
-// around the badge keeps it readable; on a template icon the badge is just
-// more ink (alpha is all macOS uses).
-func tray(state string, ink, badge, bang rgba) func(x, y float64) rgba {
+// mark paints the full-colour mark (centred on 50, 50) over base. heavy
+// (1 = the logo) thickens ring and dot for the small icon sizes.
+func mark(base rgba, x, y, heavy float64) rgba {
+	d := math.Hypot(x-50, y-50)
+	ring := math.Abs(d-logoR) - logoHalf*heavy // signed distance to the ring
+	dot := d - logoDot*math.Sqrt(heavy)
+	sd := math.Min(ring, dot)
+	c := over(base, rgba{periwinkle.r, periwinkle.g, periwinkle.b, 0.45 * glow(sd, 6)})
+	p := periwinkle
+	p.a = smooth(sd, 0.5)
+	return over(c, p)
+}
+
+// tray draws the ring in ink. Needing you adds a dot at the top right (periwinkle
+// on Windows: needs-you is periwinkle, amber is only for warnings); a problem
+// adds a red "!" badge in the same place. A clear ring around the badge keeps
+// it apart from the mark. halo, when set, outlines the needs-you dot in the
+// taskbar's contrast colour, since periwinkle alone is faint on a light
+// taskbar. On a template icon the badge is just more ink (alpha is all macOS
+// uses).
+func tray(state string, ink, badge, bang, halo rgba) func(x, y float64) rgba {
 	return func(x, y float64) rgba {
 		switch state {
 		case "attention":
-			// the amber moon: your turn
-			if inCircle(x, y, moonX, moonY, 14) {
+			if inCircle(x, y, badgeX, badgeY, 14) {
 				return badge
 			}
-			if inCircle(x, y, moonX, moonY, 19) {
+			if halo.a > 0 && inCircle(x, y, badgeX, badgeY, 18) {
+				return halo
+			}
+			if inCircle(x, y, badgeX, badgeY, 23) {
 				return none
 			}
 		case "problem":
-			if inBang(x, y, 79, 21, 22) {
+			if inBang(x, y, badgeX, badgeY+1, 22) {
 				return bang
 			}
-			if inCircle(x, y, 79, 21, 20) {
+			if inCircle(x, y, badgeX, badgeY, 20) {
 				return badge
 			}
-			if inCircle(x, y, 79, 21, 26) {
+			if inCircle(x, y, badgeX, badgeY, 26) {
 				return none
 			}
 		}
@@ -229,20 +171,26 @@ func tray(state string, ink, badge, bang rgba) func(x, y float64) rgba {
 	}
 }
 
-func app(x, y float64) rgba {
+func app(x, y float64) rgba { return appIcon(x, y, 1) }
+
+// appSmall is the app icon for 32 px and below: at the logo's weight the ring
+// would be about one pixel wide at 16 px.
+func appSmall(x, y float64) rgba { return appIcon(x, y, 1.7) }
+
+func appIcon(x, y, heavy float64) rgba {
 	// macOS grid: 824pt tile on a 1024pt canvas.
 	edge := sdRRect(x, y, 100/1024.0*100, 100/1024.0*100, 924/1024.0*100, 924/1024.0*100, 185/1024.0*100)
 	if edge >= 0.15 {
 		return none
 	}
-	// Midnight tile: the dashboard's background, with a soft glow behind the orb.
+	// Midnight tile: the dashboard's background, with a soft glow behind the ring.
 	bg := mix(hex(0x161A33), hex(0x07080F), (y-10)/80)
-	if g := math.Hypot(x-46, y-54); g < 40 {
+	if g := math.Hypot(x-50, y-50); g < 40 {
 		bg = over(bg, rgba{0.42, 0.5, 1, 0.22 * (1 - g/40) * (1 - g/40)})
 	}
 	bg = over(bg, rgba{1, 1, 1, 0.08 * smooth(math.Abs(edge+0.4)-0.25, 0.4)})
 	// The mark sits in the tile with generous padding.
-	c := mark(bg, (x-50)/0.66+50, (y-50)/0.66+50)
+	c := mark(bg, (x-50)/0.8+50, (y-50)/0.8+50, heavy)
 	c.a = smooth(edge, 0.3)
 	return c
 }
@@ -267,11 +215,19 @@ func pngBytes(img image.Image) []byte {
 	return b.Bytes()
 }
 
-// writeICO packs PNG frames into an .ico (Vista+ PNG-in-ICO).
-func writeICO(path string, sizes []int, fn func(x, y float64) rgba) {
+// appAt picks the app icon drawing for a pixel size.
+func appAt(n int) func(x, y float64) rgba {
+	if n <= 32 {
+		return appSmall
+	}
+	return app
+}
+
+// writeICO packs PNG frames of the app icon into an .ico (Vista+ PNG-in-ICO).
+func writeICO(path string, sizes []int) {
 	var frames [][]byte
 	for _, s := range sizes {
-		frames = append(frames, pngBytes(render(s, fn)))
+		frames = append(frames, pngBytes(render(s, appAt(s))))
 	}
 	var b bytes.Buffer
 	binary.Write(&b, binary.LittleEndian, [3]uint16{0, 1, uint16(len(sizes))})
@@ -295,14 +251,15 @@ func writeICO(path string, sizes []int, fn func(x, y float64) rgba) {
 
 func main() {
 	write("app-1024.png", render(1024, app))
-	writeICO("Lolad.ico", []int{16, 24, 32, 48, 64, 128, 256}, app)
+	writeICO("Lolad.ico", []int{16, 24, 32, 48, 64, 128, 256})
 
 	for _, st := range []string{"normal", "attention", "problem"} {
 		// macOS template: black + alpha only, 44px for a 22pt menu bar @2x.
-		write("tray-mac-"+st+".png", render(44, tray(st, black, black, none)))
+		write("tray-mac-"+st+".png", render(44, tray(st, black, black, none, none)))
 		// Windows: a white mark for dark taskbars and a dark one for light.
-		write("tray-win-dark-"+st+".png", render(32, tray(st, white, map[string]rgba{"attention": amber, "problem": red}[st], white)))
-		write("tray-win-light-"+st+".png", render(32, tray(st, slate, map[string]rgba{"attention": amber, "problem": red}[st], white)))
+		badge := map[string]rgba{"attention": periwinkle, "problem": red}[st]
+		write("tray-win-dark-"+st+".png", render(32, tray(st, white, badge, white, white)))
+		write("tray-win-light-"+st+".png", render(32, tray(st, slate, badge, white, slate)))
 	}
 
 	// Lolad.icns through the macOS iconset tool, when available.
@@ -310,8 +267,8 @@ func main() {
 		set := "Lolad.iconset"
 		must(os.MkdirAll(set, 0o755))
 		for _, s := range []int{16, 32, 128, 256, 512} {
-			write(filepath.Join(set, "icon_"+itoa(s)+"x"+itoa(s)+".png"), render(s, app))
-			write(filepath.Join(set, "icon_"+itoa(s)+"x"+itoa(s)+"@2x.png"), render(s*2, app))
+			write(filepath.Join(set, "icon_"+itoa(s)+"x"+itoa(s)+".png"), render(s, appAt(s)))
+			write(filepath.Join(set, "icon_"+itoa(s)+"x"+itoa(s)+"@2x.png"), render(s*2, appAt(s*2)))
 		}
 		must(exec.Command("iconutil", "-c", "icns", set, "-o", "Lolad.icns").Run())
 		must(os.RemoveAll(set))
