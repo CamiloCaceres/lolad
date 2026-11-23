@@ -63,6 +63,7 @@ func (a *admin) consoleRoutes(m *http.ServeMux) {
 	page("POST /console/invites", a.inviteCreate)
 	page("POST /console/invites/{id}/cancel", a.inviteCancel)
 	page("GET /console/health", a.healthPage)
+	page("POST /console/signup", a.signupSwitch)
 	m.Handle("/console/", a.guard(a.consoleAuth(func(w http.ResponseWriter, r *http.Request, _ session) {
 		http.NotFound(w, r)
 	})))
@@ -176,8 +177,9 @@ type skyPerson struct {
 }
 
 type personRow struct {
-	Handle, Note, Initial, State, StateText, Dot, Joined, Today, Action, ActionText, Find string
-	Hue                                                                                   template.CSS
+	Handle, Note, Initial, State, StateText, Dot, Joined, Via, Today, Volume, Action, ActionText, Find string
+	New                                                                                                bool
+	Hue                                                                                                template.CSS
 }
 
 type chip struct {
@@ -266,7 +268,16 @@ func (a *admin) peoplePage(w http.ResponseWriter, r *http.Request, s session) {
 			continue
 		}
 		row := personRow{Handle: p.Handle, Note: p.Note, Initial: initial(p.Handle), State: st, Hue: hueCSS(p.Handle), Find: find,
-			Joined: day(p.CreatedAt, now), Today: "—", Action: "disable", ActionText: "Turn off"}
+			Joined: day(p.CreatedAt, now) + " " + p.CreatedAt.Local().Format("15:04"), Today: "—", Action: "disable", ActionText: "Turn off",
+			New: now.Sub(p.CreatedAt) < 24*time.Hour, Via: "invite"}
+		if p.JoinedVia == SignupOpen {
+			row.Via = "open sign-up"
+		} else if p.Note != "" {
+			row.Via = "invite for " + p.Note
+		}
+		if p.Bytes24h > 0 {
+			row.Volume = megabytes(p.Bytes24h)
+		}
 		if row.Note == "" {
 			row.Note = p.Display
 		}
@@ -307,11 +318,16 @@ func (a *admin) peoplePage(w http.ResponseWriter, r *http.Request, s session) {
 
 func (a *admin) peopleAction(w http.ResponseWriter, r *http.Request, s session) {
 	handle, action := r.PathValue("handle"), r.PathValue("action")
-	if action != "disable" && action != "enable" {
+	var err error
+	switch action {
+	case "disable", "enable":
+		err = a.setDisabled(r, handle, action == "disable")
+	case "block":
+		err = a.block(r, handle)
+	default:
 		http.NotFound(w, r)
 		return
 	}
-	err := a.setDisabled(r, handle, action == "disable")
 	if errors.Is(err, ErrNotFound) {
 		http.NotFound(w, r)
 		return
@@ -322,6 +338,20 @@ func (a *admin) peopleAction(w http.ResponseWriter, r *http.Request, s session) 
 		return
 	}
 	http.Redirect(w, r, "/console/people", http.StatusSeeOther)
+}
+
+// signupSwitch opens or pauses open sign-up from the Health page.
+func (a *admin) signupSwitch(w http.ResponseWriter, r *http.Request, s session) {
+	if err := a.setSignup(r, r.PostFormValue("mode")); err != nil {
+		if errors.Is(err, ErrNotFound) {
+			http.Error(w, "Unknown mode", 400)
+			return
+		}
+		a.s.o.Logger.Error("console sign-up mode", "err", err)
+		http.Error(w, "Console error", 500)
+		return
+	}
+	http.Redirect(w, r, "/console/health", http.StatusSeeOther)
 }
 
 // ---------------------------------------------------------------- Invites
@@ -419,6 +449,7 @@ type logRow struct {
 
 type healthView struct {
 	Lede, UpFor, Connected, Carried, Limited, Version string
+	Signups, SignupState, PlacesLeft, SignupAction    string
 	LastHour                                          int
 	Chart                                             template.HTML
 	Log                                               []logRow
@@ -439,6 +470,18 @@ func (a *admin) healthPage(w http.ResponseWriter, r *http.Request, s session) {
 		Limited:   "None"}
 	if t.Limited24h > 0 {
 		v.Limited = plural(t.Limited24h, "request") + ", " + plural(t.LimitedIPs, "address")
+	}
+	v.Signups = plural(st.Signups24h, "new person")
+	switch {
+	case st.SignupMode == SignupInvite:
+		v.SignupState, v.SignupAction = "Invite only", SignupOpen
+	case st.SignupState == SignupClosed:
+		v.SignupState, v.SignupAction = "Open, but full for now", SignupInvite
+	default:
+		v.SignupState, v.SignupAction = "Open to anyone", SignupInvite
+	}
+	if st.AccountsMax > 0 {
+		v.PlacesLeft = fmt.Sprintf("%s of %s", commas(max(st.AccountsMax-st.Accounts, 0)), commas(st.AccountsMax))
 	}
 	v.Lede = fmt.Sprintf("%s connected.", lolads(st.Online))
 	switch {
@@ -568,12 +611,21 @@ func niceTop(peak int) int {
 
 // ---------------------------------------------------------------- words
 
+// megabytes is "0.4 MB", "12 MB".
+func megabytes(n int64) string {
+	mb := float64(n) / 1e6
+	if mb < 10 {
+		return fmt.Sprintf("%.1f MB", mb)
+	}
+	return fmt.Sprintf("%s MB", commas(int(mb+0.5)))
+}
+
 func plural(n int, word string) string {
 	if n == 1 {
 		return "1 " + word
 	}
-	if word == "person" {
-		return commas(n) + " people"
+	if strings.HasSuffix(word, "person") {
+		return commas(n) + " " + strings.TrimSuffix(word, "person") + "people"
 	}
 	if strings.HasSuffix(word, "ss") {
 		return fmt.Sprintf("%s %ses", commas(n), word)

@@ -4,7 +4,8 @@
 //	lolad-hub serve --public-url https://hub.example.com [--listen 127.0.0.1:8095] [--db PATH] [--trusted-proxies CIDR,...]
 //	lolad-hub invite [--note TEXT] [--ttl 168h] [--db PATH]
 //	lolad-hub accounts [--db PATH]
-//	lolad-hub disable|enable|rm <handle> [--db PATH]
+//	lolad-hub disable|enable|rm|block <handle> [--db PATH]
+//	lolad-hub signup open|invite [--db PATH]
 //
 // The database defaults to $LOLAD_HUB_DB, else /var/lib/lolad-hub/hub.db.
 // serve also reads $LOLAD_HUB_PUBLIC_URL, $LOLAD_HUB_LISTEN and
@@ -12,6 +13,13 @@
 // $LOLAD_HUB_ADMIN_TOKEN: when set (24+ characters), the operator console is
 // served at /console and the admin API at /v1/hub/admin/. It is read from the
 // environment only, never a flag, so it stays out of process listings.
+//
+// Open sign-up (docs/friend-connect-design.md §1): $LOLAD_HUB_SIGNUP is
+// "open" (default) or "invite"; `lolad-hub signup` or the console override it.
+// Limits, 0 = off: $LOLAD_HUB_SIGNUPS_PER_IP (3/24 h), $LOLAD_HUB_SIGNUPS_PER_NET
+// (10/24 h per /24 or /56), $LOLAD_HUB_SIGNUPS_HOURLY (60), $LOLAD_HUB_SIGNUPS_DAILY
+// (300), $LOLAD_HUB_MAX_ACCOUNTS (2000), $LOLAD_HUB_REAP_UNUSED (72h) and
+// $LOLAD_HUB_BYTES_PER_DAY (0).
 package main
 
 import (
@@ -25,6 +33,7 @@ import (
 	"net/netip"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"text/tabwriter"
 	"time"
@@ -43,7 +52,8 @@ const usage = `usage:
   lolad-hub serve --public-url https://hub.example.com [--listen 127.0.0.1:8095] [--db PATH] [--trusted-proxies CIDR,...]
   lolad-hub invite [--note TEXT] [--ttl 168h] [--db PATH]
   lolad-hub accounts [--db PATH]
-  lolad-hub disable|enable|rm <handle> [--db PATH]
+  lolad-hub disable|enable|rm|block <handle> [--db PATH]
+  lolad-hub signup open|invite [--db PATH]
   lolad-hub version`
 
 func defaultDB() string {
@@ -83,9 +93,13 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) error {
 		if err != nil {
 			return fmt.Errorf("--trusted-proxies: %w", err)
 		}
+		lim, err := limitsFromEnv()
+		if err != nil {
+			return err
+		}
 		token := os.Getenv("LOLAD_HUB_ADMIN_TOKEN")
 		os.Unsetenv("LOLAD_HUB_ADMIN_TOKEN")
-		return serve(ctx, *db, *listen, *public, trusted, token)
+		return serve(ctx, *db, *listen, *public, trusted, token, os.Getenv("LOLAD_HUB_SIGNUP"), lim)
 	case "invite":
 		note := fs.String("note", "", "who it is for (shown in accounts)")
 		ttl := fs.Duration("ttl", 7*24*time.Hour, "how long the code is valid")
@@ -130,7 +144,23 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) error {
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", a.Handle, a.Display, a.CreatedAt.Local().Format("2006-01-02"), seen, state)
 		}
 		return w.Flush()
-	case "disable", "enable", "rm":
+	case "signup":
+		if err := fs.Parse(rest); err != nil {
+			return err
+		}
+		if fs.NArg() != 1 || fs.Arg(0) != hub.SignupOpen && fs.Arg(0) != hub.SignupInvite {
+			return errors.New("usage: lolad-hub signup open|invite")
+		}
+		st, err := hub.OpenStore(*db)
+		if err != nil {
+			return err
+		}
+		defer st.Close()
+		if err = st.SetSetting(ctx, "signup_mode", fs.Arg(0)); err == nil {
+			fmt.Fprintf(errOut, "sign-up is now %s (a running hub applies it at once)\n", fs.Arg(0))
+		}
+		return err
+	case "disable", "enable", "rm", "block":
 		if err := fs.Parse(rest); err != nil {
 			return err
 		}
@@ -155,6 +185,8 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) error {
 		switch cmd {
 		case "rm":
 			err = st.Remove(ctx, h)
+		case "block":
+			err = st.Block(ctx, h)
 		default:
 			err = st.SetDisabled(ctx, h, cmd == "disable")
 		}
@@ -169,7 +201,38 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) error {
 	return errors.New(usage)
 }
 
-func serve(ctx context.Context, dbPath, listen, public string, trusted []netip.Prefix, adminToken string) error {
+// limitsFromEnv reads the sign-up and traffic limits; unset means default.
+func limitsFromEnv() (hub.Limits, error) {
+	l := hub.DefaultLimits()
+	ints := map[string]*int{"LOLAD_HUB_SIGNUPS_PER_IP": &l.SignupsPerIP, "LOLAD_HUB_SIGNUPS_PER_NET": &l.SignupsPerNet,
+		"LOLAD_HUB_SIGNUPS_HOURLY": &l.SignupsHourly, "LOLAD_HUB_SIGNUPS_DAILY": &l.SignupsDaily, "LOLAD_HUB_MAX_ACCOUNTS": &l.MaxAccounts}
+	for k, p := range ints {
+		if v := os.Getenv(k); v != "" {
+			n, err := strconv.Atoi(v)
+			if err != nil || n < 0 {
+				return l, fmt.Errorf("%s: want a whole number, 0 to turn it off", k)
+			}
+			*p = n
+		}
+	}
+	if v := os.Getenv("LOLAD_HUB_REAP_UNUSED"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil || d < 0 {
+			return l, fmt.Errorf("LOLAD_HUB_REAP_UNUSED: want a duration like 72h, 0 to turn it off")
+		}
+		l.ReapUnused = d
+	}
+	if v := os.Getenv("LOLAD_HUB_BYTES_PER_DAY"); v != "" {
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || n < 0 {
+			return l, fmt.Errorf("LOLAD_HUB_BYTES_PER_DAY: want a whole number of bytes, 0 for no cap")
+		}
+		l.BytesPerDay = n
+	}
+	return l, nil
+}
+
+func serve(ctx context.Context, dbPath, listen, public string, trusted []netip.Prefix, adminToken, signup string, lim hub.Limits) error {
 	if public == "" {
 		return errors.New("--public-url is required")
 	}
@@ -179,7 +242,7 @@ func serve(ctx context.Context, dbPath, listen, public string, trusted []netip.P
 		return err
 	}
 	defer st.Close()
-	srv, err := hub.NewServer(hub.Options{Store: st, PublicURL: public, Logger: log, TrustedProxies: trusted, AdminToken: adminToken})
+	srv, err := hub.NewServer(hub.Options{Store: st, PublicURL: public, Logger: log, TrustedProxies: trusted, AdminToken: adminToken, Signup: signup, Limits: &lim})
 	if err != nil {
 		return err
 	}
@@ -191,7 +254,7 @@ func serve(ctx context.Context, dbPath, listen, public string, trusted []netip.P
 	go func() { defer close(done); srv.Run(ctx) }()
 	errc := make(chan error, 1)
 	go func() { errc <- hs.ListenAndServe() }()
-	log.Info("lolad-hub listening", "addr", listen, "public_url", public, "db", dbPath, "trusted_proxies", len(trusted), "console", adminToken != "")
+	log.Info("lolad-hub listening", "addr", listen, "public_url", public, "db", dbPath, "trusted_proxies", len(trusted), "console", adminToken != "", "signup", srv.SignupMode(ctx))
 	select {
 	case err = <-errc:
 		stop()

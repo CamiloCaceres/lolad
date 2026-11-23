@@ -24,6 +24,13 @@ Environment variables (names only; the image sets the defaults shown):
 | `LOLAD_HUB_LISTEN` | no | no | default `0.0.0.0:8095` in the image (`127.0.0.1:8095` outside it) |
 | `LOLAD_HUB_DB` | no | no | default `/var/lib/lolad-hub/hub.db` |
 | `LOLAD_HUB_TRUSTED_PROXIES` | no | no | CIDRs whose `X-Forwarded-For` is believed; the image trusts the private ranges |
+| `LOLAD_HUB_SIGNUP` | no | no | `open` (default: any lolad may join, no code) or `invite` (operator codes only). The console's **Pause sign-ups** switch, or `lolad-hub signup open\|invite`, overrides it and survives restarts |
+| `LOLAD_HUB_SIGNUPS_PER_IP` | no | no | open sign-ups per source IP per 24 h (default 3; 0 = off) |
+| `LOLAD_HUB_SIGNUPS_PER_NET` | no | no | per IPv4 /24 or IPv6 /56 per 24 h (default 10) |
+| `LOLAD_HUB_SIGNUPS_HOURLY` / `LOLAD_HUB_SIGNUPS_DAILY` | no | no | open sign-ups hub-wide per hour / 24 h (defaults 60 / 300) |
+| `LOLAD_HUB_MAX_ACCOUNTS` | no | no | accounts in total; over it open sign-up reports `closed` (default 2000) |
+| `LOLAD_HUB_REAP_UNUSED` | no | no | open sign-ups that never connect are removed after this (default `72h`; `0` = never) |
+| `LOLAD_HUB_BYTES_PER_DAY` | no | no | bytes carried per member per 24 h (default 0 = no cap) |
 
 ## Behind Traefik (Coolify): client IPs and X-Forwarded-For
 
@@ -64,17 +71,33 @@ Tunnels are WebSockets that live for hours. The hub pings every 30 s, which
 keeps them open through Traefik's idle timeouts with no extra Traefik
 configuration.
 
+## Sign-up
+
+With `LOLAD_HUB_SIGNUP=open` (the default), any lolad can join with no code:
+the request is signed by its own key and names this hub. The limits above
+cap where sign-ups come from and how many happen. Operator invites keep
+working in both modes and are not counted against the sign-up caps.
+
+In an incident, pause sign-ups at once: the console's Health page, or
+`lolad-hub signup invite` in the container. People already on the hub are not
+affected. **Remove and block** on People removes an account and stops its key
+from joining again (`lolad-hub block <handle>`).
+
 ## Console
 
 With `LOLAD_HUB_ADMIN_TOKEN` set, open `https://<hub domain>/console` and sign
 in with that secret. Three pages:
 
-- **People:** who has joined, who is connected now, messages carried today,
-  and a control to turn someone off (closes their tunnel at once) or back on.
+- **People:** newest first, with a **New** badge for the last 24 h and how
+  each joined (open sign-up or an invite), who is connected now, messages and
+  MB carried, and controls to turn someone off (closes their tunnel at once),
+  back on, or **Remove and block**.
 - **Invites:** make a one-time code (shown once, on that page only), see codes
   waiting to be used and cancel them, and see who joined with which invite.
-- **Health:** uptime, connections, messages per hour for the last 24 hours,
-  rate-limited requests, and the recent request log.
+- **Health:** uptime, connections, new sign-ups in 24 h, the sign-up mode
+  with a **Pause sign-ups** / **Open sign-ups** switch, places left, messages
+  per hour for the last 24 hours, rate-limited requests, and the recent
+  request log.
 
 The console knows people, invites and traffic metadata only: handle, path,
 result and time taken. No mail, bodies, query strings or invite codes. The

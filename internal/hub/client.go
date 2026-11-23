@@ -60,7 +60,8 @@ type Error struct {
 	Status     int
 	Code       string
 	Message    string
-	Suggestion string // set for name_taken
+	Suggestion string // set for name_taken and invalid_handle
+	Handle     string // set for key_registered: the handle this key already holds
 }
 
 func (e *Error) Error() string {
@@ -89,18 +90,26 @@ func call(ctx context.Context, hc *http.Client, method, u, handle string, body [
 	defer res.Body.Close()
 	b, _ := io.ReadAll(io.LimitReader(res.Body, 64<<10))
 	if res.StatusCode != 200 {
-		var v struct{ Error, Message, Suggestion string }
+		var v struct{ Error, Message, Suggestion, Handle string }
 		_ = json.Unmarshal(b, &v)
 		if v.Message == "" || len(v.Message) > 256 {
 			v.Message = fmt.Sprintf("request rejected (HTTP %d)", res.StatusCode)
 		}
-		return nil, &Error{Status: res.StatusCode, Code: v.Error, Message: v.Message, Suggestion: v.Suggestion}
+		if !ValidHandle(v.Handle) {
+			v.Handle = ""
+		}
+		if !ValidHandle(v.Suggestion) {
+			v.Suggestion = ""
+		}
+		return nil, &Error{Status: res.StatusCode, Code: v.Error, Message: v.Message, Suggestion: v.Suggestion, Handle: v.Handle}
 	}
 	return b, nil
 }
 
-// Register claims handle on the hub with a single-use sign-up code and
-// returns the member URL. The code is sent only in the request body.
+// Register claims handle on the hub and returns the member URL. code is a
+// single-use sign-up code; empty means open sign-up, which the hub allows
+// only in open mode. The code is sent only in the request body. The signed
+// body names the hub, so it cannot be replayed on another one.
 func Register(ctx context.Context, hc *http.Client, hubURL, handle, display, code string, s Signer) (string, error) {
 	hubURL, e := NormalizeURL(hubURL)
 	if e != nil {
@@ -109,7 +118,7 @@ func Register(ctx context.Context, hc *http.Client, hubURL, handle, display, cod
 	if !ValidHandle(handle) {
 		return "", fmt.Errorf("%w: handle must be 3-32 of a-z, 0-9 and - (not at the ends)", core.ErrInvalid)
 	}
-	body, _ := json.Marshal(registerBody{Code: strings.TrimSpace(code), Handle: handle, Display: display, PublicKey: s.PublicKey})
+	body, _ := json.Marshal(registerBody{Code: strings.TrimSpace(code), Hub: hubURL, Handle: handle, Display: display, PublicKey: s.PublicKey})
 	b, e := call(ctx, hc, "POST", hubURL+"/v1/hub/register", handle, body, s)
 	if e != nil {
 		return "", e
@@ -119,6 +128,42 @@ func Register(ctx context.Context, hc *http.Client, hubURL, handle, display, cod
 		return "", errors.New("hub: unexpected registration response")
 	}
 	return v.URL, nil
+}
+
+// HubInfo is GET /v1/hub/info.
+type HubInfo struct {
+	Name      string `json:"name"`
+	Version   string `json:"version"`
+	PublicURL string `json:"public_url"`
+	Signup    string `json:"signup"` // SignupOpen, SignupInvite or SignupClosed
+}
+
+// Info reads a hub's public description, including whether it takes open
+// sign-ups right now.
+func Info(ctx context.Context, hc *http.Client, hubURL string) (HubInfo, error) {
+	hubURL, e := NormalizeURL(hubURL)
+	if e != nil {
+		return HubInfo{}, e
+	}
+	req, e := http.NewRequestWithContext(ctx, "GET", hubURL+"/v1/hub/info", nil)
+	if e != nil {
+		return HubInfo{}, e
+	}
+	if hc == nil {
+		hc = &http.Client{Timeout: 15 * time.Second}
+	}
+	c := *hc
+	c.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	res, e := c.Do(req)
+	if e != nil {
+		return HubInfo{}, fmt.Errorf("hub unreachable")
+	}
+	defer res.Body.Close()
+	var v HubInfo
+	if res.StatusCode != 200 || json.NewDecoder(io.LimitReader(res.Body, 16<<10)).Decode(&v) != nil || v.Name != "lolad-hub" {
+		return HubInfo{}, fmt.Errorf("hub: %s is not a lolad hub", hubURL)
+	}
+	return v, nil
 }
 
 // Leave releases handle on the hub.

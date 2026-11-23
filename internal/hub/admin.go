@@ -62,6 +62,8 @@ func (a *admin) routes(m *http.ServeMux) {
 	api("GET /v1/hub/admin/accounts", a.apiAccounts)
 	api("POST /v1/hub/admin/accounts/{handle}/disable", a.apiSetDisabled(true))
 	api("POST /v1/hub/admin/accounts/{handle}/enable", a.apiSetDisabled(false))
+	api("POST /v1/hub/admin/accounts/{handle}/block", a.apiBlock)
+	api("PUT /v1/hub/admin/signup", a.apiSetSignup)
 	api("GET /v1/hub/admin/invites", a.apiInvites)
 	api("POST /v1/hub/admin/invites", a.apiCreateInvite)
 	api("DELETE /v1/hub/admin/invites/{id}", a.apiCancelInvite)
@@ -224,8 +226,9 @@ func (a *admin) apiAuth(h http.HandlerFunc) http.Handler {
 // Person is an account with what the console shows about it.
 type Person struct {
 	Account
-	Online       bool `json:"online"`
-	CarriedToday int  `json:"carried_today"`
+	Online       bool  `json:"online"`
+	CarriedToday int   `json:"carried_today"`
+	Bytes24h     int64 `json:"bytes_24h"`
 }
 
 func (a *admin) people(r *http.Request) ([]Person, TrafficSummary, error) {
@@ -236,7 +239,7 @@ func (a *admin) people(r *http.Request) ([]Person, TrafficSummary, error) {
 	sum := a.s.traffic.summary()
 	out := make([]Person, 0, len(list))
 	for _, acc := range list {
-		out = append(out, Person{Account: acc, Online: !acc.Disabled && a.s.Online(acc.Handle), CarriedToday: sum.CarriedToday[acc.Handle]})
+		out = append(out, Person{Account: acc, Online: !acc.Disabled && a.s.Online(acc.Handle), CarriedToday: sum.CarriedToday[acc.Handle], Bytes24h: sum.Bytes24h[acc.Handle]})
 	}
 	return out, sum, nil
 }
@@ -286,6 +289,13 @@ type Status struct {
 	Accounts  int            `json:"accounts"`
 	Online    int            `json:"online"`
 	Traffic   TrafficSummary `json:"traffic"`
+	// Sign-up: the configured mode (open or invite), what /v1/hub/info
+	// reports now (closed when a cap is reached), open sign-ups in the last
+	// 24 hours, and the account cap (0 = none).
+	SignupMode  string `json:"signup_mode"`
+	SignupState string `json:"signup_state"`
+	Signups24h  int    `json:"signups_24h"`
+	AccountsMax int    `json:"accounts_max"`
 }
 
 func (a *admin) status(r *http.Request) (Status, error) {
@@ -300,6 +310,9 @@ func (a *admin) status(r *http.Request) (Status, error) {
 			st.Online++
 		}
 	}
+	now := a.s.o.Clock()
+	_, _, st.Signups24h, _ = a.s.store.signupCounts(r.Context(), now.Add(-time.Hour), now.Add(-24*time.Hour))
+	st.SignupMode, st.SignupState, st.AccountsMax = a.s.SignupMode(r.Context()), a.s.signupState(r.Context()), a.s.lim.MaxAccounts
 	return st, nil
 }
 
@@ -342,6 +355,57 @@ func (a *admin) apiSetDisabled(off bool) http.HandlerFunc {
 		}
 		reply(w, 200, Person{Account: acc, Online: !acc.Disabled && a.s.Online(handle)})
 	}
+}
+
+// block removes an account, bans its key and closes its tunnel.
+func (a *admin) block(r *http.Request, handle string) error {
+	if err := a.s.store.Block(r.Context(), handle); err != nil {
+		return err
+	}
+	a.s.mu.Lock()
+	t := a.s.tunnels[handle]
+	a.s.mu.Unlock()
+	if t != nil {
+		t.conn.Close(CloseDisabled, "removed by the hub operator")
+	}
+	a.s.o.Logger.Info("admin blocked account", "handle", handle)
+	return nil
+}
+
+func (a *admin) apiBlock(w http.ResponseWriter, r *http.Request) {
+	err := a.block(r, r.PathValue("handle"))
+	if errors.Is(err, ErrNotFound) {
+		fail(w, 404, "not_found", "No such account")
+		return
+	}
+	if err != nil {
+		a.internal(w, err)
+		return
+	}
+	reply(w, 200, map[string]bool{"ok": true})
+}
+
+func (a *admin) setSignup(r *http.Request, mode string) error {
+	if err := a.s.SetSignupMode(r.Context(), mode); err != nil {
+		return err
+	}
+	a.s.o.Logger.Info("admin set sign-up mode", "mode", mode)
+	return nil
+}
+
+func (a *admin) apiSetSignup(w http.ResponseWriter, r *http.Request) {
+	var b struct {
+		Mode string `json:"mode"`
+	}
+	if json.NewDecoder(io.LimitReader(r.Body, 4<<10)).Decode(&b) != nil || (b.Mode != SignupOpen && b.Mode != SignupInvite) {
+		fail(w, 400, "invalid_request", `mode must be "open" or "invite"`)
+		return
+	}
+	if err := a.setSignup(r, b.Mode); err != nil {
+		a.internal(w, err)
+		return
+	}
+	reply(w, 200, map[string]string{"signup_mode": b.Mode, "signup_state": a.s.signupState(r.Context())})
 }
 
 func (a *admin) apiInvites(w http.ResponseWriter, r *http.Request) {

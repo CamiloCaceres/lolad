@@ -23,6 +23,7 @@ type Request struct {
 	Path   string    `json:"path"`             // without the query string
 	Status int       `json:"status"`
 	Ms     int64     `json:"ms"`
+	Bytes  int64     `json:"bytes,omitempty"` // request plus response body
 	ip     string    // for counting addresses that were slowed down; never shown
 }
 
@@ -31,8 +32,9 @@ func (r Request) Carried() bool { return r.Handle != "" && r.Status >= 200 && r.
 
 type hourBucket struct {
 	start    time.Time
-	carried  map[string]int // handle → requests carried
-	limited  int            // 429s
+	carried  map[string]int   // handle → requests carried
+	bytes    map[string]int64 // handle → bytes forwarded, either way
+	limited  int              // 429s
 	limitIPs map[string]bool
 	ms       []int64 // durations of carried requests (capped), for the typical latency
 }
@@ -56,7 +58,7 @@ func (t *traffic) bucket(at time.Time) *hourBucket {
 			return b
 		}
 	}
-	b := &hourBucket{start: start, carried: map[string]int{}, limitIPs: map[string]bool{}}
+	b := &hourBucket{start: start, carried: map[string]int{}, bytes: map[string]int64{}, limitIPs: map[string]bool{}}
 	t.hours = append(t.hours, b)
 	slices.SortFunc(t.hours, func(a, b *hourBucket) int { return a.start.Compare(b.start) })
 	cut := t.now().Truncate(time.Hour).Add(-(hoursKept - 1) * time.Hour)
@@ -72,6 +74,9 @@ func (t *traffic) record(r Request) {
 		t.ring = slices.Delete(t.ring, 0, len(t.ring)-logKeep)
 	}
 	b := t.bucket(r.Time)
+	if r.Handle != "" && r.Bytes > 0 {
+		b.bytes[r.Handle] += r.Bytes
+	}
 	if r.Carried() {
 		b.carried[r.Handle]++
 		if len(b.ms) < 2000 {
@@ -108,13 +113,14 @@ type Hour struct {
 
 // TrafficSummary is the console's view of the last 24 hours.
 type TrafficSummary struct {
-	Hours        []Hour         `json:"hours"`       // 24 entries, oldest first; the last is the current hour
-	Carried24h   int            `json:"carried_24h"` // requests carried in those hours
-	LastHour     int            `json:"carried_last_hour"`
-	Limited24h   int            `json:"limited_24h"`     // requests refused with 429
-	LimitedIPs   int            `json:"limited_ips_24h"` // distinct source addresses among them
-	TypicalMs    int64          `json:"typical_ms"`      // median time to carry a request in the last hour, -1 when none
-	CarriedToday map[string]int `json:"carried_today"`   // handle → carried since local midnight
+	Hours        []Hour           `json:"hours"`       // 24 entries, oldest first; the last is the current hour
+	Carried24h   int              `json:"carried_24h"` // requests carried in those hours
+	LastHour     int              `json:"carried_last_hour"`
+	Limited24h   int              `json:"limited_24h"`     // requests refused with 429
+	LimitedIPs   int              `json:"limited_ips_24h"` // distinct source addresses among them
+	TypicalMs    int64            `json:"typical_ms"`      // median time to carry a request in the last hour, -1 when none
+	CarriedToday map[string]int   `json:"carried_today"`   // handle → carried since local midnight
+	Bytes24h     map[string]int64 `json:"bytes_24h"`       // handle → bytes forwarded in the last 24 hours
 }
 
 func (t *traffic) summary() TrafficSummary {
@@ -125,7 +131,7 @@ func (t *traffic) summary() TrafficSummary {
 	first := cur.Add(-23 * time.Hour)
 	y, m, d := now.Date()
 	midnight := time.Date(y, m, d, 0, 0, 0, 0, now.Location())
-	s := TrafficSummary{CarriedToday: map[string]int{}, TypicalMs: -1}
+	s := TrafficSummary{CarriedToday: map[string]int{}, Bytes24h: map[string]int64{}, TypicalMs: -1}
 	ips := map[string]bool{}
 	byStart := map[int64]*hourBucket{}
 	for _, b := range t.hours {
@@ -140,6 +146,9 @@ func (t *traffic) summary() TrafficSummary {
 				if b.start.Add(time.Hour).After(midnight) { // the hour overlaps today
 					s.CarriedToday[handle] += n
 				}
+			}
+			for handle, n := range b.bytes {
+				s.Bytes24h[handle] += n
 			}
 			s.Limited24h += b.limited
 			for ip := range b.limitIPs {
@@ -157,4 +166,18 @@ func (t *traffic) summary() TrafficSummary {
 	s.LimitedIPs = len(ips)
 	s.LastHour = s.Hours[23].Carried
 	return s
+}
+
+// bytes24h is what handle forwarded in the last 24 hours (whole hours).
+func (t *traffic) bytes24h(handle string) int64 {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	first := t.now().Truncate(time.Hour).Add(-23 * time.Hour)
+	var n int64
+	for _, b := range t.hours {
+		if !b.start.Before(first) {
+			n += b.bytes[handle]
+		}
+	}
+	return n
 }

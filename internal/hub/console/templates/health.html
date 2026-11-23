@@ -11,7 +11,14 @@
 <div><dt>Carried in 24 hours</dt><dd>{{.Carried}}</dd></div>
 <div><dt>Slowed down today</dt><dd>{{.Limited}}</dd></div>
 <div><dt>Version</dt><dd>{{.Version}} · lolad-hub</dd></div>
+<div><dt>New sign-ups, 24 hours</dt><dd>{{.Signups}}</dd></div>
+<div><dt>Sign-ups</dt><dd>{{.SignupState}}</dd></div>
+{{with .PlacesLeft}}<div><dt>Places left</dt><dd>{{.}}</dd></div>{{end}}
 </dl>
+<form class="signup-switch" method="post" action="/console/signup"><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="mode" value="{{.SignupAction}}">
+{{if eq .SignupAction "invite"}}<button class="btn ghost sm" type="submit">Pause sign-ups</button><span class="fine">Anyone with Lolad can join right now. Pausing makes it invite-only until you open it again; people already here are not affected.</span>
+{{else}}<button class="btn sm" type="submit">Open sign-ups</button><span class="fine">Only people with an invite from you can join right now.</span>{{end}}
+</form>
 
 <section class="panel" aria-label="Traffic">
 <div class="sechead"><h2>Messages carried per hour</h2><span class="fine">Last 24 hours · {{.LastHour}} in the last hour</span></div>

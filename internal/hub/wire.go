@@ -70,7 +70,9 @@ func pick(h http.Header, names []string) map[string]string {
 }
 
 var handleRE = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{1,30}[a-z0-9])$`)
-var reserved = map[string]bool{"admin": true, "api": true, "hub": true, "www": true, "p": true, "v1": true}
+var reserved = map[string]bool{"admin": true, "api": true, "hub": true, "www": true, "p": true, "v1": true,
+	"lolad": true, "support": true, "help": true, "root": true, "operator": true, "security": true,
+	"console": true, "status": true, "mail": true, "abuse": true, "info": true}
 
 // ValidHandle reports whether h may be registered: [a-z0-9-]{3,32}, no
 // leading or trailing dash, not reserved.

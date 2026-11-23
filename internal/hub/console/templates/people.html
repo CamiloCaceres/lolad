@@ -29,11 +29,12 @@
 <thead><tr><th scope="col">Person</th><th scope="col">Status</th><th scope="col">Joined</th><th scope="col" class="num">Carried today</th><th scope="col"><span class="sr">Actions</span></th></tr></thead>
 <tbody>
 {{range .Rows}}<tr data-find="{{.Find}}">
-<td><div class="person {{.State}}"><span class="ring {{.State}}" style="{{.Hue}}">{{.Initial}}</span><div><b>{{.Handle}}</b><small>{{.Note}}</small></div></div></td>
+<td><div class="person {{.State}}"><span class="ring {{.State}}" style="{{.Hue}}">{{.Initial}}</span><div><b>{{.Handle}}{{if .New}} <span class="badge">New</span>{{end}}</b><small>{{.Note}}</small></div></div></td>
 <td><span class="state {{.State}}"><span class="{{.Dot}}"></span>{{.StateText}}</span></td>
-<td class="soft">{{.Joined}}</td>
-<td class="soft num">{{.Today}}</td>
-<td class="right"><form method="post" action="/console/people/{{.Handle}}/{{.Action}}"{{if eq .Action "disable"}} data-confirm="Turn off {{.Handle}}? Their connection closes now."{{end}}><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="btn ghost sm" type="submit" aria-label="{{.ActionText}} {{.Handle}}">{{.ActionText}}</button></form></td>
+<td class="soft">{{.Joined}}<small class="sub">{{.Via}}</small></td>
+<td class="soft num">{{.Today}}{{with .Volume}}<small class="sub">{{.}}</small>{{end}}</td>
+<td class="right actions"><form method="post" action="/console/people/{{.Handle}}/{{.Action}}"{{if eq .Action "disable"}} data-confirm="Turn off {{.Handle}}? Their connection closes now."{{end}}><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="btn ghost sm" type="submit" aria-label="{{.ActionText}} {{.Handle}}">{{.ActionText}}</button></form>
+<form method="post" action="/console/people/{{.Handle}}/block" data-confirm="Remove {{.Handle}} and block this lolad from joining again? This can't be undone from the console."><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="linkbtn danger" type="submit" aria-label="Remove and block {{.Handle}}">Remove and block</button></form></td>
 </tr>
 {{else}}<tr><td colspan="5" class="soft">{{if .Filtered}}No one matches.{{else}}Nobody has joined yet. <a href="/console/invites">Invite someone</a>.{{end}}</td></tr>{{end}}
 </tbody>

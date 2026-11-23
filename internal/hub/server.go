@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -38,6 +39,11 @@ type Options struct {
 	// (/v1/hub/admin/...), both behind it. Empty leaves them off (404).
 	// cmd/lolad-hub reads it from LOLAD_HUB_ADMIN_TOKEN.
 	AdminToken string
+	// Signup is the default sign-up mode, SignupOpen (when empty) or
+	// SignupInvite; the console can override it. cmd reads LOLAD_HUB_SIGNUP.
+	Signup string
+	// Limits bound open sign-up and traffic; nil = DefaultLimits().
+	Limits *Limits
 }
 
 // Server is the hub. Mount Handler behind a TLS-terminating proxy and run Run
@@ -53,6 +59,7 @@ type Server struct {
 	traffic *traffic
 	started time.Time
 	admin   *admin // nil when the console is off
+	lim     Limits
 }
 
 type tunnel struct {
@@ -91,7 +98,18 @@ func NewServer(o Options) (*Server, error) {
 		o.Clock = time.Now
 	}
 	o.Store.now = o.Clock
-	s := &Server{o: o, store: o.Store, tunnels: map[string]*tunnel{}, limits: newLimiter(o.Clock), traffic: newTraffic(o.Clock), started: o.Clock()}
+	switch o.Signup {
+	case "":
+		o.Signup = SignupOpen
+	case SignupOpen, SignupInvite:
+	default:
+		return nil, fmt.Errorf("hub: sign-up mode must be %q or %q", SignupOpen, SignupInvite)
+	}
+	lim := DefaultLimits()
+	if o.Limits != nil {
+		lim = *o.Limits
+	}
+	s := &Server{lim: lim, o: o, store: o.Store, tunnels: map[string]*tunnel{}, limits: newLimiter(o.Clock), traffic: newTraffic(o.Clock), started: o.Clock()}
 	if o.AdminToken != "" {
 		if len(o.AdminToken) < MinAdminToken {
 			return nil, fmt.Errorf("hub: admin token must be at least %d characters", MinAdminToken)
@@ -135,6 +153,15 @@ func (s *Server) Run(ctx context.Context) {
 // Sweep closes tunnels whose account is gone or disabled.
 func (s *Server) Sweep(ctx context.Context) {
 	s.limits.prune()
+	if s.lim.ReapUnused > 0 {
+		if gone, e := s.store.reap(ctx, s.lim.ReapUnused); e != nil {
+			s.o.Logger.Error("reap", "err", e)
+		} else {
+			for _, h := range gone {
+				s.o.Logger.Info("reaped unused sign-up", "handle", h)
+			}
+		}
+	}
 	if s.admin != nil {
 		s.admin.prune()
 	}
@@ -168,11 +195,12 @@ func (s *Server) Online(handle string) bool {
 }
 
 func (s *Server) info(w http.ResponseWriter, r *http.Request) {
-	reply(w, 200, map[string]string{"name": "lolad-hub", "version": Version, "public_url": s.o.PublicURL, "signup": "invite"})
+	reply(w, 200, map[string]string{"name": "lolad-hub", "version": Version, "public_url": s.o.PublicURL, "signup": s.signupState(r.Context())})
 }
 
 type registerBody struct {
-	Code      string `json:"code"`
+	Code      string `json:"code,omitempty"`
+	Hub       string `json:"hub,omitempty"` // this hub's public URL; binds the signature to it
 	Handle    string `json:"handle"`
 	Display   string `json:"display"`
 	PublicKey string `json:"public_key"`
@@ -186,6 +214,11 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		s.traffic.record(Request{Time: start, Path: "/v1/hub/register", Status: rw.code(), Ms: s.o.Clock().Sub(start).Milliseconds(), ip: ip})
 	}()
+	ctx := r.Context()
+	failed := func(status int, code, msg string) {
+		s.limits.hit("fail:"+ip, time.Hour)
+		fail(w, status, code, msg)
+	}
 	if !s.limits.peek("fail:"+ip, 10, time.Hour) {
 		fail(w, 429, "rate_limited", "Too many failed sign-up attempts")
 		return
@@ -201,7 +234,11 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !ValidHandle(b.Handle) {
-		fail(w, 400, "invalid_handle", "Handle must be 3-32 of a-z, 0-9 and -, not starting or ending with -")
+		body := map[string]string{"error": "invalid_handle", "message": "Handle must be 3-32 of a-z, 0-9 and -, not starting or ending with -, and not reserved"}
+		if sug := s.suggestHandle(ctx, b.Handle); sug != "" {
+			body["suggestion"] = sug
+		}
+		reply(w, 400, body)
 		return
 	}
 	if len(b.Display) > 64 {
@@ -210,11 +247,49 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	}
 	key, e := parsePublicKey(b.PublicKey)
 	if e != nil || r.Header.Get("X-AMP-Provider") != b.Handle || !verifyRequest(r, raw, key, s.o.Clock()) {
-		s.limits.hit("fail:"+ip, time.Hour)
-		fail(w, 403, "invalid_signature", "Invalid signature or timestamp")
+		failed(403, "invalid_signature", "Invalid signature or timestamp")
 		return
 	}
-	a, e := s.store.register(r.Context(), b.Code, b.Handle, strings.TrimSpace(b.Display), b.PublicKey)
+	// The signed body names the hub, so a captured request cannot be
+	// replayed on another hub. Required for a sign-up without a code.
+	if b.Hub != "" && strings.TrimRight(b.Hub, "/") != s.o.PublicURL || b.Hub == "" && b.Code == "" {
+		failed(400, "wrong_hub", "The request is not for this hub")
+		return
+	}
+	if ban, e := s.store.banned(ctx, b.PublicKey); e != nil || ban {
+		if e != nil {
+			s.o.Logger.Error("register failed", "err", e)
+			fail(w, 500, "internal_error", "Cannot register")
+			return
+		}
+		fail(w, 403, "signup_refused", "This lolad can't join this hub")
+		return
+	}
+	// Re-registering the same key is idempotent and never limited.
+	_, e = s.store.accountByKey(ctx, b.PublicKey)
+	if e != nil && !errors.Is(e, ErrNotFound) {
+		s.o.Logger.Error("register failed", "err", e)
+		fail(w, 500, "internal_error", "Cannot register")
+		return
+	}
+	open := b.Code == "" && e != nil // a new account with no code
+	if open {
+		if s.SignupMode(ctx) != SignupOpen {
+			failed(403, "invalid_invite", "This hub is invite-only: a sign-up code is required")
+			return
+		}
+		if reason, wait := s.capReached(ctx); reason != "" {
+			w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())))
+			fail(w, 503, "signup_closed", "This hub isn't taking new sign-ups right now")
+			return
+		}
+		if !s.signupAllowed(ip) {
+			w.Header().Set("Retry-After", "3600")
+			fail(w, 429, "rate_limited", "Too many sign-ups from your network today")
+			return
+		}
+	}
+	a, e := s.store.register(ctx, b.Code, b.Handle, strings.TrimSpace(b.Display), b.PublicKey)
 	var re *registerError
 	if errors.As(e, &re) {
 		if re.code == "invalid_invite" {
@@ -224,6 +299,9 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		if re.suggestion != "" {
 			body["suggestion"] = re.suggestion
 		}
+		if re.handle != "" {
+			body["handle"] = re.handle
+		}
 		reply(w, re.status, body)
 		return
 	}
@@ -232,7 +310,10 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		fail(w, 500, "internal_error", "Cannot register")
 		return
 	}
-	s.o.Logger.Info("registered", "handle", a.Handle)
+	if open {
+		s.signupCounted(ip)
+	}
+	s.o.Logger.Info("registered", "handle", a.Handle, "via", a.JoinedVia, "ip", ip)
 	reply(w, 200, map[string]string{"handle": a.Handle, "url": s.o.PublicURL + "/p/" + a.Handle})
 }
 
@@ -422,11 +503,12 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	status := 0
+	var size int64
 	ip := s.clientIP(r)
 	defer func() {
 		ms := s.o.Clock().Sub(start).Milliseconds()
-		s.o.Logger.Info("forward", "handle", handle, "path", path, "status", status, "ms", ms)
-		s.traffic.record(Request{Time: start, Handle: handle, Path: "/p/" + handle + path, Status: status, Ms: ms, ip: ip})
+		s.o.Logger.Info("forward", "handle", handle, "path", path, "status", status, "ms", ms, "bytes", size)
+		s.traffic.record(Request{Time: start, Handle: handle, Path: "/p/" + handle + path, Status: status, Ms: ms, Bytes: size, ip: ip})
 	}()
 	a, e := s.store.Account(r.Context(), handle)
 	if errors.Is(e, ErrNotFound) {
@@ -443,13 +525,15 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request) {
 		fail(w, 403, "provider_disabled", "This lolad is disabled on the hub")
 		return
 	}
-	if !s.limits.allow("h:"+handle, 300, time.Minute) || !s.limits.allow("ip:"+ip, 600, time.Minute) {
+	if !s.limits.allow("h:"+handle, 300, time.Minute) || !s.limits.allow("ip:"+ip, 600, time.Minute) ||
+		s.lim.BytesPerDay > 0 && s.traffic.bytes24h(handle) >= s.lim.BytesPerDay {
 		status = 429
 		w.Header().Set("Retry-After", "60")
 		fail(w, 429, "rate_limited", "Too many requests")
 		return
 	}
 	body, e := io.ReadAll(io.LimitReader(r.Body, MaxBody+1))
+	size = int64(len(body))
 	if e != nil || len(body) > MaxBody {
 		status = 413
 		fail(w, 413, "request_too_large", "Request exceeds 1 MB")
@@ -521,6 +605,7 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set(k, v)
 		}
 		status = res.Status
+		size += int64(len(res.Body))
 		w.WriteHeader(res.Status)
 		_, _ = w.Write(res.Body)
 	case <-timer.C:
