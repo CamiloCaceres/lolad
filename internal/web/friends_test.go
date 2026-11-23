@@ -250,3 +250,25 @@ func TestWelcomeFriendStep(t *testing.T) {
 		t.Fatal("welcome refusal")
 	}
 }
+
+// A waiting entry (core.Connection.Waiting) survives a reload and can be cancelled.
+func TestFriendWaitingCancel(t *testing.T) {
+	f, do := friendSetup(t, web.Options{})
+	link := fake.FriendLink("Cara", "cara", nil, time.Now().Add(time.Hour), true)
+	_, body, _ := do("POST", "/connections/friends/preview", url.Values{"link": {link}})
+	do("POST", "/connections/friends/accept", url.Values{"token": {previewToken(t, body)}})
+	_, body, _ = do("GET", "/connections", nil)
+	if !strings.Contains(body, "as long as it’s back before") || !strings.Contains(body, "Stop waiting") || strings.Contains(body, "Send Cara a message") {
+		t.Fatal("waiting card after reload")
+	}
+	status, _, _ := do("POST", "/connections/cara.lolad.local/remove", url.Values{"confirm": {"remove"}})
+	if status != http.StatusSeeOther {
+		t.Fatalf("cancel: %d", status)
+	}
+	cs, _ := f.Connections(t.Context())
+	for _, c := range cs {
+		if c.Provider == "cara.lolad.local" {
+			t.Fatal("still waiting after cancel")
+		}
+	}
+}

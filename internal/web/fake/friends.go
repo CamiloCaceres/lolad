@@ -201,6 +201,7 @@ func (s *Service) AcceptFriendInvite(ctx context.Context, link string, r web.Acc
 	if p.X == "offline" {
 		state = web.FriendWaiting
 		s.friends.waiting[provider] = true
+		c.Waiting, c.WaitingUntil = true, time.Unix(p.E, 0)
 	} else {
 		c.LastSeen = now
 	}
@@ -231,6 +232,7 @@ func (s *Service) FinishWaiting(provider string) {
 	for i := range s.connections {
 		if s.connections[i].Provider == provider {
 			s.connections[i].LastSeen = s.now()
+			s.connections[i].Waiting, s.connections[i].WaitingUntil = false, time.Time{}
 		}
 	}
 	s.emit("", "federation", "Friend connected")

@@ -298,7 +298,7 @@ func (s *server) friendAccept(w http.ResponseWriter, r *http.Request) {
 
 // friendCard is one connection in plain words.
 type friendCard struct {
-	Waiting     bool                 // paired by link, their lolad has not answered yet
+	Waiting     bool                 // accepted a link while their lolad was offline
 	Human       *core.RemoteContact  // their person, when we may write to them
 	TheirAgents []core.RemoteContact // their assistants we may write to
 	OurAgents   []string             // display names of ours they can reach
@@ -306,7 +306,7 @@ type friendCard struct {
 
 func cardFor(c core.Connection, contacts []core.RemoteContact, labels map[string]string) friendCard {
 	var fc friendCard
-	fc.Waiting = c.LastSeen.IsZero() && c.LastError == "" && !c.Paused
+	fc.Waiting = c.Waiting
 	for i := range contacts {
 		rc := contacts[i]
 		if rc.Peer != c.Provider {
