@@ -2,6 +2,7 @@ package web
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"net/http"
 	"slices"
@@ -138,7 +139,12 @@ func (s *server) connectionAccept(w http.ResponseWriter, r *http.Request) {
 	}
 	if _, e := s.svc.AcceptInvite(r.Context(), code); e != nil {
 		// Service errors may include parser input. Never echo any part of the code.
-		s.connectionError(w, r, "Could not accept that invitation. Ask for a new invitation and try again.")
+		msg := "Could not accept that invitation. Ask for a new invitation and try again."
+		var um interface{ UserMessage() string }
+		if errors.As(e, &um) { // a refusal written for people; never contains the code
+			msg = um.UserMessage()
+		}
+		s.connectionError(w, r, msg)
 		return
 	}
 	s.redirect(w, r, "/connections")

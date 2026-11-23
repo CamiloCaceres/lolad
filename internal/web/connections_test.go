@@ -21,11 +21,15 @@ type federationSpy struct {
 	provider, remote, local string
 	allow                   bool
 	accept                  string
+	acceptErr               error
 	removed                 string
 }
 
 func (s *federationSpy) AcceptInvite(ctx context.Context, code string) (core.Connection, error) {
 	s.accept = code
+	if s.acceptErr != nil {
+		return core.Connection{}, s.acceptErr
+	}
 	return core.Connection{}, fmt.Errorf("invalid: %s", code)
 }
 func (s *federationSpy) UpdateConnection(ctx context.Context, p string, u core.ConnectionUpdate) (core.Connection, error) {
@@ -154,5 +158,26 @@ func TestFederationRemoteScreens(t *testing.T) {
 				t.Errorf("%s: missing %q", tc.path, want)
 			}
 		}
+	}
+}
+
+type userMessageErr struct{}
+
+func (userMessageErr) Error() string       { return "invalid request: same name" }
+func (userMessageErr) Unwrap() error       { return core.ErrInvalid }
+func (userMessageErr) UserMessage() string { return "Both lolads are called home." }
+
+// A refusal that carries a message written for people (fed's same-name
+// refusal) is shown as is; other errors keep the generic text.
+func TestAcceptShowsUserMessage(t *testing.T) {
+	sp, do := fedSetup(t)
+	sp.acceptErr = fmt.Errorf("accept: %w", userMessageErr{})
+	status, b := do("POST", "/connections/accept", url.Values{"code": {"lolad-invite:SECRET"}})
+	if status != 422 || !strings.Contains(b, "Both lolads are called home.") || strings.Contains(b, "Could not accept that invitation") || strings.Contains(b, "SECRET") {
+		t.Fatalf("%d\n%s", status, b)
+	}
+	sp.acceptErr = nil
+	if _, b = do("POST", "/connections/accept", url.Values{"code": {"lolad-invite:SECRET"}}); !strings.Contains(b, "Could not accept that invitation") {
+		t.Fatal("generic message missing")
 	}
 }
