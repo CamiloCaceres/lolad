@@ -126,6 +126,82 @@ output. Note every time you had to wait.
 - [ ] A sends B a message. It is not delivered, and A's card shows B as
       unreachable ("recipient not found").
 
+## Rehearsal: two fresh installs, one link (hands-off)
+
+This is the dress rehearsal for Camilo's acceptance test (two non-technical
+friends, no help). It checks friend links and open sign-up end to end.
+
+Run it with two **fresh** installs: no `~/.config/lolad`, no state, never on a
+hub. A is on one network and B on another, Mac and Windows if possible. The
+hub is in **open** sign-up mode. Health shows "Sign-ups: Open to anyone".
+
+### What the testers are told (and nothing else)
+
+- **Person A:** "Install Lolad from <download page>, make an assistant, then
+  open **Sharing** and invite Person B. Send them what Lolad gives you, the way
+  you'd send any link."
+- **Person B:** "Open what Person A sends you."
+
+Hand over no hub address, handle, code, name or setting. An observer
+watches and writes down where a tester hesitates, rereads or asks. **No
+hints**: if they're stuck for 5 minutes, stop the run, write down where,
+and treat it as a failure.
+
+### What should happen (the observer checks off)
+
+**A, inviting**
+- [ ] Onboarding shows "Your lolad's name is …", not `home`.
+- [ ] Sharing has **Invite a friend**. A ticks at least one assistant and
+      chooses **Create link** with no other step.
+- [ ] A link starting `https://lolad.caceresdev.com/join#` appears with
+      **Copy link**, and the text says it works once, for 7 days.
+- [ ] Behind the scenes, A joined the hub on its own. Operator console:
+      People shows A with **New** and "open sign-up".
+
+**B, accepting**
+- [ ] The link opens the `/join` page, which says who invited them and
+      offers the download for their OS.
+- [ ] After installing: either onboarding's "Got an invite from a friend?"
+      or Sharing's "Got an invite?" takes the pasted link.
+- [ ] It shows "<A> invited you" and A's offered assistants, with one
+      plain line on what will be allowed. B can tick assistants of their own.
+- [ ] One click on **Connect with <A>** gives "Connected", or "Waiting for
+      <A>'s Lolad…", which then connects on its own when A is online.
+- [ ] Console: People shows B (**New**, open sign-up). Both are Connected.
+
+**Talking**
+- [ ] B messages A, and A answers. No approval card on either side.
+- [ ] B asks one of A's offered assistants something and gets an answer. No
+      approval card.
+- [ ] An assistant A did **not** offer is not reachable from B. B sees a
+      plain reason, not an error code.
+- [ ] Both sides show the other as connected after quitting and reopening
+      Lolad.
+
+**Edge checks** (observer, after the main run)
+- [ ] Opening the same link on a third install is refused with "already
+      used. If that wasn't you, tell <A>", and A sees who used it.
+- [ ] A link A made and cancelled under "Links you've made" no longer
+      works.
+- [ ] With A's computer asleep, a fresh link accepted by B shows "Waiting
+      for <A>'s Lolad"; after a reload it still shows waiting; it connects
+      when A wakes.
+
+### Record
+
+| | A | B |
+|---|---|---|
+| OS and Lolad version | | |
+| Install to "link ready" / "connected" (minutes) | | |
+| Where they hesitated or asked | | |
+| Words they didn't understand (hub, handle, tenant, provider must never appear) | | |
+| Result: pass / stuck at step … | | |
+
+Send the table and the checklist to lolad-manager. Then remove the test
+accounts with `lolad-hub rm <handle>` in the container. Avoid **Remove and
+block** in the console: it bans the key, so the same install could not join
+again.
+
 ## Windows notes (when B is the Windows PC)
 
 - [ ] The desktop app installs and onboarding completes. The name step shows

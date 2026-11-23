@@ -39,6 +39,7 @@
     <p class="lede" data-lede>Lolad runs a small team of AI assistants on your own computer. Install it, paste your invite link, and you’re connected: you can message each other, and the assistants you each choose.</p>
     <div class="join-offer" data-offer hidden><p class="eyebrow"><span data-who-2>Your friend</span> is sharing</p><ul class="join-chips" data-agents></ul></div>
     <p class="flash" data-problem role="alert" hidden></p>
+    <p class="note">Already have Lolad? Skip to <a href="#paste">step 3</a>.</p>
   </section>
 
   <ol class="join-steps">
@@ -52,17 +53,38 @@
           <a class="btn lg" data-os="windows" href="https://github.com/CamiloCaceres/lolad/releases/latest/download/Lolad-Setup.exe"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#060818" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>Download for Windows</a>
         </div>
         <p class="note" data-other hidden></p>
+        <p class="note" data-for="windows" hidden>If Edge says the file “isn’t commonly downloaded”, click the <strong>…</strong> next to it, choose <strong>Keep</strong>, then <strong>Keep anyway</strong>. New apps get this message until more people have downloaded them.</p>
       </div>
     </li>
     <li class="join-step">
       <span class="step-n" aria-hidden="true">2</span>
       <div>
         <h2 class="join-h">Install it and open it</h2>
-        <p data-install>Open the file you downloaded and follow the short setup. It walks you through your first assistant.</p>
-        <p class="note"><span data-install-note>The first time you open it, your computer may ask you to confirm, because this early build isn’t signed yet.</span> <a data-guide href="https://github.com/CamiloCaceres/lolad/blob/main/docs/install.md">The install guide</a> shows each step.</p>
+        <div data-for="any">
+          <p>Open the file you downloaded and follow the short setup. It walks you through your first assistant.</p>
+          <p class="note">This early version isn’t signed yet, so the first time you open it your computer asks you to confirm. <a href="https://github.com/CamiloCaceres/lolad/blob/main/docs/install.md">The install guide</a> shows each step.</p>
+        </div>
+        <div data-for="windows" hidden>
+          <ol class="join-substeps">
+            <li>Double-click <strong>Lolad-Setup.exe</strong> in your Downloads.</li>
+            <li>If a blue <strong>“Windows protected your PC”</strong> window appears, click <strong>More info</strong>, then <strong>Run anyway</strong>. It appears because this early version isn’t signed yet.</li>
+            <li>Click <strong>Install</strong>. Leave <strong>Open Lolad now</strong> ticked and click <strong>Finish</strong>.</li>
+          </ol>
+          <p>Lolad opens and walks you through setup. You don’t need an administrator password.</p>
+          <p class="note">Stuck? <a href="https://github.com/CamiloCaceres/lolad/blob/main/docs/install.md#windows">The Windows install guide</a> shows each step.</p>
+        </div>
+        <div data-for="mac" hidden>
+          <ol class="join-substeps">
+            <li>Open <strong>Lolad.dmg</strong> in your Downloads and drag <strong>Lolad</strong> onto <strong>Applications</strong>.</li>
+            <li>Open Lolad from Applications. The first time, your Mac says it can’t verify Lolad, because Apple hasn’t reviewed this early version yet. Click <strong>Done</strong>.</li>
+            <li>Open <strong>System Settings</strong>, then <strong>Privacy &amp; Security</strong>. Scroll down and click <strong>Open Anyway</strong> next to Lolad, then confirm.</li>
+          </ol>
+          <p>Lolad opens and walks you through setup. Your Mac remembers this, so you only do it once.</p>
+          <p class="note">Stuck? <a href="https://github.com/CamiloCaceres/lolad/blob/main/docs/install.md#mac">The Mac install guide</a> shows each step.</p>
+        </div>
       </div>
     </li>
-    <li class="join-step">
+    <li class="join-step" id="paste">
       <span class="step-n" aria-hidden="true">3</span>
       <div>
         <h2 class="join-h">Paste your invite link into Lolad</h2>

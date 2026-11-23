@@ -279,3 +279,8 @@ a.btn.ghost:hover { color: var(--ink); background: rgba(255,255,255,0.06); }
 @media (max-width: 560px) {
   .join-step { padding: 22px 18px; gap: 14px; }
 }
+.join-substeps { margin: 0; padding-left: 22px; display: grid; gap: 10px; color: var(--ink-2); font-size: 16px; line-height: 1.6; }
+.join-substeps li::marker { color: var(--ink-3); }
+.join-step div[data-for] { display: flex; flex-direction: column; gap: 14px; }
+.join-step [data-for][hidden] { display: none; }
+.join-hero .note a, .join-step .note a { color: #9FB8FF; }

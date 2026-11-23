@@ -31,7 +31,7 @@
 {{else}}<p class="muted">You don’t have any assistants yet. You can share them later.</p>{{end}}</fieldset>
 <p class="friend-consequence" data-friend-consequence data-who="{{.Who}}" data-default-who="{{.DefaultWho}}"><span data-friend-who>{{.Who}}</span>, and the assistants {{.They}}, can message <span data-friend-yours>you</span> without asking.</p>{{end}}
 
-{{define "friend-pairing"}}<div class="connection-pairing friend-pairing">
+{{define "friend-pairing"}}{{if not .Info.Enabled}}<p class="flash is-note" role="status">Connecting with friends is turned off on this Lolad, so you can’t make or use invite links right now.</p>{{end}}<div class="connection-pairing friend-pairing">
 <section class="share-card friend-invite" aria-labelledby="invite-title"><h2 id="invite-title">Invite a friend</h2>
 {{with .Friend.Created}}<div class="friend-link" role="status">
 <p class="friend-link-title">{{template "icon" "check"}}<span>{{with $.Friend.CreatedFor}}Your link for {{.}} is ready{{else}}Your link is ready{{end}}</span></p>

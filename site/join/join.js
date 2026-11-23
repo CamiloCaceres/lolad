@@ -66,7 +66,6 @@
   // iPadOS says "Macintosh"; touch gives it away.
   const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(ua) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(ua));
   const os = mobile ? "" : /Win/i.test(platform) || /Windows/i.test(ua) ? "windows" : /Mac/i.test(platform) || /Mac OS X/i.test(ua) ? "mac" : "";
-  const guide = $("[data-guide]");
   if (os) {
     const other = os === "mac" ? "windows" : "mac";
     const keep = $('[data-downloads] [data-os="' + os + '"]');
@@ -78,10 +77,7 @@
     a.textContent = other === "mac" ? "Download for Mac" : "Download for Windows";
     note.append("On another computer? ", a, ".");
     note.hidden = false;
-    guide.href += "#" + os;
-    $("[data-install-note]").textContent = os === "mac"
-      ? "The first time you open it, macOS asks you to confirm in System Settings, because Apple hasn’t reviewed this early build yet."
-      : "If Windows shows “Windows protected your PC”, choose More info, then Run anyway. This early build isn’t signed yet.";
+    for (const el of document.querySelectorAll("[data-for]")) el.hidden = el.dataset.for !== os;
   } else if (mobile) {
     $("[data-mobile]").hidden = false;
   }
