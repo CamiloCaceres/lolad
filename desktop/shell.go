@@ -39,6 +39,7 @@ type shell struct {
 
 	det   *detector
 	batch *batcher
+	nav   *navGate // every SetURL and Reload goes through it (nav.go)
 
 	mu        sync.Mutex
 	base      string // "http://127.0.0.1:4100" (no trailing slash); see baseURL
@@ -65,6 +66,15 @@ func newShell(app *application.App, win *application.WebviewWindow, base string,
 	s := &shell{app: app, win: win, base: strings.TrimSuffix(base, "/"), notif: notif, background: background,
 		prefs: loadPrefs(filepath.Join(prefsDir(), "desktop.json")), det: newDetector(), linkByID: map[string]string{}}
 	s.batch = newBatcher(2*time.Second, 12, s.deliver)
+	s.nav = newNavGate(
+		func(url string) { application.InvokeAsync(func() { win.SetURL(url) }) },
+		func() { application.InvokeAsync(func() { win.Reload() }) },
+	)
+	// The first finished navigation (the bundled offline page) proves the
+	// webview exists. Each platform has its own event; the other never fires.
+	ready := func(*application.WindowEvent) { s.nav.Ready() }
+	win.OnWindowEvent(events.Windows.WebViewNavigationCompleted, ready)
+	win.OnWindowEvent(events.Mac.WebViewDidFinishNavigation, ready)
 	return s
 }
 
@@ -96,8 +106,13 @@ func (s *shell) showMain() {
 	application.InvokeAsync(func() {
 		setDockVisible(true)
 		s.win.Show()
-		s.win.Restore()
-		s.win.Focus()
+		// On Windows, Restore and Focus read the WebView2 controller without a
+		// nil check (Wails v3.1.0), so they wait for the webview. Show is safe,
+		// and a window that was never shown has nothing to restore.
+		if runtime.GOOS != "windows" || s.nav.IsReady() {
+			s.win.Restore()
+			s.win.Focus()
+		}
 	})
 }
 
@@ -113,7 +128,7 @@ func (s *shell) openLink(path string) {
 	s.mu.Unlock()
 	if up {
 		target := s.baseURL() + path
-		application.InvokeAsync(func() { s.win.SetURL(target) })
+		s.nav.Navigate(target)
 	}
 	s.showMain()
 }
@@ -198,7 +213,7 @@ func (s *shell) buildTray() {
 	m.AddSeparator()
 	m.Add("Open in Browser").OnClick(func(*application.Context) { _ = s.app.Browser.OpenURL(s.baseURL() + "/") })
 	m.Add("View logs").OnClick(func(*application.Context) { go s.viewLogs() })
-	m.Add("Reload").OnClick(func(*application.Context) { application.InvokeAsync(func() { s.win.Reload() }) })
+	m.Add("Reload").OnClick(func(*application.Context) { s.nav.Reload() })
 	InitUpdates(s.app, m, s.win, func(title, body string) {
 		s.deliver(Note{ID: "update", Kind: "update", Title: title, Body: body, Link: "/"})
 	})
@@ -250,7 +265,7 @@ func (s *shell) onData(d Data) {
 		if d.Snap.Up {
 			go s.onDaemonUp()
 		} else {
-			application.InvokeAsync(func() { s.win.SetURL("/") })
+			s.nav.Navigate("/")
 		}
 		if !seen && !d.Snap.Up {
 			go s.firstLaunchStart()
@@ -314,7 +329,7 @@ func downLabel(d Data) string {
 func (s *shell) onDaemonUp() {
 	s.refreshMeta()
 	base := s.baseURL()
-	application.InvokeAsync(func() { s.win.SetURL(base + "/") })
+	s.nav.Navigate(base + "/")
 
 	s.mu.Lock()
 	agents := len(s.last.Agents)
@@ -325,7 +340,7 @@ func (s *shell) onDaemonUp() {
 	if !done {
 		target := firstRunTarget(setup, agents, pageExists(base, "/welcome"))
 		if target != "" && target != "/" {
-			application.InvokeAsync(func() { s.win.SetURL(base + target) })
+			s.nav.Navigate(base + target)
 			if !s.background {
 				s.showMain()
 			}
