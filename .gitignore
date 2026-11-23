@@ -4,3 +4,7 @@
 
 dist/
 !bin/build-release.sh
+
+# Retired native Apple client (kept on disk only) and agent tool state
+/clients/apple/
+/.codewhale/
