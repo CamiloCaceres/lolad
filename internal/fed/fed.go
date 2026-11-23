@@ -391,7 +391,7 @@ func (f *Engine) Connections(ctx context.Context) ([]core.Connection, error) {
 		}
 		f.mu.Unlock()
 	}
-	return out, nil
+	return f.withPending(ctx, out)
 }
 func (f *Engine) Grants(ctx context.Context) ([]core.Grant, error) {
 	f.mu.Lock()
@@ -480,10 +480,14 @@ func (f *Engine) UpdateConnection(ctx context.Context, provider string, u core.C
 	return cloneConnection(p.Connection), nil
 }
 func (f *Engine) RemoveConnection(ctx context.Context, provider string) error {
+	waiting := f.cancelPending(ctx, provider)
 	f.mu.Lock()
 	p := f.find(provider)
 	if p == nil {
 		f.mu.Unlock()
+		if waiting {
+			return nil // only a waiting friend link: cancelled
+		}
 		return core.ErrNotFound
 	}
 	copy := *p

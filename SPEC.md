@@ -971,7 +971,9 @@ joins the hub when needed, and pre-approves each side.
 - **Offline inviter:** a 503 or an unreachable inviter stores a `fed_pending`
   row and returns `waiting`. It is retried when the hub reports the inviter
   online (pending URLs are in the watch list), every 10 min, and at start,
-  until the link expires.
+  until the link expires. `Connections()` lists it with `waiting: true` and
+  `waiting_until` (an entry of its own until paired), and `RemoveConnection`
+  cancels it.
 - **Events:** `friend_connected` (both sides), `friend_waiting`,
   `friend_expired`, `friend_failed`.
 - **v1 codes:** `lolad-invite:` codes keep working, through the same accept

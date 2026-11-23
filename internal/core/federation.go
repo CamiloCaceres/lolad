@@ -87,6 +87,11 @@ type Connection struct {
 	LastError     string    `json:"last_error,omitempty"`
 	Queued        int       `json:"queued"`  // our messages waiting to reach them
 	Pending       int       `json:"pending"` // their senders waiting for approval
+	// Waiting: we accepted this lolad's friend link while it was offline; the
+	// connection finishes on its own when it comes online, until
+	// WaitingUntil (the link's expiry). RemoveConnection cancels it.
+	Waiting      bool      `json:"waiting,omitempty"`
+	WaitingUntil time.Time `json:"waiting_until,omitzero"`
 }
 
 // Share makes one local agent reachable from a connection.

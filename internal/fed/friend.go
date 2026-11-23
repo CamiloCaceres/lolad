@@ -688,3 +688,46 @@ func migrateFriends(db *sql.DB) error {
 	}
 	return nil
 }
+
+// withPending marks connections waiting on a friend link, and adds those
+// that are not paired yet, so the dashboard can show "Waiting for …".
+func (f *Engine) withPending(ctx context.Context, out []core.Connection) ([]core.Connection, error) {
+	rows, e := f.o.DB.QueryContext(ctx, `SELECT provider,code,url,expires FROM fed_pending ORDER BY created`)
+	if e != nil {
+		return nil, e
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var provider, code, url string
+		var expires int64
+		if e = rows.Scan(&provider, &code, &url, &expires); e != nil {
+			return nil, e
+		}
+		var c friendCode
+		_ = json.Unmarshal([]byte(code), &c)
+		until := time.Unix(expires, 0).UTC()
+		found := false
+		for i := range out {
+			if out[i].Provider == provider {
+				out[i].Waiting, out[i].WaitingUntil, found = true, until, true
+			}
+		}
+		if !found {
+			out = append(out, core.Connection{Provider: provider, Display: c.display(), URL: url, Fingerprint: fingerprint(c.publicKey()), Shares: []core.Share{}, Waiting: true, WaitingUntil: until})
+		}
+	}
+	return out, rows.Err()
+}
+
+// cancelPending drops a waiting friend link for provider; reports whether
+// there was one.
+func (f *Engine) cancelPending(ctx context.Context, provider string) bool {
+	f.pendingMu.Lock()
+	defer f.pendingMu.Unlock()
+	res, e := f.o.DB.ExecContext(ctx, `DELETE FROM fed_pending WHERE provider=?`, provider)
+	if e != nil {
+		return false
+	}
+	n, _ := res.RowsAffected()
+	return n > 0
+}

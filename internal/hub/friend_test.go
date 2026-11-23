@@ -175,6 +175,8 @@ func TestFriendLinkEndToEnd(t *testing.T) {
 		t.Fatal(inv)
 	}
 
+	eventually(t, "ana online", func() bool { return h.srv.Online("ana") })
+
 	// Ben reads it before accepting: no network, no side effects.
 	p, e := ben.f.PreviewFriendInvite(ctx, "  Look: "+inv.Link+"\n")
 	if e != nil || p.FromDisplay != "Ana" || len(p.Agents) != 1 || p.Agents[0].Slug != "maple" || p.Agents[0].Display != "Maple" || !p.JoinsNetwork || p.Expired || p.SameName || p.AlreadyConnected {
@@ -306,11 +308,16 @@ func TestFriendLinkWaitsForInviter(t *testing.T) {
 	if !strings.Contains(ben.eventKinds(), "friend_waiting") {
 		t.Fatal(ben.eventKinds())
 	}
+	// After a reload the dashboard still knows: Connections lists it as waiting.
+	cs, _ := ben.f.Connections(ctx)
+	if len(cs) != 1 || !cs[0].Waiting || cs[0].Display != "Ana" || cs[0].Provider != "ana.lolad.local" || cs[0].WaitingUntil.Before(time.Now()) {
+		t.Fatalf("%+v", cs)
+	}
 	// Ana comes back: the hub tells Ben, and the connection finishes alone.
 	ana.client, ana.stop = startClientNoCleanupWait(ana.opts)
 	eventually(t, "connected after inviter returned", func() bool {
 		cs, _ := ben.f.Connections(ctx)
-		return len(cs) == 1 && cs[0].UserReachable
+		return len(cs) == 1 && cs[0].UserReachable && !cs[0].Waiting
 	})
 	delivered(t, ben, "ben", "maple@ana.lolad.local")
 }
@@ -327,6 +334,7 @@ func TestFriendAutoHandleCollision(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
+	eventually(t, "ana online", func() bool { return h.srv.Online("ana") })
 	if res, e := ben.f.AcceptFriendInvite(t.Context(), inv.Link, core.AcceptRequest{}); e != nil || res.State != core.FriendConnected {
 		t.Fatal(res, e)
 	}
@@ -336,5 +344,39 @@ func TestFriendAutoHandleCollision(t *testing.T) {
 	cs, _ := ana.f.Connections(t.Context())
 	if len(cs) != 1 || cs[0].URL != h.url+"/p/ben-2" {
 		t.Fatal(cs)
+	}
+}
+
+// Removing a waiting connection cancels the pending accept.
+func TestFriendLinkCancelWaiting(t *testing.T) {
+	h := newHub(t)
+	ana := newFriendLolad(t, h, "ana")
+	ctx := t.Context()
+	inv, e := ana.f.CreateFriendInvite(ctx, core.FriendInviteRequest{})
+	if e != nil {
+		t.Fatal(e)
+	}
+	eventually(t, "ana online", func() bool { return h.srv.Online("ana") })
+	ana.stop()
+	eventually(t, "ana offline", func() bool { return !h.srv.Online("ana") })
+	ben := newFriendLolad(t, h, "ben")
+	if res, e := ben.f.AcceptFriendInvite(ctx, inv.Link, core.AcceptRequest{}); e != nil || res.State != core.FriendWaiting {
+		t.Fatal(res, e)
+	}
+	if e = ben.f.RemoveConnection(ctx, "ana.lolad.local"); e != nil {
+		t.Fatal(e)
+	}
+	if cs, _ := ben.f.Connections(ctx); len(cs) != 0 {
+		t.Fatalf("%+v", cs)
+	}
+	if e = ben.f.RemoveConnection(ctx, "ana.lolad.local"); !errors.Is(e, core.ErrNotFound) {
+		t.Fatal(e)
+	}
+	// Ana coming back no longer connects them.
+	ana.client, ana.stop = startClientNoCleanupWait(ana.opts)
+	eventually(t, "ana online again", func() bool { return h.srv.Online("ana") })
+	time.Sleep(300 * time.Millisecond)
+	if cs, _ := ben.f.Connections(ctx); len(cs) != 0 {
+		t.Fatal("cancelled link connected anyway", cs)
 	}
 }
