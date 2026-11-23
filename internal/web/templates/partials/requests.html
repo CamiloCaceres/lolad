@@ -5,7 +5,7 @@ the card folds into a one-line receipt. See requests.go. */}}
 
 {{/* req-bar: the waiting bar above the composer. app.js hides it while the
 card it points at is on screen. */}}
-{{define "req-bar"}}{{$t := .T}}<div id="req-bar" class="req-bar"{{if .OOB}} hx-swap-oob="true"{{end}}{{if not (and $t $t.Reqs)}} hidden{{end}} data-req-bar{{with $t}}{{with .FirstWaiting}} data-req-target="m-{{short .}}"{{end}}{{end}}>{{with $t}}{{if .Reqs}}
+{{define "req-bar"}}{{$t := .T}}<div id="req-bar" class="req-bar"{{if .OOB}} hx-swap-oob="morph"{{end}}{{if not (and $t $t.Reqs)}} hidden{{end}} data-req-bar{{with $t}}{{with .FirstWaiting}} data-req-target="m-{{short .}}"{{end}}{{end}}>{{with $t}}{{if .Reqs}}
   <span class="pulse" aria-hidden="true"></span>
   <span class="req-bar-text">{{if eq (len .Reqs) 1}}<strong>{{.Display}}</strong> <span>is waiting: {{(index .Reqs 0).Line}}</span>{{else}}<strong>{{len .Reqs}} questions</strong> <span>are waiting · oldest first</span>{{end}}</span>
   {{with .FirstWaiting}}<a class="btn btn-sm" href="#m-{{short .}}" data-req-jump="{{short .}}">Jump to it</a>{{end}}
@@ -26,12 +26,12 @@ card it points at is on screen. */}}
   {{template "ask-body" $m}}
   {{template "atts" $m.Files}}
   {{if $r.Draft}}
-  <form class="ask-staged" method="post" action="/inbox/{{$t.Peer}}/requests/{{$m.ID}}" hx-post="/inbox/{{$t.Peer}}/requests/{{$m.ID}}" hx-target="#msgs" hx-disabled-elt="find button">
+  <form class="ask-staged" method="post" action="/inbox/{{$t.Peer}}/requests/{{$m.ID}}" hx-post="/inbox/{{$t.Peer}}/requests/{{$m.ID}}" hx-target="#msgs" hx-swap="morph:innerHTML" hx-disabled-elt="find button">
     <p>{{if $r.Draft.Skipped}}You’ll skip this.{{else}}{{$r.Summary}}{{end}} <span class="muted">Not sent yet.</span></p>
     <div class="ask-actions"><button class="btn btn-primary" type="submit" formaction="/inbox/{{$t.Peer}}/requests/send" hx-post="/inbox/{{$t.Peer}}/requests/send">Send answer</button><button class="btn btn-ghost" type="submit" name="do" value="change">Change</button></div>
   </form>
   {{else}}
-  <form class="ask-form" method="post" action="/inbox/{{$t.Peer}}/requests/{{$m.ID}}" hx-post="/inbox/{{$t.Peer}}/requests/{{$m.ID}}" hx-target="#msgs" hx-disabled-elt="find button" autocomplete="off"{{if or $r.File (and (eq $k "task") (not $r.FileOff))}} enctype="multipart/form-data" hx-encoding="multipart/form-data"{{end}} data-ask-form>
+  <form class="ask-form" method="post" action="/inbox/{{$t.Peer}}/requests/{{$m.ID}}" hx-post="/inbox/{{$t.Peer}}/requests/{{$m.ID}}" hx-target="#msgs" hx-swap="morph:innerHTML" hx-disabled-elt="find button" autocomplete="off"{{if or $r.File (and (eq $k "task") (not $r.FileOff))}} enctype="multipart/form-data" hx-encoding="multipart/form-data"{{end}} data-ask-form>
     <input type="hidden" name="send" value="1">
     {{if eq $k "options"}}
     <div class="ask-opts" role="radiogroup" aria-label="{{or (subject $m.Mail) "Choices"}}">

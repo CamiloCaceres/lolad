@@ -12,6 +12,42 @@
     set(k, v) { try { v ? localStorage.setItem(k, v) : localStorage.removeItem(k); } catch { /* private mode */ } },
   };
 
+  // ------------------------------------------------------------ swaps
+  // Live regions refresh with hx-swap="morph" (idiomorph): the nodes stay, so
+  // scroll positions, open menus, focus and running animations survive an
+  // update and only what changed is touched. What the person is doing wins
+  // over the server's copy: an open/closed <details>, an answer being typed or
+  // picked, a "couldn't do it" box they opened, the waiting bar's on-screen state.
+  if (window.Idiomorph) {
+    Idiomorph.defaults.ignoreActiveValue = true;
+    Idiomorph.defaults.callbacks.beforeAttributeUpdated = (attr, node) => {
+      if (!node.matches) return;
+      if (attr === "open" && node.tagName === "DETAILS") return false;
+      if ((attr === "value" || attr === "checked") && node.matches("[data-req-input], input[data-ask-pick]")) return false;
+      if (attr === "hidden" && node.matches(".ask-couldnt, .ask-done-row")) return false;
+      if (attr === "class" && node.matches("[data-req-bar]")) return false;
+    };
+  }
+  // A boosted link or form is a page change: it always replaces the whole
+  // body. htmx would otherwise let it inherit an hx-target/hx-swap from an
+  // enclosing element, and the next page (sidebar and all) would land inside
+  // that element: the "two sidebars" bug.
+  document.addEventListener("htmx:beforeSwap", (e) => {
+    const d = e.detail;
+    if (!(d.boosted || (d.requestConfig && d.requestConfig.boosted))) return;
+    d.target = body;
+    d.swapOverride = "innerHTML";
+  });
+  // Background refreshes (live events, polling) fail quietly: the live dot in
+  // the sidebar already says when lolad can't be reached. Only something the
+  // person did gets a toast.
+  const background = (d) => {
+    const spec = (d && d.elt && d.elt.getAttribute && d.elt.getAttribute("hx-trigger")) || "";
+    if (/\bevery\b/.test(spec)) return true; // polling
+    const t = d && d.requestConfig && d.requestConfig.triggeringEvent;
+    return !!t && /^lolad:/.test(t.type); // live events
+  };
+
   // ------------------------------------------------------------ live stream
   // Server events become: lolad:mail | lolad:agent, lolad:a-<agent>, and
   // lolad:mail-visible (mail while this tab is visible; the open thread
@@ -72,8 +108,9 @@
     setTimeout(() => { t.classList.add("is-leaving"); setTimeout(() => t.remove(), 200); }, level === "error" ? 6000 : 2600);
   }
   document.addEventListener("lolad:toast", (e) => toast(e.detail && e.detail.message, e.detail && e.detail.level));
-  document.addEventListener("htmx:sendError", () => toast("Couldn't reach lolad. Is the daemon running?", "error"));
+  document.addEventListener("htmx:sendError", (e) => { if (!background(e.detail)) toast("Couldn't reach lolad. Is the daemon running?", "error"); });
   document.addEventListener("htmx:responseError", (e) => {
+    if (background(e.detail)) return;
     const x = e.detail.xhr;
     if (x && x.getResponseHeader("HX-Trigger")) return; // the server already explained
     toast("Request failed (" + (x ? x.status : "?") + ")" + (x && x.responseText && x.responseText.length < 200 ? ": " + x.responseText : ""), "error");
@@ -116,34 +153,67 @@
   }
 
   // ------------------------------------------------------------ thread
+  // The thread follows its bottom while you are at the bottom ("stuck"), and
+  // stays exactly where you put it otherwise. Whatever changes its height (a
+  // new message, an image that finished loading, the composer growing, a
+  // window resize) is handled by one ResizeObserver, so nothing else needs to
+  // scroll it, and no update can yank you away from what you are reading.
   const scroller = () => document.getElementById("thread-scroll");
+  const calm = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
   let stick = true;
+  let gliding = 0; // a smooth scroll to the bottom is under way until then
+  let watched = null;
+  let sizeObs = null;
+  let lastH = 0, lastC = 0;
+  const atBottom = (s) => s.scrollHeight - s.scrollTop - s.clientHeight < 120;
   function toBottom(smooth) {
     const s = scroller();
-    if (s) s.scrollTo({ top: s.scrollHeight, behavior: smooth && !matchMedia("(prefers-reduced-motion: reduce)").matches ? "smooth" : "auto" });
+    if (!s) return;
+    stick = true;
+    const glide = smooth && !calm();
+    if (glide) gliding = Date.now() + 700;
+    s.scrollTo({ top: s.scrollHeight, behavior: glide ? "smooth" : "auto" });
+  }
+  function watchThread() {
+    const s = scroller();
+    if (s === watched) return;
+    if (sizeObs) sizeObs.disconnect();
+    watched = s;
+    sizeObs = null;
+    if (!s) return;
+    stick = true;
+    lastH = s.scrollHeight; lastC = s.clientHeight;
+    s.addEventListener("scroll", () => { if (Date.now() > gliding) stick = atBottom(s); }, { passive: true });
+    if (!("ResizeObserver" in window)) return;
+    sizeObs = new ResizeObserver(() => {
+      const h = s.scrollHeight, c = s.clientHeight;
+      if (h === lastH && c === lastC) return;
+      lastH = h; lastC = c;
+      if (!stick) return;
+      if (Date.now() < gliding) s.scrollTo({ top: h, behavior: "smooth" });
+      else s.scrollTop = h;
+    });
+    sizeObs.observe(s);
+    const list = document.getElementById("msgs");
+    if (list) sizeObs.observe(list);
   }
   function openThread() {
+    watchThread();
     const s = scroller();
     if (!s) return;
     const m = /^#m-([0-9a-z]+)$/i.exec(location.hash);
     if (m && showQuestion(m[1], false)) return;
     const fresh = document.getElementById("new");
-    if (fresh && fresh.offsetTop > s.clientHeight * 0.6) s.scrollTop = fresh.offsetTop - 24;
+    if (fresh && fresh.offsetTop > s.clientHeight * 0.6) { s.scrollTop = fresh.offsetTop - 24; stick = atBottom(s); }
     else toBottom(false);
   }
-  document.addEventListener("htmx:beforeSwap", (e) => {
-    if (e.detail.target && e.detail.target.id === "msgs") {
-      const s = scroller();
-      stick = !s || s.scrollHeight - s.scrollTop - s.clientHeight < 120;
-    }
-  });
   document.addEventListener("htmx:afterSwap", (e) => {
     if (e.detail.target && e.detail.target.id === "msgs") {
       // Your own message or a batch of answers lands at the bottom; staging an
       // answer to an older question stays where you are.
       const elt = e.detail.requestConfig && e.detail.requestConfig.elt;
       const mine = e.detail.requestConfig && e.detail.requestConfig.verb === "post" && elt && elt.closest && !!elt.closest("[data-composer], [data-req-send], [data-ask-form]");
-      if (stick || mine) toBottom(true);
+      if (mine && !stick) toBottom(true); // stuck: the observer follows the new height
     }
   });
 
@@ -177,7 +247,7 @@
         store.set(draftKey(form), "");
         clearFiles(form);
         sync();
-        ta.focus();
+        ta.focus({ preventScroll: true });
       });
       if (!coarse.matches && !document.querySelector(".msg.is-open")) ta.focus({ preventScroll: true });
     });
@@ -419,7 +489,7 @@
     const pct = Math.round((item.progress || 0) * 100);
     item.bar.hidden = item.state !== "uploading" && item.state !== "queued";
     item.bar.setAttribute("aria-valuenow", String(pct));
-    item.bar.firstChild.style.width = (item.state === "queued" ? 0 : pct) + "%";
+    item.bar.firstChild.style.transform = "scaleX(" + (item.state === "queued" ? 0 : pct / 100) + ")";
     item.info.textContent = item.state === "error" ? item.error :
       item.state === "queued" ? sizeLabel(item.file.size) + " · waiting" :
       item.state === "uploading" ? sizeLabel(item.file.size) + " · " + (pct >= 100 ? "finishing" : pct + "%") :
@@ -850,8 +920,13 @@
     const id = bar && bar.dataset.reqTarget;
     const card = id && document.getElementById(id);
     if (!bar) return;
-    bar.classList.remove("is-onscreen");
-    if (!card || !("IntersectionObserver" in window)) return;
+    if (!card || !("IntersectionObserver" in window)) { bar.classList.remove("is-onscreen"); return; }
+    const s = scroller();
+    if (s) {
+      const v = s.getBoundingClientRect(), r = card.getBoundingClientRect();
+      const seen = Math.max(0, Math.min(r.bottom, v.bottom) - Math.max(r.top, v.top));
+      bar.classList.toggle("is-onscreen", r.height > 0 && seen / r.height >= 0.35);
+    }
     waitObs = new IntersectionObserver((es) => es.forEach((en) => bar.classList.toggle("is-onscreen", en.isIntersecting)), { threshold: 0.35 });
     waitObs.observe(card);
   }
@@ -861,6 +936,7 @@
   function showQuestion(short, focus) {
     const msg = document.getElementById("m-" + short);
     if (!msg) return false;
+    stick = false; // reading a question: don't follow the bottom away from it
     msg.scrollIntoView({ block: "center", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
     msg.classList.add("is-flash");
     setTimeout(() => msg.classList.remove("is-flash"), 1600);
@@ -877,6 +953,27 @@
   let restoring = false;
   function settleRequests() { restoring = true; restoreTyped(); restoreSteps(); setTimeout(() => { restoring = false; }, 0); }
 
+  // ------------------------------------------------------------ nav
+  // A page change re-renders the sidebar. Keep the conversation list where it
+  // was scrolled, and make sure the open conversation is in view.
+  const convList = () => document.querySelector(".nav-convs .conv-list");
+  let navScroll = null;
+  document.addEventListener("htmx:beforeSwap", (e) => {
+    if (e.detail.target !== body) return;
+    const l = convList();
+    navScroll = l ? l.scrollTop : null;
+  });
+  function restoreNav() {
+    const l = convList();
+    if (!l) return;
+    if (navScroll != null) l.scrollTop = navScroll;
+    navScroll = null;
+    const a = l.querySelector(".conv.is-active");
+    if (!a) return;
+    const lr = l.getBoundingClientRect(), ar = a.getBoundingClientRect();
+    if (ar.top < lr.top || ar.bottom > lr.bottom) l.scrollTop += ar.top - lr.top - (lr.height - ar.height) / 2;
+  }
+
   // ------------------------------------------------------------ boot
   function settle(root) {
     retime(root);
@@ -886,9 +983,23 @@
     paintLive();
     retitle();
   }
+  // Run on the swapped element itself (e.target), not the element that made the
+  // request (e.detail.elt: for a page change that is the link, gone by now).
+  // On swap, not settle, so restored state and the live dot are painted in
+  // the same frame as the new content instead of flashing 20ms later.
+  let lastPage = null;
+  document.addEventListener("htmx:afterSwap", (e) => {
+    const root = e.target && e.target.querySelectorAll ? e.target : document;
+    settle(root);
+    if (e.detail.target === body && e.detail.xhr !== lastPage) {
+      lastPage = e.detail.xhr;
+      restoreNav();
+      openThread();
+    }
+  });
+  document.addEventListener("htmx:oobAfterSwap", () => { retitle(); paintLive(); });
   document.addEventListener("htmx:afterSettle", (e) => {
-    settle(e.detail.elt || document);
-    if (e.detail.elt === body) { openThread(); return; }
+    if (e.detail.target === body) return;
     // A form answered with an error: make sure it is seen.
     const err = document.querySelector("#main .flash.is-error[role=alert]");
     if (err && !err.dataset.seen) {
@@ -897,7 +1008,7 @@
       if (r.top < 0 || r.bottom > innerHeight) err.scrollIntoView({ block: "center", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
     }
   });
-  const boot = () => { settle(document); openThread(); connect(); };
+  const boot = () => { settle(document); restoreNav(); openThread(); connect(); };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
   else boot();
 })();

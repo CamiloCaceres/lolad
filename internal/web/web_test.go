@@ -690,7 +690,7 @@ func TestDevDirReloads(t *testing.T) {
 func TestStalePageReloads(t *testing.T) {
 	e := setup(t)
 	resp, page := e.do("GET", "/agents", nil, false)
-	m := regexp.MustCompile(`<body hx-boost="true" hx-headers='\{"X-Lolad-Build": "([0-9a-f]{12})"\}'>`).FindStringSubmatch(page)
+	m := regexp.MustCompile(`<body hx-boost="true" hx-ext="morph" hx-headers='\{"X-Lolad-Build": "([0-9a-f]{12})"\}'>`).FindStringSubmatch(page)
 	if resp.StatusCode != 200 || m == nil {
 		t.Fatalf("page does not carry its build: %d %q", resp.StatusCode, regexp.MustCompile(`<body[^>]*>`).FindString(page))
 	}

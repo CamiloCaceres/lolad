@@ -12,7 +12,7 @@ sleep, Restart and Settings are buttons beside it (agent-head). */}}
 
 {{define "state-detail"}}{{if .Problem}}{{.Problem.Title}}{{else if eq .State "crashed"}}{{if future .NextRestart}}Automatic retry in {{until .NextRestart}}{{else}}Automatic retry due{{end}}{{with .LastError}} · {{.}}{{end}}{{else if eq .State "failed"}}{{.LastError}}{{else if eq .State "stopped"}}{{if .Runtime.WakeOnMessageEnabled}}Asleep. A new message wakes it up.{{else}}Asleep. Press Start when you need it.{{end}}{{else if .Detail}}{{.Detail}}{{else if eq .State "idle"}}Ready when you are.{{else if eq .State "unknown"}}lolad can't tell what it's doing right now.{{else if eq .State "starting"}}Waking up…{{else}}Working on something.{{end}}{{end}}
 
-{{define "fleet"}}<div id="fleet" class="agents-roster" hx-get="/fragments/fleet" hx-include="#fleet-filters" hx-trigger="lolad:agent from:body delay:500ms, lolad:mail from:body delay:900ms" hx-swap="outerHTML">
+{{define "fleet"}}<div id="fleet" class="agents-roster" hx-get="/fragments/fleet" hx-include="#fleet-filters" hx-trigger="lolad:agent from:body delay:500ms, lolad:mail from:body delay:900ms" hx-swap="morph">
  {{if not .Agents}}{{template "first-run" (dict "Title" "No assistants yet")}}{{else}}
  {{range .Groups}}
  <section class="roster-team" aria-label="{{.Name}}">{{if gt (len $.Groups) 1}}<h2 class="eyebrow">{{.Name}} <span>· {{len .Agents}}</span></h2>{{end}}<ul class="as-grid" role="list">
@@ -31,12 +31,13 @@ sleep, Restart and Settings are buttons beside it (agent-head). */}}
 </div>{{end}}
 {{define "fleet-body"}}{{template "fleet" .}}{{end}}
 
-{{define "agent-head"}}<header class="agent-head" id="agent-head" hx-get="/agents/{{.A.Name}}/part/head" hx-trigger="lolad:a-{{.A.Name}} from:body delay:300ms, lolad:mail from:body delay:500ms" hx-swap="outerHTML">
+{{define "agent-head"}}<header class="agent-head" id="agent-head" hx-get="/agents/{{.A.Name}}/part/head" hx-trigger="lolad:a-{{.A.Name}} from:body delay:300ms, lolad:mail from:body delay:500ms" hx-swap="morph">
  <div class="agent-title">{{template "avatar" (dict "Display" .A.Display "State" .A.State "Size" "xl")}}<div class="agent-id"><h1>{{.A.Display}}</h1><p class="agent-role">{{.A.Role}}{{with .TeamName}} · {{.}}{{end}}</p><div class="agent-current">{{template "state" .A}}<p>{{template "state-detail" .A}}</p></div></div></div>
- <div class="agent-actions" hx-target="#agent-head" hx-swap="outerHTML" hx-disabled-elt="find button"><a class="btn btn-primary" href="/inbox/{{.A.Name}}">{{template "icon" "message"}}<span>Talk to {{.A.Display}}</span></a>
+ <div class="agent-actions"><a class="btn btn-primary" href="/inbox/{{.A.Name}}">{{template "icon" "message"}}<span>Talk to {{.A.Display}}</span></a>
+  <span class="agent-action-forms" hx-target="#agent-head" hx-swap="outerHTML" hx-disabled-elt="find button">
   {{if running .A.State}}<form method="post" action="/agents/{{.A.Name}}/stop" hx-post="/agents/{{.A.Name}}/stop" hx-confirm="Put {{.A.Display}} to sleep? Current work is interrupted.{{if .A.Runtime.WakeOnMessageEnabled}} A new message wakes it up again.{{else}} It stays asleep until you press Start.{{end}}"><input type="hidden" name="from" value="detail"><button class="btn">{{template "icon" "stop"}}<span>Put to sleep</span></button></form>
   <form method="post" action="/agents/{{.A.Name}}/restart" hx-post="/agents/{{.A.Name}}/restart"><input type="hidden" name="from" value="detail"><button class="btn" title="A quick restart. It keeps its conversation and picks up changed settings.">{{template "icon" "restart"}}<span>Restart</span></button></form>
-  {{else if ne .A.State "failed"}}<form method="post" action="/agents/{{.A.Name}}/start" hx-post="/agents/{{.A.Name}}/start"><input type="hidden" name="from" value="detail"><button class="btn">{{template "icon" "start"}}<span>Start</span></button></form>{{end}}
+  {{else if ne .A.State "failed"}}<form method="post" action="/agents/{{.A.Name}}/start" hx-post="/agents/{{.A.Name}}/start"><input type="hidden" name="from" value="detail"><button class="btn">{{template "icon" "start"}}<span>Start</span></button></form>{{end}}</span>
   <a class="btn btn-ghost" href="/agents/{{.A.Name}}/settings">{{template "icon" "settings"}}<span>Settings</span></a>{{template "controls" (dict "A" .A "From" "detail")}}</div>
  {{if eq .A.State "failed"}}{{template "agent-fix" .A}}{{else if .A.Problem}}{{template "agent-problem" .A}}{{end}}
  <dl class="agent-vitals" hidden><div><dt>Last heard from</dt><dd>{{if .A.LastActivity.IsZero}}Not received{{else}}<time datetime="{{stamp .A.LastActivity}}" title="{{long .A.LastActivity}}" data-ago>{{ago .A.LastActivity}}</time>{{end}}</dd></div><div><dt>Awake for</dt><dd>{{if and (running .A.State) (not .A.StartedAt.IsZero)}}{{since .A.StartedAt}}{{else}}Asleep{{end}}</dd></div><div><dt>Crashes today</dt><dd>{{.A.Restarts}}</dd></div><div><dt>Messages it hasn't read</dt><dd>{{.A.Unread}}</dd></div><div><dt>Next check-in</dt><dd>{{if not .NextTrigger.IsZero}}<time datetime="{{stamp .NextTrigger}}" title="{{long .NextTrigger}}">{{when .NextTrigger}}</time>{{else}}None{{end}}</dd></div></dl>
@@ -89,10 +90,10 @@ sleep, Restart and Settings are buttons beside it (agent-head). */}}
  {{else}}<p><strong>Healthy</strong></p><p class="muted">No crashes today.{{if and (running .A.State) (not .A.StartedAt.IsZero)}} Awake for {{since .A.StartedAt}}.{{else}} Asleep now.{{end}}{{if not .A.LastActivity.IsZero}} Last heard from <time datetime="{{stamp .A.LastActivity}}" data-ago>{{ago .A.LastActivity}}</time> ago.{{end}}</p>{{end}}
 </section>{{end}}
 
-{{define "agent-events"}}<div id="agent-events" hx-get="/agents/{{.A.Name}}/part/events" hx-trigger="lolad:a-{{.A.Name}} from:body delay:500ms, lolad:mail from:body delay:700ms" hx-swap="outerHTML">
+{{define "agent-events"}}<div id="agent-events" hx-get="/agents/{{.A.Name}}/part/events" hx-trigger="lolad:a-{{.A.Name}} from:body delay:500ms, lolad:mail from:body delay:700ms" hx-swap="morph">
  {{if .Timeline}}<ol class="activity-stream" role="list">{{range .Timeline}}<li class="activity-entry kind-{{.Kind}}"><time datetime="{{stamp .At}}" title="{{long .At}}">{{evtime .At}}</time><div><strong>{{.Title}}</strong><p>{{.Detail}}</p></div></li>{{end}}</ol>{{else}}<p class="empty-inline">No activity yet. Starts, turns, triggers and mail will appear here.</p>{{end}}
 </div>{{end}}
-{{define "agent-mail"}}{{$name := .A.Name}}<div id="agent-mail" hx-get="/agents/{{.A.Name}}/part/mail" hx-trigger="lolad:mail from:body delay:700ms" hx-swap="outerHTML">
+{{define "agent-mail"}}{{$name := .A.Name}}<div id="agent-mail" hx-get="/agents/{{.A.Name}}/part/mail" hx-trigger="lolad:mail from:body delay:700ms" hx-swap="morph">
   {{if .Mail}}
   <ul class="mail-list" role="list">
     {{range .Mail}}{{$out := eq .FromName $name}}
@@ -109,7 +110,7 @@ sleep, Restart and Settings are buttons beside it (agent-head). */}}
   {{else}}<p class="empty-inline">No mail to or from {{.A.Display}} yet.</p>{{end}}
 </div>{{end}}
 
-{{define "agent-facts"}}{{$a := .A}}{{$rt := .A.Runtime}}<dl class="facts" id="agent-facts" hx-get="/agents/{{.A.Name}}/part/facts" hx-trigger="lolad:a-{{.A.Name}} from:body delay:900ms" hx-swap="outerHTML">
+{{define "agent-facts"}}{{$a := .A}}{{$rt := .A.Runtime}}<dl class="facts" id="agent-facts" hx-get="/agents/{{.A.Name}}/part/facts" hx-trigger="lolad:a-{{.A.Name}} from:body delay:900ms" hx-swap="morph">
   <div><dt>Address</dt><dd class="mono">{{.A.Address}}</dd></div>
   <div class="is-wide"><dt>Directory</dt><dd class="mono">{{.A.Dir}} <a href="/agents/{{$a.Name}}/settings/files">Browse files</a></dd></div>
   <div><dt>Harness &amp; model</dt><dd>{{harness $rt}} <a href="/agents/{{$a.Name}}/settings">Change</a></dd></div>

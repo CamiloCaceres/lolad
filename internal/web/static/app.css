@@ -401,6 +401,7 @@ th.c-num { text-align: right; }
 .agent-id h1 { font-size: var(--t-xl); letter-spacing: -0.02em; line-height: 1.2; }
 .agent-role { color: var(--muted); }
 .agent-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.agent-action-forms { display: contents; }
 .agent-status { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 4px var(--s4); padding: 10px var(--s3); border-radius: var(--r); background: var(--bg-2); font-size: var(--t-sm); color: var(--ink-2); }
 .agent-status .fact { color: var(--muted); font-variant-numeric: tabular-nums; }
 .agent-detail { color: var(--ink-2); overflow-wrap: anywhere; min-width: 0; }

@@ -297,7 +297,7 @@
 .att-chip .att-name { font-size: var(--t-sm); font-weight: 560; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .att-chip .att-size { font-size: var(--t-xs); color: var(--muted); font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .att-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--line); }
-.att-bar i { display: block; height: 100%; width: 0; background: var(--ink-2); transition: width 160ms linear; }
+.att-bar i { display: block; height: 100%; width: 100%; background: var(--ink-2); transform: scaleX(0); transform-origin: left; transition: transform 160ms linear; }
 .att-chip.is-done .att-thumb { color: var(--ink); }
 .att-chip.is-flagged .att-size { color: var(--st-crashed-text); font-weight: 600; white-space: normal; }
 .att-chip.is-error { border-color: color-mix(in oklch, var(--st-failed) 55%, var(--line)); background: var(--st-failed-wash); }
@@ -486,6 +486,9 @@
 
 /* updates: one quiet line; the next update replaces it */
 .msg.is-update { max-width: min(94%, 680px); margin-top: var(--s2); }
+/* A message never grows past its column: a long one-line update or a wide
+   block would otherwise widen the thread and give it a sideways scrollbar. */
+.msg > * { max-width: 100%; min-width: 0; }
 .upd > summary { display: flex; align-items: center; gap: 10px; padding: 4px 8px; list-style: none; color: var(--ink-2); font-size: var(--t-md); cursor: pointer; border-radius: 10px; }
 .upd[data-flat] > summary { cursor: default; }
 .upd > summary::-webkit-details-marker { display: none; }

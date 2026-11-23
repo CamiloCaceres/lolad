@@ -8,7 +8,7 @@
  </div>
 </details>{{end}}
 
-{{define "traffic-rows"}}<section id="traffic"{{if .Before.IsZero}} hx-get="{{.LiveURL}}" hx-trigger="lolad:mail from:body delay:700ms, lolad:agent from:body delay:700ms" hx-swap="outerHTML" data-live{{end}} aria-label="Activity">
+{{define "traffic-rows"}}<section id="traffic"{{if .Before.IsZero}} hx-get="{{.LiveURL}}" hx-trigger="lolad:mail from:body delay:700ms, lolad:agent from:body delay:700ms" hx-swap="morph" data-live{{end}} aria-label="Activity">
  <div class="traffic-tools"><nav class="traffic-scopes" aria-label="Delivery filter"><a href="{{.URL "status" ""}}"{{if eq .Status ""}} aria-current="page"{{end}}>Everything <span>{{.Total}}</span></a><a href="{{.URL "status" "denied"}}"{{if eq .Status "denied"}} aria-current="page"{{end}}>Stopped <span>{{.Denied}}</span></a><a href="{{.URL "status" "queued"}}"{{if eq .Status "queued"}} aria-current="page"{{end}}>On the way <span>{{.Queued}}</span></a></nav><nav class="traffic-modes" aria-label="Audit view"><a href="{{.URL "view" ""}}"{{if ne .View "pairs"}} aria-current="page"{{end}}>Timeline</a><a href="{{.URL "view" "pairs"}}"{{if eq .View "pairs"}} aria-current="page"{{end}}>By conversation</a></nav></div>
  {{if .Other}}<p class="traffic-pair-filter">Conversation: <strong>{{.Peer}} ↔ {{.Other}}</strong> <a href="{{.URL "other" ""}}">Show all for {{.Peer}}</a></p>{{end}}
  <div class="traffic-caption"><p>{{if eq .View "pairs"}}Pairs ranked by volume on this page. Open one to see the messages.{{else}}Newest first. Open a row to read the message.{{end}}</p><p>On the way: not picked up yet · Held: waiting for someone to approve the sender</p></div>

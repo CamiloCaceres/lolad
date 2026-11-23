@@ -5,17 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#07080F">
-<meta name="htmx-config" content='{"allowEval":false,"includeIndicatorStyles":false,"historyCacheSize":0,"defaultSwapStyle":"innerHTML","responseHandling":[{"code":"204","swap":false},{"code":"[23]..","swap":true},{"code":"422","swap":true},{"code":"409","swap":true},{"code":"[45]..","swap":false,"error":true}]}'>
+<meta name="htmx-config" content='{"allowEval":false,"includeIndicatorStyles":false,"historyCacheSize":0,"defaultSwapStyle":"innerHTML","defaultSettleDelay":0,"attributesToSettle":[],"responseHandling":[{"code":"204","swap":false},{"code":"[23]..","swap":true},{"code":"422","swap":true},{"code":"409","swap":true},{"code":"[45]..","swap":false,"error":true}]}'>
 <title>Welcome · lolad</title>
 <link rel="icon" href="{{asset "favicon.svg"}}" type="image/svg+xml">
 <link rel="stylesheet" href="{{asset "app.css"}}">
 {{range pageStyles}}<link rel="stylesheet" href="{{asset .}}">
 {{end}}<script src="{{asset "vendor/htmx.min.js"}}" defer></script>
+<script src="{{asset "vendor/idiomorph-ext.min.js"}}" defer></script>
 <script src="{{asset "app.js"}}" defer></script>
 <script src="{{asset "term.js"}}" defer></script>
 <script src="{{asset "welcome.js"}}" defer></script>
 </head>
-<body class="welcome-body" hx-boost="true" hx-headers='{"X-Lolad-Build": "{{build}}"}'>
+<body class="welcome-body" hx-boost="true" hx-ext="morph" hx-headers='{"X-Lolad-Build": "{{build}}"}'>
 {{template "icons"}}
 <a class="skip" href="#main">Skip to content</a>
 <div class="welcome dots-bg is-{{.Step}}" id="app">
@@ -203,7 +204,7 @@
     <p class="welcome-meta">{{template "state" (dict "State" .CreatedState)}}{{with .CreatedRole}} · {{.}}{{end}}</p></div>
   </div>
   {{if eq .CreatedState "failed"}}<div class="flash is-error" role="alert">{{template "icon" "alert"}}<div><p>Something stopped {{$n}} from starting. lolad can walk you through fixing it.</p><p><a href="/agents/{{.Created}}" hx-boost="false">See what happened</a></p></div></div>{{end}}
-  <div class="welcome-hello-card"{{if not .Hello}} hx-get="/welcome?step=ready&amp;agent={{.Created}}&amp;job={{.Job.Key}}" hx-trigger="every 4s" hx-select=".welcome-hello-card" hx-swap="outerHTML" hx-push-url="false"{{end}}>
+  <div class="welcome-hello-card"{{if not .Hello}} hx-get="/welcome?step=ready&amp;agent={{.Created}}&amp;job={{.Job.Key}}" hx-trigger="every 4s" hx-select=".welcome-hello-card" hx-swap="morph" hx-push-url="false"{{end}}>
     {{if .Hello}}<p class="welcome-hello-from">{{$n}}</p><p class="welcome-hello-text">{{.Hello}}</p>
     {{else}}<p class="welcome-hello-text is-quiet">Say hello to {{$n}}, or pick one of these to start. {{$n}} answers here and on Home.</p>{{end}}
   </div>

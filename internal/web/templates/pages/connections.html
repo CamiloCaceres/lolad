@@ -4,7 +4,7 @@
 {{with .Data.Connected}}<p class="flash is-ok friend-flash" role="status">{{template "icon" "check"}}<span>Connected with {{.}}. You can message {{.}} now.</span></p>{{end}}
 {{if .Data.Friends}}{{template "friend-pairing" .Data}}{{else}}{{template "code-pairing" .Data}}{{end}}
 
-<section id="connection-list" hx-get="/connections" hx-select="#connection-list" hx-target="this" hx-disinherit="hx-select hx-target hx-swap hx-push-url" hx-swap="outerHTML" hx-trigger="lolad:federation from:body delay:500ms" hx-push-url="false"><h2 class="connections-heading">{{if .Data.Friends}}Your friends{{else}}Connected{{end}} <span class="muted">{{len .Data.Connections}}</span></h2>
+<section id="connection-list" hx-get="/connections" hx-select="#connection-list" hx-target="this" hx-disinherit="hx-select hx-target hx-swap hx-push-url" hx-swap="morph" hx-trigger="lolad:federation from:body delay:500ms" hx-push-url="false"><h2 class="connections-heading">{{if .Data.Friends}}Your friends{{else}}Connected{{end}} <span class="muted">{{len .Data.Connections}}</span></h2>
 {{range .Data.Connections}}{{template "friend-card" .}}{{else}}<p class="connection-empty">{{if .Data.Friends}}No friends connected yet. Invite someone, or paste the link a friend sent you.{{else}}Nobody connected yet. Invite someone, or paste the code a friend sent you.{{end}}</p>{{end}}</section>
 
 <details class="connection-advanced"><summary><span>Advanced</span><span class="muted">This Lolad’s identity, the network and invite codes</span>{{template "icon" "down"}}</summary>

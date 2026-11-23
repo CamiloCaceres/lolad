@@ -5,12 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#07080F">
-<meta name="htmx-config" content='{"allowEval":false,"includeIndicatorStyles":false,"historyCacheSize":0,"defaultSwapStyle":"innerHTML","responseHandling":[{"code":"204","swap":false},{"code":"[23]..","swap":true},{"code":"422","swap":true},{"code":"409","swap":true},{"code":"[45]..","swap":false,"error":true}]}'>
+<meta name="htmx-config" content='{"allowEval":false,"includeIndicatorStyles":false,"historyCacheSize":0,"defaultSwapStyle":"innerHTML","defaultSettleDelay":0,"attributesToSettle":[],"responseHandling":[{"code":"204","swap":false},{"code":"[23]..","swap":true},{"code":"422","swap":true},{"code":"409","swap":true},{"code":"[45]..","swap":false,"error":true}]}'>
 <title>{{if .Badges.Unread}}({{.Badges.Unread}}) {{end}}{{.Title}} · lolad</title>
 <link rel="icon" href="{{asset "favicon.svg"}}" type="image/svg+xml">
 <link rel="stylesheet" href="{{asset "app.css"}}">
 {{range pageStyles}}<link rel="stylesheet" href="{{asset .}}">
 {{end}}<script src="{{asset "vendor/htmx.min.js"}}" defer></script>
+<script src="{{asset "vendor/idiomorph-ext.min.js"}}" defer></script>
 <script src="{{asset "app.js"}}" defer></script>
 <script src="{{asset "term.js"}}" defer></script>
 <!-- New agent previews and adoption selection; listeners are scoped to the New screen. -->
@@ -20,7 +21,7 @@
 {{/* Settings workspace keyboard navigation and safe GET-form leave guard. */}}
 <script src="{{asset "settings.js"}}" defer></script>
 </head>
-<body hx-boost="true" hx-headers='{"X-Lolad-Build": "{{build}}"}'>
+<body hx-boost="true" hx-ext="morph" hx-headers='{"X-Lolad-Build": "{{build}}"}'>
 {{template "icons"}}
 <a class="skip" href="#main">Skip to content</a>
 <div class="app {{.Class}}" id="app" data-title="{{.Title}}">
@@ -56,6 +57,6 @@
 </body>
 </html>{{end}}
 
-{{define "nav-badges"}}<span id="nav-badges" class="nav-badges"{{if .OOB}} hx-swap-oob="true"{{end}} hx-get="/fragments/nav" hx-trigger="lolad:mail from:body delay:400ms" hx-swap="outerHTML" hx-push-url="false" data-unread="{{.Unread}}">{{if .Pending}}<span class="count is-you" title="{{plural .Pending "question" "questions"}} waiting on you">{{.Pending}}</span>{{else if .Unread}}<span class="count" title="{{.Unread}} unread">{{.Unread}}</span>{{end}}</span>{{end}}
+{{define "nav-badges"}}<span id="nav-badges" class="nav-badges"{{if .OOB}} hx-swap-oob="morph"{{end}} hx-get="/fragments/nav" hx-trigger="lolad:mail from:body delay:400ms" hx-swap="morph" hx-push-url="false" data-unread="{{.Unread}}">{{if .Pending}}<span class="count is-you" title="{{plural .Pending "question" "questions"}} waiting on you">{{.Pending}}</span>{{else if .Unread}}<span class="count" title="{{.Unread}} unread">{{.Unread}}</span>{{end}}</span>{{end}}
 
-{{define "nav-alert"}}<span id="nav-alert" class="nav-badges" hx-get="/fragments/nav?part=alert" hx-trigger="lolad:agent from:body delay:600ms" hx-swap="outerHTML">{{if .Alert}}<span class="count is-alert" title="{{plural .Alert "agent needs" "agents need"}} attention">{{.Alert}}</span>{{end}}</span>{{end}}
+{{define "nav-alert"}}<span id="nav-alert" class="nav-badges" hx-get="/fragments/nav?part=alert" hx-trigger="lolad:agent from:body delay:600ms" hx-swap="morph">{{if .Alert}}<span class="count is-alert" title="{{plural .Alert "agent needs" "agents need"}} attention">{{.Alert}}</span>{{end}}</span>{{end}}

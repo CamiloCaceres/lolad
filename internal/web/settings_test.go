@@ -145,7 +145,7 @@ func TestRuntimeSave(t *testing.T) {
 	if rt.Harness != before.Runtime.Harness || len(rt.Triggers) != len(before.Runtime.Triggers) || rt.Skills != before.Runtime.Skills {
 		t.Errorf("fields the form doesn't edit changed: %+v", rt)
 	}
-	if !strings.Contains(body, `id="settings-panel"`) || !strings.Contains(body, `hx-swap-oob="true"`) || !strings.Contains(body, "Needs a quick restart") {
+	if !strings.Contains(body, `id="settings-panel"`) || !strings.Contains(body, `hx-swap-oob="morph"`) || !strings.Contains(body, "Needs a quick restart") {
 		t.Error("answer should be the panel plus the pending-restart banner, out of band")
 	}
 	if !strings.Contains(resp.Header.Get("HX-Trigger"), "Restart to apply") {

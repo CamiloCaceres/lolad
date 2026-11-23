@@ -24,7 +24,7 @@ of setup); it can be changed under Advanced when shaping the assistant. */}}
 </div>{{end}}
 
 {{/* Ob-Waking's checklist, polled until the assistant is up. */}}
-{{define "welcome-waking-list"}}{{$a := .A}}<div class="welcome-waking" id="waking"{{if ne (printf "%v" $a.State) "failed"}} hx-get="/welcome/waking?agent={{$a.Name}}&amp;job={{.Job}}&amp;since={{.Since}}" hx-trigger="every 1500ms" hx-swap="outerHTML" hx-push-url="false"{{end}}>
+{{define "welcome-waking-list"}}{{$a := .A}}<div class="welcome-waking" id="waking"{{if ne (printf "%v" $a.State) "failed"}} hx-get="/welcome/waking?agent={{$a.Name}}&amp;job={{.Job}}&amp;since={{.Since}}" hx-trigger="every 1500ms" hx-swap="morph" hx-push-url="false"{{end}}>
   <ul class="welcome-checklist">
     <li class="is-done">{{template "icon" "check"}}Made a home for {{$a.Display}} on this computer</li>
     <li class="is-done">{{template "icon" "check"}}Gave it its job and your name</li>
@@ -33,7 +33,7 @@ of setup); it can be changed under Advanced when shaping the assistant. */}}
   {{if eq (printf "%v" $a.State) "failed"}}<div class="welcome-actions is-center"><a class="btn btn-primary" href="/agents/{{$a.Name}}" hx-boost="false">See what happened</a></div>{{else}}<p class="welcome-meta">Usually about 20 seconds.</p>{{end}}
 </div>{{end}}
 
-{{define "welcome-harnesses-list"}}<ul class="wh-list" id="wh-list" aria-label="Agent tools"{{if .Poll}} hx-get="/welcome/harnesses{{if .Terminal}}?terminal={{.Terminal.Session}}{{end}}" hx-trigger="every 3s" hx-swap="outerHTML" hx-push-url="false"{{end}}>
+{{define "welcome-harnesses-list"}}<ul class="wh-list" id="wh-list" aria-label="Agent tools"{{if .Poll}} hx-get="/welcome/harnesses{{if .Terminal}}?terminal={{.Terminal.Session}}{{end}}" hx-trigger="every 3s" hx-swap="morph" hx-push-url="false"{{end}}>
 {{range .S.Harnesses}}{{if and .Supported (or .Installed (eq .ID "claude"))}}{{template "welcome-row" (dict "H" . "AnyReady" $.AnyReady)}}{{end}}{{end}}
 </ul>{{end}}
 

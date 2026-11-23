@@ -6,7 +6,7 @@
     </div>
     {{if .Data.Agents}}<div class="page-actions"><a class="btn btn-primary" href="/new">{{template "icon" "plus"}}<span>New assistant</span></a></div>{{end}}
   </header>
-  {{if .Data.Agents}}<form id="fleet-filters" class="roster-filters" method="get" action="/agents" hx-get="/fragments/fleet" hx-target="#fleet" hx-swap="outerHTML" hx-trigger="submit, input changed delay:250ms from:input, change from:select">
+  {{if .Data.Agents}}<form id="fleet-filters" class="roster-filters" method="get" action="/agents" hx-get="/fragments/fleet" hx-target="#fleet" hx-swap="morph" hx-trigger="submit, input changed delay:250ms from:input, change from:select">
  <label for="agent-search"><span class="sr-only">Find an assistant</span><input id="agent-search" type="search" name="q" value="{{.Data.Query}}" placeholder="Find an assistant by name, job or team" autocomplete="off"></label>
  <label for="agent-filter"><span class="sr-only">Show</span><select id="agent-filter" name="status"><option value="">Everyone</option><option value="attention"{{if eq .Data.Filter "attention"}} selected{{end}}>Needs a look</option></select></label><button class="btn btn-sm" type="submit">Show</button>
  </form>{{end}}

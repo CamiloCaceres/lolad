@@ -6,7 +6,7 @@
   {{range .Options.Candidates}}<span hidden data-known-dir="{{.Dir}}" data-known-registered="{{.Registered}}"></span>{{end}}
   <datalist id="new-models-claude">{{range .ClaudeModels}}<option value="{{.ID}}">{{.Label}}</option>{{end}}</datalist>
   <datalist id="new-models-codewhale">{{range .CodewhaleModels}}<option value="{{.ID}}">{{.Label}}</option>{{end}}</datalist>
-  <form class="new-form mode-create new-workspace" method="post" action="/new" hx-post="/new" hx-target="#new-body" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]" data-new-form>
+  <form class="new-form mode-create new-workspace" method="post" action="/new" hx-post="/new" hx-target="#new-body" hx-swap="outerHTML" hx-disinherit="hx-target hx-swap" hx-disabled-elt="find button[type=submit]" data-new-form>
     <input type="hidden" name="flow" value="v3">
     <div class="new-editor">
       {{with .Error}}<div class="flash is-error new-error" role="alert" tabindex="-1"><strong>This assistant isn’t ready yet</strong><p>{{.}}</p>{{if $v.RecoveryDir}}<p>Setup may have left files in <code>{{$v.RecoveryDir}}</code>. You can bring that folder in to finish; making it again won’t overwrite them.</p><a href="{{$v.RecoveryURL}}">Recover by adopting this directory</a>{{end}}{{if $v.Partial}}<a href="/agents/{{$v.Partial}}/settings">Open the assistant’s settings</a>{{end}}</div>{{end}}
@@ -75,7 +75,7 @@
     </aside>
   </form>
 
-  <form class="new-form mode-adopt new-workspace" method="post" action="/adopt" hx-post="/adopt" hx-target="#new-body" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]" data-adopt-form>
+  <form class="new-form mode-adopt new-workspace" method="post" action="/adopt" hx-post="/adopt" hx-target="#new-body" hx-swap="outerHTML" hx-disinherit="hx-target hx-swap" hx-disabled-elt="find button[type=submit]" data-adopt-form>
     <div class="new-editor">
       {{with .AError}}<div class="flash is-error new-error" role="alert" tabindex="-1"><strong>Couldn’t bring this assistant in</strong><p>{{.}}</p><p>Your entries are kept below. Fix the problem and try again.</p>{{if $v.Partial}}<a href="/agents/{{$v.Partial}}/settings">Open the assistant’s settings</a>{{end}}</div>{{end}}
       <h2 class="new-section-title">Bring one you have</h2><p class="new-intro">Already have an assistant folder? It keeps its memory, skills and instructions. lolad connects its messaging and looks after it.</p>

@@ -1,6 +1,6 @@
 {{/* Agent settings: the pending-restart banner and one panel per tab. */}}
 
-{{define "pending"}}{{$a := .A}}{{$set := eq .From "settings"}}<div class="pending-slot" id="pending-{{.From}}"{{if .OOB}} hx-swap-oob="true"{{end}}{{if $set}} hx-get="/agents/{{$a.Name}}/part/pending" hx-trigger="lolad:a-{{$a.Name}} from:body delay:400ms" hx-swap="outerHTML"{{end}}>{{if $a.PendingRestart}}<div class="pending" role="status">
+{{define "pending"}}{{$a := .A}}{{$set := eq .From "settings"}}<div class="pending-slot" id="pending-{{.From}}"{{if .OOB}} hx-swap-oob="morph"{{end}}{{if $set}} hx-get="/agents/{{$a.Name}}/part/pending" hx-trigger="lolad:a-{{$a.Name}} from:body delay:400ms" hx-swap="morph"{{end}}>{{if $a.PendingRestart}}<div class="pending" role="status">
   <span class="pending-icon">{{template "icon" "restart"}}</span>
   <p class="pending-text"><strong>Needs a quick restart</strong> <span>{{sentence $a.PendingReason}}. {{if running $a.State}}It takes effect after a restart. {{$a.Display}} keeps its conversation.{{else}}It takes effect when {{$a.Display}} next wakes up.{{end}}</span></p>
   {{if running $a.State}}<button class="btn btn-sm" type="button" hx-post="/agents/{{$a.Name}}/restart" hx-vals='{"from":"{{.From}}"}' hx-target="{{if $set}}#pending-settings{{else}}#agent-head{{end}}" hx-swap="outerHTML" hx-disabled-elt="this">{{template "icon" "restart"}}<span>Restart {{$a.Display}}</span></button>{{end}}
@@ -19,7 +19,7 @@
     <p>How {{.A.Display}} thinks, when it wakes up and whether it asks first. Save, then restart to apply.</p>
   </header>
   {{template "set-error" .}}
-  <form class="set-form" method="post" action="/agents/{{.A.Name}}/settings/runtime" hx-post="/agents/{{.A.Name}}/settings/runtime" hx-target="#settings-panel" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]">
+  <form class="set-form" method="post" action="/agents/{{.A.Name}}/settings/runtime" hx-post="/agents/{{.A.Name}}/settings/runtime" hx-target="#settings-panel" hx-disinherit="hx-target hx-swap" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]">
     <div class="set-row">
       <div class="set-label"><h3 id="lbl-model">How smart</h3><p>Runs on {{if eq $rt.Harness "codewhale"}}Codewhale{{else}}Claude Code{{end}}. Smarter is slower and uses more of your plan.</p></div>
       <div class="set-control">
@@ -305,7 +305,7 @@
     </div>
   </div>
 
-  <form class="set-form" method="post" action="/agents/{{.A.Name}}/settings/email" hx-post="/agents/{{.A.Name}}/settings/email" hx-target="#settings-panel" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]">
+  <form class="set-form" method="post" action="/agents/{{.A.Name}}/settings/email" hx-post="/agents/{{.A.Name}}/settings/email" hx-target="#settings-panel" hx-disinherit="hx-target hx-swap" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]">
     <div class="set-row">
       <div class="set-label"><h3><label for="operators">Your addresses</label></h3><p>Verified mail from these addresses counts as coming from you. One per line.</p></div>
       <div class="set-control"><textarea id="operators" name="operators" rows="2" class="mono" spellcheck="false" autocapitalize="off" placeholder="you@example.com">{{range $i, $o := $e.OperatorEmails}}{{if $i}}
