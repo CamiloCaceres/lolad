@@ -546,3 +546,74 @@ Each spike is a throwaway branch with a written result appended to this file.
   keeps the data.
 - The browser at `http://127.0.0.1:<port>/` shows exactly the same UI as the
   app window.
+
+## 16. Spike results (M2.0)
+
+### S3: relocatable tmux (2026-11-23, macOS 26.2, Apple Silicon + Rosetta) — pass here, fresh-Mac run pending
+
+- `packaging/macos/build-tmux.sh` builds tmux 3.5a from pinned, checksummed
+  source for arm64 and x86_64 (libevent 2.1.12 static) and `lipo`s them.
+- `otool -L`, both slices: only `/usr/lib/libncurses.5.4.dylib`,
+  `libSystem.B.dylib` and `libresolv.9.dylib`, all of which every Mac has.
+  `minos 13.0` on both slices. No Homebrew paths.
+- With `env -i PATH=/usr/bin:/bin` and the shipped `tmux.conf`, it starts a
+  session that renders colour and UTF-8. `default-terminal` is
+  `screen-256color`. The x86_64 slice (under Rosetta) talks to the same arm64
+  server. Attaching from a pty (`script(1)`, like `lolad attach` in
+  Terminal.app) works.
+- **Pitfall:** a Unix socket path must fit in 104 bytes. A long
+  `TMUX_TMPDIR` fails with "File name too long". The planned private
+  `TMUX_TMPDIR` under the state dir (§8) is fine for normal home paths, but
+  should be checked by `lolad doctor`. As of today `internal/tmux` only passes
+  `TMUX_TMPDIR` through; it does not set a private one.
+- Still to prove: an agent running on a Mac with no Homebrew (§15 run).
+
+### S5: SMAppService LaunchAgent (2026-11-23) — works unsigned; beta keeps the plain LaunchAgent
+
+- A throwaway ad-hoc-signed bundle (own label `dev.caceres.lolad.spike5*`)
+  registered `SMAppService.agent(plistName:)` with
+  `BundleProgram = Contents/Helpers/lolad`. Registration succeeded (status
+  `enabled`) and launchd ran the helper at once with `argv = [lolad, serve]`,
+  `HOME` set and `PATH=/usr/bin:/bin:/usr/sbin:/sbin`.
+- **It also works when the whole bundle carries `com.apple.quarantine`** (as if
+  downloaded and copied out of the DMG): launchd still spawned the quarantined,
+  ad-hoc-signed helper. Gatekeeper only gates the user opening the app, which is
+  the "Open Anyway" step.
+- **Bug found and fixed:** the bundled `dev.caceres.lolad.plist` had
+  `StandardOutPath = ~/.local/share/lolad/logs/daemon.log`. launchd does not
+  expand `~`. The job fails with `last exit code = 78: EX_CONFIG` and the daemon
+  never starts. The log keys are removed. With stdout on `/dev/null`, `serve`
+  writes its own rotated `<state>/logs/daemon.log`.
+- **Decision for v0.2.0-beta.1:** the app keeps calling `lolad service install`,
+  which writes `~/Library/LaunchAgents/dev.caceres.lolad.plist` pointing at
+  `Lolad.app/Contents/Helpers/lolad`. Reasons:
+  1. It is what runs the production install today.
+  2. It writes the captured `PATH` and absolute paths, which a static bundled
+     plist cannot carry.
+  3. It is the same code path as CLI installs.
+  4. Moving an existing plain-plist job to SMAppService under the same label
+     needs a migration step (bootout, remove, register).
+
+  On an unsigned build the Login Items entry shows "lolad" from an
+  unidentified developer. Switch to `SMAppService.agent` when a Developer ID
+  exists; the bundled plist is kept correct for that.
+- Not done by me: a reboot test. The production install's plain LaunchAgent
+  has been starting the daemon at login (launchd `runs = 28`).
+
+### S7: harness install and login in the dashboard terminal — commands verified, end-to-end run pending
+
+- `internal/setup/terminal.go` runs `curl -fsSL https://claude.ai/install.sh | bash`,
+  `<claude> auth login`, `npm install -g @openai/codex` and `<codex> login`.
+  `claude auth login` (Claude Code 2.1.330) and `codex login` (0.170.0) exist
+  as written.
+- **Gap for a fresh Mac:** installing Codex needs Node.js, and a fresh Mac has
+  none, so "Install Codex" fails there. Claude Code's installer needs only
+  `curl`. This is acceptable for the beta (one ready harness is enough), but
+  the Codex row should say "needs Node.js" before the user presses Install.
+- The real run (no outside terminal, reaching "ready") needs a clean account,
+  so it is part of the §15 run.
+
+### S8: TCC for unattended agents — pending
+
+Not run on the production Mac: the prompts would appear on the owner's screen
+and attribute to the live install. It is part of the §15 run in the VM.

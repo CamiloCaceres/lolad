@@ -12,7 +12,9 @@
   <key>ProcessType</key><string>Interactive</string>
   <key>EnvironmentVariables</key>
   <dict><key>LOLAD_INSTALL</key><string>app</string></dict>
-  <key>StandardOutPath</key><string>~/.local/share/lolad/logs/daemon.log</string>
-  <key>StandardErrorPath</key><string>~/.local/share/lolad/logs/daemon.log</string>
+  <!-- No StandardOutPath/StandardErrorPath: launchd does not expand "~", and a
+       path it cannot open makes the job fail with EX_CONFIG (78) before the
+       daemon starts (spike S5, docs/desktop.md). With stdout on /dev/null,
+       `lolad serve` writes its own rotated <state>/logs/daemon.log. -->
 </dict>
 </plist>
