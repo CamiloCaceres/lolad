@@ -148,6 +148,10 @@ func TestWelcomeWalkThrough(t *testing.T) {
 			t.Errorf("terminal panel lacks %q", want)
 		}
 	}
+	_, body, _ = w.get("/welcome?step=harnesses&terminal=setup-login-claude")
+	if !strings.Contains(body, "Restart sign-in") || !strings.Contains(body, `name="action" value="login-claude"`) {
+		t.Error("a sign-in terminal offers Restart sign-in")
+	}
 	if code, _, _ = w.post("/welcome/terminal", url.Values{"action": {"rm-rf"}}); code != http.StatusUnprocessableEntity {
 		t.Errorf("bad action: %d", code)
 	}

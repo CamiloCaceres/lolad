@@ -75,7 +75,8 @@
 <h1 class="welcome-title" id="welcome-title">First, a brain for your assistants.</h1>
 <p class="welcome-lede">Your assistants think with Claude, on this computer. Connect your Claude account: <strong>Install</strong> and <strong>Sign in</strong> open Claude’s own screen below, so you can see exactly what happens. You need Claude Pro or Max.</p>
 {{template "welcome-harnesses-list" .}}
-{{with .Terminal}}{{template "welcome-terminal" .}}{{end}}
+{{with .Terminal}}{{template "welcome-terminal" .}}
+{{if hasPrefix .Action "login-"}}<form method="post" action="/welcome/terminal" class="welcome-term-links"><input type="hidden" name="action" value="{{.Action}}"><button class="btn btn-ghost btn-sm" type="submit">{{template "icon" "restart"}}<span>Restart sign-in</span></button></form>{{end}}{{end}}
 <div class="welcome-foot">
   {{template "welcome-next" (dict "Ready" .AnyReady "Folder" .Folder)}}
   <form method="post" action="/welcome/harnesses/rescan" class="welcome-rescan">

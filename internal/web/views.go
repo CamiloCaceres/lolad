@@ -71,6 +71,7 @@ func funcs(s *server) template.FuncMap {
 		"subject":        subject,
 		"json":           func(v any) (string, error) { b, err := json.Marshal(v); return string(b), err },
 		"harness":        harnessLabel,
+		"runsOn":         runsOn,
 		"list":           func(v ...string) []string { return v },
 		"hasPrefix":      strings.HasPrefix,
 		"indent":         func(depth int) string { return strings.Repeat("\u00a0\u00a0\u00a0", max(depth-1, 0)) },

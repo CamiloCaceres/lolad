@@ -66,7 +66,7 @@ func TestAgentsFilteredControlResumesAndFreshWakes(t *testing.T) {
 func TestAgentDetailJobsAndConsequences(t *testing.T) {
 	e := setup(t)
 	_, body := e.do("GET", "/agents/lola", nil, false)
-	for _, want := range []string{"Talk to Lola", "Put to sleep", "At a glance", "Healthy", "Recent activity", "Wrote to you", "Got a message from Forge", "Automation ran", "Configuration", "Skills mode", "/settings/skills", "/settings/email", "/settings/files", "Read-only", "A quick restart", "Start fresh", "A new message wakes it up again", "Next check-in", "See what Lola sees"} {
+	for _, want := range []string{"Talk to Lola", "Put to sleep", "At a glance", "Healthy", "<dt>Runs on</dt><dd>", "Recent activity", "Wrote to you", "Got a message from Forge", "Automation ran", "Configuration", "Skills mode", "/settings/skills", "/settings/email", "/settings/files", "Read-only", "A quick restart", "Start fresh", "A new message wakes it up again", "Next check-in", "See what Lola sees"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("missing %q", want)
 		}

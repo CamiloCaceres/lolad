@@ -74,7 +74,7 @@ sleep, Restart and Settings are buttons beside it (agent-head). */}}
 {{define "agent-about"}}{{$rt := .A.Runtime}}<section class="panel agent-about" aria-labelledby="h-about">
  <h2 id="h-about" class="eyebrow">At a glance</h2>
  <dl class="glance">
-  <div><dt>Runs on</dt><dd>{{harness $rt}}</dd></div>
+  <div><dt>Runs on</dt><dd>{{runsOn $rt}}</dd></div>
   <div><dt>Before acting</dt><dd>{{if eq $rt.Permissions "default"}}Asks you first{{else}}Works on its own{{end}}</dd></div>
   <div><dt>Wakes on a message</dt><dd>{{if $rt.WakeOnMessageEnabled}}On{{else}}Off{{end}}</dd></div>
   <div><dt>Fresh start</dt><dd>{{with $rt.Rotate}}Every day at {{.}}{{else}}Never{{end}}</dd></div>

@@ -458,6 +458,25 @@ func (s *server) terminal(w http.ResponseWriter, r *http.Request) {
 }
 
 // harnessLabel is for the config summary.
+// runsOn is "Runs on" in plain words (Assistant board): "Claude · Opus",
+// "Codex". Unknown harnesses and models show as they are.
+func runsOn(rt core.Runtime) string {
+	h := map[core.Harness]string{core.HarnessClaude: "Claude", "codex": "Codex", core.HarnessCodewhale: "Codewhale"}[rt.Harness]
+	if h == "" {
+		h = cmp.Or(string(rt.Harness), "Claude")
+	}
+	m := strings.ToLower(rt.Model)
+	if m == "" {
+		return h
+	}
+	for _, f := range []string{"opus", "sonnet", "haiku", "fable"} {
+		if strings.Contains(m, f) {
+			return h + " · " + strings.ToUpper(f[:1]) + f[1:]
+		}
+	}
+	return h + " · " + rt.Model
+}
+
 func harnessLabel(rt core.Runtime) string {
 	if rt.Model == "" {
 		return fmt.Sprintf("%s · default model", rt.Harness)

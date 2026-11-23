@@ -61,4 +61,4 @@ package and what is done.
 - Activity's "Group by conversation" and per-message plain-word reasons
   ("Different team, so it has to go through Lola").
 - Assistant colour picker, on Ob-Shape and in settings (needs a colour field in `lolabot.yaml`).
-- Logo: the v2 ring is in `static/logo.svg` (and `site/`); `desktop/assets/icons/gen.go` still draws the old orb until lolad-desktop redraws it. `site/og.png` still shows the old mark.
+- Logo: the v2 ring is in `static/logo.svg` (and `site/`); `desktop/assets/icons/gen.go` still draws the old orb until lolad-desktop redraws it.

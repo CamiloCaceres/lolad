@@ -186,3 +186,4 @@
 .welcome-card .friend-consequence { margin: 14px 0 0; font-size: var(--t-sm); color: var(--ink-2); padding: 10px 14px; border-left: 2px solid var(--line-2); }
 .welcome-card .friend-consequence span { color: var(--ink); font-weight: 600; }
 .welcome-thing [data-notify-state]:empty { display: none; }
+.welcome-term-links { margin: -8px 0 0; }
