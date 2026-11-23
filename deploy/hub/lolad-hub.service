@@ -1,0 +1,31 @@
+[Unit]
+Description=lolad hub (federation relay)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=lolad-hub
+Group=lolad-hub
+# Set the public URL to the domain Caddy serves for the hub.
+Environment=LOLAD_HUB_PUBLIC_URL=https://hub.example.com
+Environment=LOLAD_HUB_DB=/var/lib/lolad-hub/hub.db
+ExecStart=/usr/local/bin/lolad-hub serve --listen 127.0.0.1:8095
+Restart=on-failure
+RestartSec=2
+StateDirectory=lolad-hub
+StateDirectoryMode=0700
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+LockPersonality=true
+MemoryDenyWriteExecute=true
+
+[Install]
+WantedBy=multi-user.target

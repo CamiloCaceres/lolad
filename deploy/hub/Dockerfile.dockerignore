@@ -1,0 +1,9 @@
+# Used by BuildKit for deploy/hub/Dockerfile only. The hub needs go.mod,
+# go.sum, cmd/lolad-hub and internal/.
+*
+!go.mod
+!go.sum
+!cmd/
+!internal/
+internal/**/testdata/
+**/*_test.go

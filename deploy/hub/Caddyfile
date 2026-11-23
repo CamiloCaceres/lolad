@@ -1,0 +1,5 @@
+# Add to the VPS Caddyfile; replace the domain. Caddy gets the TLS certificate
+# and proxies WebSockets (the tunnels) without extra config.
+hub.example.com {
+	reverse_proxy 127.0.0.1:8095
+}
