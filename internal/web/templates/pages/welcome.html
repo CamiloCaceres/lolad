@@ -40,6 +40,8 @@
       {{else if eq .Step "folder"}}{{template "welcome-folder" .}}
       {{else if eq .Step "name"}}{{template "welcome-name" .}}
       {{else if eq .Step "agent"}}{{template "welcome-agent" .}}
+      {{else if eq .Step "friend"}}{{template "welcome-friend" .}}
+      {{else if eq .Step "friend-done"}}{{template "welcome-friend-done" .}}
       {{else}}{{template "welcome-done" .}}{{end}}
     </section>
   </main>
@@ -153,9 +155,41 @@
   {{if .Created}}<a class="btn btn-primary" href="/inbox/{{.Created}}?created=1" hx-boost="false">Say hi to {{.CreatedName}}{{template "icon" "next"}}</a><a class="btn" href="/" hx-boost="false">Go to Home</a>
   {{else}}<a class="btn btn-primary" href="/new" hx-boost="false">{{template "icon" "plus"}}<span>New assistant</span></a><a class="btn" href="/" hx-boost="false">Go to Home</a>{{end}}
 </div>
+{{if .Friend.On}}<div class="welcome-friend" id="friend">
+  <h2>Got an invite from a friend?</h2>
+  <p class="welcome-meta">Paste the link they sent you to connect. You can also do this later, under <strong>Sharing</strong>.</p>
+  {{with .Friend.Error}}<div class="flash is-error" role="alert">{{template "icon" "alert"}}<div>{{.}}</div></div>{{end}}
+  <form method="post" action="/welcome/friend" hx-boost="false" autocomplete="off" class="welcome-friend-paste"><label for="welcome-friend-link" class="sr-only">Invite link</label><input id="welcome-friend-link" name="link" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" required placeholder="https://lolad.caceresdev.com/join#…"><button class="btn" type="submit">Continue</button></form>
+</div>{{end}}
 <div class="welcome-notify" data-notify hidden>
   <p class="welcome-meta">Want a nudge when it’s your turn? Never for progress updates.</p>
   <button class="btn btn-sm" type="button" data-notify-ask>Tell me when I’m needed</button>
   <span class="help" data-notify-state role="status"></span>
 </div>
 {{end}}
+
+{{define "welcome-friend"}}{{with .Friend.Preview}}{{$who := or .FromDisplay "Your friend"}}
+<h1 class="welcome-title" id="welcome-title">{{$who}} invited you</h1>
+{{with $.Friend.Error}}<div class="flash is-error" role="alert">{{template "icon" "alert"}}<div>{{.}}</div></div>{{end}}
+{{if .Expired}}<p class="welcome-lede">This invite has expired. Ask {{$who}} for a new link, then paste it under <strong>Sharing</strong>.</p><div class="welcome-actions"><a class="btn btn-primary" href="/" hx-boost="false">Go to Home</a></div>
+{{else if .SameName}}<p class="welcome-lede">Your Lolad and {{$who}}’s have the same name, so they can’t connect yet. Rename yours under Settings, then paste the link again under <strong>Sharing</strong>.</p><div class="welcome-actions"><a class="btn btn-primary" href="/" hx-boost="false">Go to Home</a></div>
+{{else if .AlreadyConnected}}<p class="welcome-lede">You’re already connected with {{$who}}.</p><div class="welcome-actions"><a class="btn btn-primary" href="/connections" hx-boost="false">See your friends</a></div>
+{{else}}<p class="welcome-lede">Connect, and you and {{$who}} can message each other{{if .Agents}} and the assistants you each choose{{end}}.</p>
+<div class="friend-offer"><p class="label">{{$who}} is sharing</p>{{if .Agents}}<ul class="friend-chips">{{range .Agents}}<li><span class="orb {{hue .Display}} avatar-sm" aria-hidden="true"><span class="c"><i></i><i></i><i></i><i></i></span></span>{{.Display}}</li>{{end}}</ul>{{else}}<p class="welcome-meta">No assistants yet. You’ll be able to message {{$who}}.</p>{{end}}</div>
+<form method="post" action="/welcome/friend/accept" hx-boost="false" class="welcome-form friend-form" data-friend-form><input type="hidden" name="token" value="{{$.Friend.Token}}">
+{{if $.Friend.Agents}}{{template "welcome-agent-picks" (dict "Who" $who "Agents" $.Friend.Agents)}}{{else}}<p class="welcome-meta">You can share your assistants with {{$who}} later, once you have some.</p>{{end}}
+<div class="welcome-actions"><button class="btn btn-primary" type="submit">Connect with {{$who}}</button><a class="btn btn-ghost" href="/welcome?step=done">Not now</a></div></form>
+{{end}}{{end}}{{end}}
+
+{{define "welcome-agent-picks"}}<fieldset class="friend-picks" data-friend-picks><legend>Which of your assistants can {{.Who}} talk to?</legend>
+{{range .Agents}}<label class="friend-pick"><input type="checkbox" name="agent" value="{{.Name}}" data-display="{{.Display}}"><span class="orb {{hue .Display}} avatar-sm" aria-hidden="true"><span class="c"><i></i><i></i><i></i><i></i></span></span><span>{{.Display}}</span></label>{{end}}</fieldset>
+<p class="friend-consequence" data-friend-consequence data-default-who="{{.Who}}"><span data-friend-who>{{.Who}}</span>, and the assistants {{.Who}} chooses, can message <span data-friend-yours>you</span> without asking.</p>{{end}}
+
+{{define "welcome-friend-done"}}{{with .Friend.Result}}{{with .Connection}}<span class="orb {{hue .Display}} avatar-xl {{if eq $.Friend.Result.State "waiting"}}st-waiting{{end}} welcome-orb" aria-hidden="true"><span class="c"><i></i><i></i><i></i><i></i></span></span>
+{{if eq $.Friend.Result.State "waiting"}}<h1 class="welcome-title" id="welcome-title">Almost there</h1>
+<p class="welcome-lede">{{.Display}}’s Lolad is offline right now. This finishes by itself as soon as it’s back, and you’ll find {{.Display}} under <strong>Sharing</strong>.</p>
+<div class="welcome-actions"><a class="btn btn-primary" href="/" hx-boost="false">Go to Home</a></div>
+{{else}}<h1 class="welcome-title" id="welcome-title">You’re connected with {{.Display}}</h1>
+<p class="welcome-lede">You can message {{.Display}} now. See who can reach whom, or change it, under <strong>Sharing</strong>.</p>
+<div class="welcome-actions">{{with $.Friend.Human}}<a class="btn btn-primary" href="/inbox/{{.Address}}" hx-boost="false">{{template "icon" "message"}}<span>Send {{.Display}} a message</span></a>{{end}}<a class="btn" href="/" hx-boost="false">Go to Home</a></div>
+{{end}}{{end}}{{end}}{{end}}

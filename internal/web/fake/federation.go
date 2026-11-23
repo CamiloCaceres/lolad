@@ -159,10 +159,14 @@ func (s *Service) DecideGrant(ctx context.Context, p, r, l string, allow bool) (
 func (s *Service) RemoteContacts(ctx context.Context, local string) ([]core.RemoteContact, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if !slices.ContainsFunc(s.connections, func(c core.Connection) bool { return c.Provider == "jugui.lolad.local" && !c.Paused }) {
+	var contacts []core.RemoteContact
+	if slices.ContainsFunc(s.connections, func(c core.Connection) bool { return c.Provider == "jugui.lolad.local" && !c.Paused }) {
+		contacts = []core.RemoteContact{{Address: "jugui@jugui.lolad.local", Name: "jugui", Display: "Jugui", Kind: "human", Peer: "jugui.lolad.local", PeerDisplay: "Jugui"}, {Address: "nova@jugui.lolad.local", Name: "nova", Display: "Nova", Kind: "agent", Role: "Research assistant", Peer: "jugui.lolad.local", PeerDisplay: "Jugui"}}
+	}
+	contacts = append(contacts, s.friendContacts()...)
+	if len(contacts) == 0 {
 		return nil, nil
 	}
-	contacts := []core.RemoteContact{{Address: "jugui@jugui.lolad.local", Name: "jugui", Display: "Jugui", Kind: "human", Peer: "jugui.lolad.local", PeerDisplay: "Jugui"}, {Address: "nova@jugui.lolad.local", Name: "nova", Display: "Nova", Kind: "agent", Role: "Research assistant", Peer: "jugui.lolad.local", PeerDisplay: "Jugui"}}
 	if local == s.org.User.Name {
 		return contacts, nil
 	}

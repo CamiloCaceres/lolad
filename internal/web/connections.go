@@ -21,6 +21,7 @@ type connectionView struct {
 	Editors  []shareEditor
 	Contacts []core.RemoteContact
 	Grants   []core.Grant
+	Card     friendCard
 }
 type connectionsView struct {
 	Info        core.FederationInfo
@@ -32,6 +33,10 @@ type connectionsView struct {
 	Hub          *core.HubStatus
 	HubURL       string // join form values kept after an error (never the code)
 	HubHandle    string
+	// Friend links (friends.go): shown when the service is a FriendInviter.
+	Friends   bool
+	Friend    friendState
+	Connected string // display name of the friend just connected
 }
 
 func (s *server) connectionData(r *http.Request) (connectionsView, error) {
@@ -64,8 +69,12 @@ func (s *server) connectionData(r *http.Request) (connectionsView, error) {
 	if err != nil {
 		return v, err
 	}
+	labels := map[string]string{}
+	for _, a := range agents {
+		labels[a.Name] = cmp.Or(a.Display, a.Name)
+	}
 	for _, c := range cs {
-		cv := connectionView{Connection: c}
+		cv := connectionView{Connection: c, Card: cardFor(c, contacts, labels)}
 		for _, a := range agents {
 			e := shareEditor{Name: a.Name, Display: cmp.Or(a.Display, a.Name)}
 			for _, share := range c.Shares {
@@ -104,7 +113,18 @@ func (s *server) connectionsPage(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, e)
 		return
 	}
-	s.page(w, r, 200, "connections", layout{Title: "Connections", Data: v})
+	if e := s.friendData(r, &v, nil); e != nil {
+		s.fail(w, r, e)
+		return
+	}
+	if p := r.URL.Query().Get("connected"); p != "" {
+		for _, c := range v.Connections {
+			if c.Provider == p {
+				v.Connected = cmp.Or(c.Display, c.Provider)
+			}
+		}
+	}
+	s.page(w, r, 200, "connections", layout{Title: "Sharing", Data: v})
 }
 func (s *server) connectionInvite(w http.ResponseWriter, r *http.Request) {
 	invite, e := s.svc.CreateInvite(r.Context())
@@ -114,6 +134,10 @@ func (s *server) connectionInvite(w http.ResponseWriter, r *http.Request) {
 	}
 	v, e := s.connectionData(r)
 	if e != nil {
+		s.fail(w, r, e)
+		return
+	}
+	if e := s.friendData(r, &v, nil); e != nil {
 		s.fail(w, r, e)
 		return
 	}
@@ -127,8 +151,12 @@ func (s *server) connectionError(w http.ResponseWriter, r *http.Request, msg str
 		s.fail(w, r, e)
 		return
 	}
+	if e := s.friendData(r, &v, nil); e != nil {
+		s.fail(w, r, e)
+		return
+	}
 	v.Error = msg
-	s.page(w, r, 422, "connections", layout{Title: "Connections", Data: v})
+	s.page(w, r, 422, "connections", layout{Title: "Sharing", Data: v})
 }
 func (s *server) connectionAccept(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
@@ -159,6 +187,8 @@ func (s *server) connectionUpdate(w http.ResponseWriter, r *http.Request) {
 		u.Paused = new(false)
 	case "reachability":
 		u.UserReachable = new(r.FormValue("reachable") == "yes")
+	case "stopsharing": // stay connected, but they can reach nobody here
+		u.UserReachable, u.Shares = new(false), []core.Share{}
 	case "shares":
 		agents, e := s.list(r.Context())
 		if e != nil {
@@ -294,9 +324,13 @@ func (s *server) hubJoin(w http.ResponseWriter, r *http.Request) {
 			s.fail(w, r, e)
 			return
 		}
+		if e := s.friendData(r, &v, nil); e != nil {
+			s.fail(w, r, e)
+			return
+		}
 		v.Error, v.HubURL, v.HubHandle = msg, url, handle
 		v.HubAvailable = true // keep the attempted join on screen with its error
-		s.page(w, r, 422, "connections", layout{Title: "Connections", Data: v})
+		s.page(w, r, 422, "connections", layout{Title: "Sharing", Data: v})
 	}
 	if url == "" || handle == "" || strings.TrimSpace(code) == "" {
 		fail("Enter the hub address, a handle and the sign-up code.")

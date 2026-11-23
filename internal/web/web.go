@@ -62,6 +62,7 @@ type server struct {
 	setup         setup.Service
 	uploads       pending       // files uploaded in a conversation, not sent yet
 	drafts        requestDrafts // staged answers to requests, not sent yet
+	friendLinks   friendLinks   // pasted friend links between preview and connect
 
 	mu     sync.Mutex
 	base   *template.Template
@@ -89,6 +90,10 @@ func New(svc core.Service, opts Options) http.Handler {
 	mux.HandleFunc("GET /connections", s.connectionsPage)
 	mux.HandleFunc("POST /connections/invite", s.connectionInvite)
 	mux.HandleFunc("POST /connections/accept", s.connectionAccept)
+	mux.HandleFunc("POST /connections/friends/invite", s.friendInvite)
+	mux.HandleFunc("POST /connections/friends/preview", s.friendPreview)
+	mux.HandleFunc("POST /connections/friends/accept", s.friendAccept)
+	mux.HandleFunc("POST /connections/friends/{id}/cancel", s.friendCancel)
 	mux.HandleFunc("POST /connections/hub/join", s.hubJoin)
 	mux.HandleFunc("POST /connections/hub/leave", s.hubLeave)
 	mux.HandleFunc("POST /connections/{provider}", s.connectionUpdate)

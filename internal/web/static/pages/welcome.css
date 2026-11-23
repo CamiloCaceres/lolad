@@ -79,3 +79,21 @@
   .welcome-actions .btn, .welcome-foot .btn { min-height: 44px; }
   .welcome-form input, .welcome-form textarea, .welcome-form select { font-size: 16px; }
 }
+
+/* Optional last step: "Got an invite from a friend?" (welcome_friend.go). */
+.welcome-friend { margin-top: 36px; padding-top: 24px; border-top: 1px solid var(--line); display: grid; gap: 12px; }
+.welcome-friend h2 { font: 300 1.35rem/1.25 var(--display); letter-spacing: -0.015em; margin: 0; }
+.welcome-friend .welcome-meta { margin: 0; }
+.welcome-friend-paste { display: flex; flex-wrap: wrap; gap: 10px; }
+.welcome-friend-paste input { flex: 1 1 260px; min-width: 0; }
+.welcome-card .friend-offer { margin: 18px 0; }
+.welcome-card .friend-offer .label { display: block; margin-bottom: 10px; }
+.welcome-card .friend-chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.welcome-card .friend-chips li { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px 6px 6px; border-radius: 999px; background: var(--bg-2); border: 1px solid var(--line); font-size: var(--t-sm); }
+.welcome-card .friend-picks { border: 0; margin: 0; padding: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.welcome-card .friend-picks legend { font-size: var(--t-sm); font-weight: 600; color: var(--ink-2); margin-bottom: 10px; padding: 0; }
+.welcome-card .friend-pick { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 6px 14px 6px 8px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg-2); cursor: pointer; font-size: var(--t-sm); }
+.welcome-card .friend-pick:has(input:checked) { border-color: color-mix(in oklch, var(--action) 60%, transparent); background: color-mix(in oklch, var(--action) 12%, transparent); }
+.welcome-card .friend-pick:has(input:focus-visible) { outline: 2px solid var(--action); outline-offset: 2px; }
+.welcome-card .friend-consequence { margin: 14px 0 0; font-size: var(--t-sm); color: var(--ink-2); padding: 10px 14px; border-left: 2px solid var(--line-2); }
+.welcome-card .friend-consequence span { color: var(--ink); font-weight: 600; }

@@ -67,3 +67,35 @@ message to the open thread. Expanded sharing editors were checked and captured
 in both sizes/themes. The fake package additionally passes `go test -race`.
 An independent Impeccable finish review was requested from the coordinator for
 integration; no named finish-reviewer agent is registered in this worker.
+
+## Friend links (docs/friend-connect-design.md)
+
+When the service implements `core.FriendInviter` (§6; `friendtypes.go`
+aliases the core types to short names), Sharing shows the one-link flow instead of codes:
+
+- **Invite a friend**: optional private note "Who is this for?", assistant
+  checkboxes (none ticked), and a live line saying what that allows
+  ("Ben, and the assistants they choose, can message you and Lola without
+  asking"). **Create link** shows the link once, in that POST response, with
+  Copy and "Send it in a private chat. It works once, for 7 days." Links made
+  are listed (note, assistants, expiry or who used it) with Cancel.
+- **Got an invite?**: paste → **Continue** previews ("Ana invited you", what
+  Ana shares, your own picks) → **Connect with Ana**. Refusals show the
+  service's `UserMessage()`. If Ana's Lolad is offline the card says so and
+  that it finishes by itself. The pasted link is never written back into a
+  page: between preview and connect it waits server-side under a random
+  token (`friendLinks`, 30 min, single use). Older `lolad-invite:` codes paste
+  into the same box.
+- **Friend cards**: who you can reach (links to message the person and each
+  shared assistant), who they can reach, Send a message, Pause, Stop sharing
+  (stays connected, shares nothing), Disconnect. The share editor sits under
+  "Change what Ana can reach"; the identity under Details. Newest first. A
+  connection never heard from shows Waiting.
+- Words like hub, handle and provider appear only under Advanced (tested),
+  which also keeps "Make an invite code" for older Lolads.
+
+Onboarding's done screen offers "Got an invite from a friend?" with the same
+preview → connect steps (`welcome_friend.go`). `webdev -welcome-done` shows
+that screen against the demo. The fake builds real-shaped links
+(`fake.FriendLink`); a payload with `"x":"offline"` makes accepting wait, and
+`FinishWaiting` connects it. Tests: `friends_test.go`.

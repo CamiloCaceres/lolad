@@ -4,6 +4,7 @@
 //	go run ./internal/web/cmd/webdev            # http://127.0.0.1:4199
 //	go run ./internal/web/cmd/webdev -live      # re-read templates and assets from disk
 //	go run ./internal/web/cmd/webdev -empty     # first-run state
+//	go run ./internal/web/cmd/webdev -welcome-done  # onboarding finished: /welcome shows the last screen
 package main
 
 import (
@@ -24,13 +25,21 @@ func main() {
 	live := flag.Bool("live", false, "serve templates and static files from the source tree, re-read on every request")
 	quiet := flag.Bool("still", false, "don't simulate activity (no state changes or incoming mail)")
 	empty := flag.Bool("empty", false, "start like a fresh install: no agents, no mail")
+	done := flag.Bool("welcome-done", false, "onboarding already finished, so /welcome shows its last screen")
 	flag.Parse()
 
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	svc := fake.New(fake.Options{Simulate: !*quiet, Empty: *empty})
 	defer svc.Close()
 
-	opts := web.Options{Logger: log, Setup: setup.NewDemo()} // /welcome with canned detection
+	demo := setup.NewDemo()
+	if *done {
+		demo.Set(func(st *setup.Status) {
+			st.ServiceDone, st.FolderSet, st.NameSet, st.SkippedAgent = true, true, true, true
+			st.Harnesses[0].Installed, st.Harnesses[0].LoggedIn = true, true
+		})
+	}
+	opts := web.Options{Logger: log, Setup: demo} // /welcome with canned detection
 	if *live {
 		_, file, _, _ := runtime.Caller(0)
 		opts.Dir = filepath.Join(filepath.Dir(file), "..", "..")

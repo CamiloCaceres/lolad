@@ -57,6 +57,8 @@ type welcomeView struct {
 	Created       string          // slug of the agent just made
 	CreatedName   string
 	NextHref      string
+
+	Friend welcomeFriend // optional "Got an invite from a friend?" (welcome_friend.go)
 }
 
 // agentHarnesses are the harnesses lolad can create agents on.
@@ -79,6 +81,7 @@ func (s *server) welcomeRoutes(m *http.ServeMux) {
 	m.HandleFunc("POST /welcome/agent", s.welcomeAgent)
 	m.HandleFunc("POST /welcome/later", s.welcomeLater)
 	m.HandleFunc("POST /welcome/leave", s.welcomeLeave)
+	s.welcomeFriendRoutes(m)
 }
 
 // welcomeRedirect sends a first-run visitor from "/" to /welcome. It never
@@ -162,6 +165,7 @@ func (s *server) welcomeView(r *http.Request) (welcomeView, error) {
 		info.Title = setup.ActionTitle(info.Action)
 		v.Terminal = &info
 	}
+	_, v.Friend.On = s.friendInviter()
 	v.Poll = len(st.Terminals) > 0
 	_, v.AnyReady = st.FirstReady()
 	if slug := r.URL.Query().Get("agent"); slug != "" {

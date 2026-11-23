@@ -14,6 +14,7 @@ Design source: `lolad-manager/designs/landing-hub/project/Main.dc.html`
 | `styles.css` | All styles, including the orb component shared with the dashboard |
 | `logo.svg`, `favicon.svg` | Copied from `internal/web/static/` |
 | `fonts/` | Sora and Manrope (OFL), copied from `internal/web/static/vendor/fonts/` |
+| `join/index.html`, `join/join.js` | The page a friend link opens (`/join#<invite>`), see below |
 | `og.png` | 1200×630 social preview (a screenshot of the hero) |
 | `Dockerfile`, `Caddyfile` | Container for Coolify: Caddy serves the folder on port 80 |
 
@@ -50,11 +51,13 @@ sed -i '' 's#lolad\.caceresdev\.com#NEW-SITE-DOMAIN#g; s#lolad-hub\.caceresdev\.
 
 ## Links
 
-- Download: `https://github.com/CamiloCaceres/lolad/releases/latest` (the "Download Lolad.dmg" button).
-  The header and hero "Download for Mac" buttons scroll to that section first, as in the design,
-  so people see the macOS requirement and Gatekeeper note before downloading.
+- Downloads go straight to the release assets: `releases/latest/download/Lolad.dmg` and
+  `releases/latest/download/Lolad-Setup.exe`. An "All downloads" link goes to `releases/latest`.
+  These asset names must stay stable across releases.
+  The header and hero "Download" buttons scroll to that section first,
+  so people pick their platform and see the first-open note before downloading.
 - Source: `https://github.com/CamiloCaceres/lolad`
-- Install guide: `docs/install.md` on GitHub
+- Install guides: `docs/install.md#mac` and `docs/install.md#windows` on GitHub
 
 ## Notes
 
@@ -62,3 +65,17 @@ sed -i '' 's#lolad\.caceresdev\.com#NEW-SITE-DOMAIN#g; s#lolad-hub\.caceresdev\.
   the app, not controls: they are rendered as non-focusable spans.
 - `prefers-reduced-motion: reduce` stops every animation.
 - To regenerate `og.png`, screenshot the page at a 1200×630 viewport.
+
+## /join
+
+Friend links look like `https://lolad.caceresdev.com/join#2.<invite>`. The page
+greets the visitor ("Ana invited you to Lolad"), lists what Ana shares, offers
+the download for their computer (both on other systems; on a phone it says to
+open the link on a computer), three install steps, and a button to copy the
+link to paste into Lolad.
+
+The invite is in the `#fragment`, which browsers never send to a server.
+`join.js` decodes it in the browser only, writes it with `textContent`, and
+makes no requests. Caddy serves `/join` with `Referrer-Policy: no-referrer`,
+`Cache-Control: no-store` and a CSP allowing only this site's script with
+`connect-src 'none'`; every other page keeps `script-src 'none'`.

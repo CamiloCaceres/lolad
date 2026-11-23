@@ -876,3 +876,24 @@ function openToHash() {
 }
 window.addEventListener("hashchange", openToHash);
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", openToHash); else openToHash();
+
+// Friend links: keep "<friend>, and the assistants they choose, can message
+// you and Maple without asking" true to what is typed and ticked.
+function friendConsequence(form) {
+  const line = form.querySelector("[data-friend-consequence]");
+  if (!line) return;
+  const nameInput = form.querySelector("[data-friend-name]");
+  const who = (nameInput && nameInput.value.trim()) || line.dataset.defaultWho || "Your friend";
+  const picked = [...form.querySelectorAll('[data-friend-picks] input[type="checkbox"]:checked')].map((i) => i.dataset.display);
+  const names = ["you", ...picked];
+  const yours = names.length === 1 ? names[0] : names.slice(0, -1).join(", ") + " and " + names[names.length - 1];
+  const whoEl = line.querySelector("[data-friend-who]");
+  const yoursEl = line.querySelector("[data-friend-yours]");
+  if (whoEl) whoEl.textContent = who;
+  if (yoursEl) yoursEl.textContent = yours;
+}
+document.addEventListener("input", (e) => { const f = e.target.closest && e.target.closest("[data-friend-form]"); if (f) friendConsequence(f); });
+document.addEventListener("change", (e) => { const f = e.target.closest && e.target.closest("[data-friend-form]"); if (f) friendConsequence(f); });
+function friendConsequences() { document.querySelectorAll("[data-friend-form]").forEach(friendConsequence); }
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", friendConsequences); else friendConsequences();
+document.addEventListener("htmx:afterSettle", friendConsequences);

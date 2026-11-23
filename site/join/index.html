@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- The invite lives in the #fragment, which browsers never send to a server.
+     This page reads it in the browser only, to greet the visitor. It makes no
+     requests with it, loads no third-party scripts, and sends no referrer. -->
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex">
+<title>You’re invited to Lolad</title>
+<meta name="description" content="A friend invited you to Lolad. Install it, paste the link, and you’re connected.">
+<meta name="theme-color" content="#07080F">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="/fonts/sora.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/manrope.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/styles.css">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="lolad">
+<meta property="og:title" content="You’re invited to Lolad">
+<meta property="og:description" content="A friend invited you to Lolad. Install it, paste the link, and you’re connected.">
+<meta property="og:image" content="https://lolad.caceresdev.com/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<script src="/join/join.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="page join-page">
+
+<header class="wrap site-header">
+  <a class="brand" href="/"><img src="/logo.svg" width="34" height="34" alt=""><span>lolad</span></a>
+  <nav class="site-nav" aria-label="Main"><a class="link" href="/">What is Lolad?</a></nav>
+</header>
+
+<main id="main" class="wrap join">
+  <section class="join-hero" aria-labelledby="join-title">
+    <span class="pill"><span class="dot"></span>Free and open source · Mac and Windows</span>
+    <h1 id="join-title" class="h1 join-title"><span data-who>A friend</span> invited you to&#160;Lolad.</h1>
+    <p class="lede" data-lede>Lolad runs a small team of AI assistants on your own computer. Install it, paste your invite link, and you’re connected: you can message each other, and the assistants you each choose.</p>
+    <div class="join-offer" data-offer hidden><p class="eyebrow"><span data-who-2>Your friend</span> is sharing</p><ul class="join-chips" data-agents></ul></div>
+    <p class="flash" data-problem role="alert" hidden></p>
+  </section>
+
+  <ol class="join-steps">
+    <li class="join-step">
+      <span class="step-n" aria-hidden="true">1</span>
+      <div>
+        <h2 class="join-h">Download Lolad</h2>
+        <p class="join-mobile" data-mobile hidden>Lolad runs on a Mac or a Windows computer. Copy your link (step 3), open it on your computer, and download it there.</p>
+        <div class="ctas" data-downloads>
+          <a class="btn lg" data-os="mac" href="https://github.com/CamiloCaceres/lolad/releases/latest/download/Lolad.dmg"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#060818" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>Download for Mac</a>
+          <a class="btn lg" data-os="windows" href="https://github.com/CamiloCaceres/lolad/releases/latest/download/Lolad-Setup.exe"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#060818" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>Download for Windows</a>
+        </div>
+        <p class="note" data-other hidden></p>
+      </div>
+    </li>
+    <li class="join-step">
+      <span class="step-n" aria-hidden="true">2</span>
+      <div>
+        <h2 class="join-h">Install it and open it</h2>
+        <p data-install>Open the file you downloaded and follow the short setup. It walks you through your first assistant.</p>
+        <p class="note"><span data-install-note>The first time you open it, your computer may ask you to confirm, because this early build isn’t signed yet.</span> <a data-guide href="https://github.com/CamiloCaceres/lolad/blob/main/docs/install.md">The install guide</a> shows each step.</p>
+      </div>
+    </li>
+    <li class="join-step">
+      <span class="step-n" aria-hidden="true">3</span>
+      <div>
+        <h2 class="join-h">Paste your invite link into Lolad</h2>
+        <p>At the end of setup Lolad asks <strong>“Got an invite from a friend?”</strong> Paste the link there. Or later, open <strong>Sharing</strong> and use <strong>Got an invite?</strong></p>
+        <div class="join-copy" data-copy-row hidden>
+          <button type="button" class="btn ghost lg" data-copy><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F2F4FF" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg><span data-copy-label>Copy your invite link</span></button>
+          <span class="note" data-copy-status role="status"></span>
+        </div>
+        <noscript><p class="note">Copy the whole address of this page from your browser’s address bar. That is your invite link.</p></noscript>
+      </div>
+    </li>
+  </ol>
+
+  <p class="note join-privacy">Your invite stays in this browser tab. This page doesn’t send it anywhere. It works once, so don’t share it with anyone else.</p>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <span class="foot-note"><img src="/logo.svg" width="22" height="22" alt="">lolad · MIT license · Linux: <a href="https://github.com/CamiloCaceres/lolad">build from source</a></span>
+    <nav class="foot-links" aria-label="Footer">
+      <a href="/">Home</a>
+      <a href="https://github.com/CamiloCaceres/lolad">GitHub</a>
+      <a href="https://github.com/CamiloCaceres/lolad/blob/main/docs/install.md">Install</a>
+    </nav>
+  </div>
+</footer>
+
+</div>
+</body>
+</html>

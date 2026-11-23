@@ -2,12 +2,27 @@
 :80 {
 	root * /srv
 	encode zstd gzip
+	# /join serves join/index.html without a redirect (the #invite stays put either way).
+	try_files {path} {path}/index.html
 	file_server
 
 	header {
 		X-Content-Type-Options nosniff
+	}
+
+	# Everything but /join: no scripts at all.
+	@site not path /join /join/*
+	header @site {
 		Referrer-Policy strict-origin-when-cross-origin
 		Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+	}
+	# /join reads the invite from the #fragment with its own script, sends it
+	# nowhere (connect-src 'none') and never leaks it through a referrer.
+	@join path /join /join/*
+	header @join {
+		Referrer-Policy no-referrer
+		Cache-Control no-store
+		Content-Security-Policy "default-src 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 	}
 	@static path *.woff2 *.svg *.png *.css
 	header @static Cache-Control "public, max-age=86400"

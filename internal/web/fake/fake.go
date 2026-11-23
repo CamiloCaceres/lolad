@@ -51,6 +51,7 @@ type Service struct {
 
 	connections []core.Connection
 	grants      []core.Grant
+	friends     friendState // friend links (friends.go)
 	stop        chan struct{}
 	once        sync.Once
 }
