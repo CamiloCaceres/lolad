@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/ed25519"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"os"
 	"path/filepath"
@@ -75,6 +76,19 @@ func TestKeygenSignGenerateEndToEnd(t *testing.T) {
 	raw, _ = os.ReadFile(man)
 	if m, err := updater.ParseAndVerify(raw, pub); err != nil || m.Version != "1.2.4" {
 		t.Fatalf("direct signing: %v", err)
+	}
+
+	// verify: the right public key passes, another key and garbage fail
+	b64 := base64.StdEncoding.EncodeToString(pub)
+	if out, err := do(t, "verify", "--in", man, "--pub", b64); err != nil || !strings.Contains(out, "version 1.2.4") {
+		t.Fatalf("verify: %v %s", err, out)
+	}
+	other, _, _ := ed25519.GenerateKey(nil)
+	if _, err := do(t, "verify", "--in", man, "--pub", base64.StdEncoding.EncodeToString(other)); err == nil {
+		t.Fatal("verify accepted another key")
+	}
+	if _, err := do(t, "verify", "--in", man, "--pub", "bm90LWEta2V5"); err == nil {
+		t.Fatal("verify accepted a non-key")
 	}
 }
 

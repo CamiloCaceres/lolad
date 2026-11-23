@@ -600,6 +600,23 @@ Each spike is a throwaway branch with a written result appended to this file.
 - Not done by me: a reboot test. The production install's plain LaunchAgent
   has been starting the daemon at login (launchd `runs = 28`).
 
+- **A clean exit is not restarted** (`KeepAlive = {SuccessfulExit: false}`),
+  and `serve` exits 0 on SIGTERM, whoever sends it. On 2026-11-23 a stray
+  `pkill` stopped the production daemon this way, and it stayed down until it
+  was restarted by hand. **Decision: intended, kept for the beta.**
+  - "Stop lolad" (tray, `lolad service stop`) is `launchctl kill SIGTERM`,
+    and the user expects it to stay stopped.
+  - At logout launchd also sends SIGTERM, and `RunAtLoad` starts the daemon at
+    the next login anyway.
+  - A daemon stopped from outside is visible, not silent: the tray icon shows
+    the problem state, the status line reads "lolad is not running", and
+    **Start lolad** is one click.
+
+  To restart on any outside kill, the stop path has to change first: "Stop"
+  would `launchctl bootout` the job (Start already bootstraps a job that is
+  not loaded), and `serve` would exit non-zero on a signal it did not ask for.
+  That is a daemon-side change (`internal/cli`), proposed for after the beta.
+
 ### S7: harness install and login in the dashboard terminal — commands verified, end-to-end run pending
 
 - `internal/setup/terminal.go` runs `curl -fsSL https://claude.ai/install.sh | bash`,
@@ -617,3 +634,74 @@ Each spike is a throwaway branch with a written result appended to this file.
 
 Not run on the production Mac: the prompts would appear on the owner's screen
 and attribute to the live install. It is part of the §15 run in the VM.
+
+## 17. Windows: ready for a real PC (v0.2.0-beta.1)
+
+Everything below builds and vets on macOS (`GOOS=windows`), and
+`Lolad-Setup.exe` compiles with NSIS 3.13. None of it has run on Windows yet.
+
+### Desk-checked so far
+
+- **S4 psmux:** MIT (Copyright 2025 Godwin Sam Josh). Its LICENSE is installed
+  beside `bin\psmux\psmux.exe`, as MIT requires. It runs from the per-user
+  install dir with no install step of its own. The daemon finds it as
+  `bin\psmux\psmux.exe` next to `lolad-daemon.exe` / `lolad.exe`
+  (`internal/app/setupwire.go`), not through `PATH`. The zip also carries
+  `tmux.exe` and `pmux.exe` copies; only `psmux.exe` is installed.
+- **S6:** the installer writes `HKCU\…\Run\lolad =
+  "…\bin\lolad-daemon.exe" serve --supervised` and `LoladApp =
+  "…\Lolad.exe" --background` on a fresh install, and keeps the user's choice on
+  updates. `RequestExecutionLevel user`, `InstallDir
+  $LOCALAPPDATA\Programs\Lolad`: no UAC.
+- **Path:** a per-user `Path` edit through `packaging/windows/path.ps1`. NSIS's
+  `ReadRegStr` truncates at 1024 characters, so a long Path would otherwise have
+  been replaced on install and deleted on uninstall (fixed 2026-11-23).
+- **Updates (unsigned beta):** the app downloads the installer itself, so there
+  is no Mark-of-the-Web and no SmartScreen. It checks the SHA-256 pinned by the
+  signed `update.json`, accepts an unsigned installer while the app itself is
+  unsigned, and runs it with `/S`. The installer then relaunches
+  `Lolad.exe --background`.
+
+### Test script for the real PC (standard user, ~45 min)
+
+Run it as a **standard (non-admin) user**, ideally on a fresh Windows 11
+account. Record the result of each step in this section.
+
+1. **Download and SmartScreen.** Download `Lolad-Setup.exe` through a browser,
+   so it gets Mark-of-the-Web. Expect the browser's "not commonly downloaded"
+   prompt, then SmartScreen "More info → Run anyway". Screenshot each prompt
+   for docs/install.md.
+2. **Install.** Expect no UAC prompt. Files are in
+   `%LOCALAPPDATA%\Programs\Lolad`. Check `reg query
+   HKCU\Software\Microsoft\Windows\CurrentVersion\Run` (both values), a new
+   terminal's `where lolad`, Start menu ▸ Lolad, and Settings ▸ Apps.
+   Test once with a user Path longer than 1024 characters (add dummy entries
+   first) and confirm it survives install and uninstall.
+3. **First run.** "Open Lolad now" → onboarding. **Watch for console window
+   flashes** at every step: daemon start, psmux, git, harness install.
+4. **S7 on Windows.** Install Claude Code from the onboarding terminal (`irm
+   https://claude.ai/install.ps1 | iex`), then sign in. Expect it to reach
+   "ready" with no outside terminal.
+5. **First agent** replies in the inbox. Measure the time from download to
+   reply (target ≤ 5 min).
+6. **`lolad` CLI** in a new PowerShell: `lolad msg who`, `lolad attach <agent>`.
+7. **Reboot without opening the app.** The daemon answers on
+   `http://127.0.0.1:4100/api/health`, agents run, and the tray icon is there.
+   Check Task Manager ▸ Startup apps shows both entries.
+8. **Crash watchdog:** in Task Manager, end the `lolad-daemon.exe` child
+   (`serve`) and expect a restart within seconds.
+9. **Close, quit, reopen:** agents keep running.
+10. **Update:** build a second version with the same test key (for example
+    `UPDATE_SIGNING_KEY_FILE=<test key> UPDATE_PUBLIC_KEY=<its base64>
+    bin/release-local.sh 0.2.0-beta.2`). Serve that folder on the PC with
+    `python -m http.server --bind 127.0.0.1`, start `Lolad.exe` with
+    `LOLAD_UPDATE_URL=http://127.0.0.1:8000/update.json`, then Check for
+    updates → Restart to update. Expect: agents keep running, the new version
+    starts, and no SmartScreen.
+11. **`taskkill /T` risk:** the installer stops the old daemon with `taskkill
+    /IM lolad-daemon.exe /T /F`. If the psmux server is a descendant of the
+    daemon in the process tree, this kills every agent. Step 10 shows it. If
+    agents die, the installer must stop the daemon without `/T` (or with
+    `lolad service stop`).
+12. **Uninstall** from Settings ▸ Apps: no Run values, no Path entry, data kept
+    unless the box is ticked.

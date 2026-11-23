@@ -88,6 +88,11 @@ for a in $built; do set -- "$@" "$work/tmux-$a"; done
 if [ $# -gt 1 ]; then lipo -create "$@" -output "$out/tmux"; else cp "$1" "$out/tmux"; fi
 chmod 755 "$out/tmux"
 echo "$TMUX_VERSION" >"$out/tmux.version"
+# tmux (ISC) and libevent (BSD-3-Clause) require their notices to travel with
+# the binary; bundle.sh copies these into Contents/Resources/licenses/.
+mkdir -p "$out/licenses"
+tar -xzOf "$work/tmux-$TMUX_VERSION.tar.gz" "tmux-$TMUX_VERSION/COPYING" >"$out/licenses/tmux-COPYING.txt"
+tar -xzOf "$work/libevent-$LIBEVENT_VERSION.tar.gz" "libevent-$LIBEVENT_VERSION/LICENSE" >"$out/licenses/libevent-LICENSE.txt"
 echo "build-tmux: wrote $out/tmux ($(lipo -archs "$out/tmux"))"
 want=$(echo "$archs" | wc -w)
 have=$(echo "$built" | wc -w)

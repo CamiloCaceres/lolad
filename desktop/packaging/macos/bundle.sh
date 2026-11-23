@@ -167,6 +167,16 @@ mk_universal "$c/Helpers/lolad" daemon
 cp "$tmux_src" "$c/Helpers/tmux"
 chmod 755 "$c/MacOS/Lolad" "$c/Helpers/lolad" "$c/Helpers/tmux"
 cp "$here/tmux.conf" "$c/Resources/tmux.conf"
+# Third-party notices (tmux ISC, libevent BSD-3-Clause, lolabot MIT is in Resources/lolabot).
+tmux_lic="$(dirname "$tmux_src")/licenses"
+if [ -f "$tmux_lic/tmux-COPYING.txt" ] && [ -f "$tmux_lic/libevent-LICENSE.txt" ]; then
+  mkdir -p "$c/Resources/licenses"
+  cp "$tmux_lic/tmux-COPYING.txt" "$tmux_lic/libevent-LICENSE.txt" "$c/Resources/licenses/"
+elif [ "$RELEASE" = 1 ]; then
+  die "no tmux/libevent license files next to $tmux_src (build-tmux.sh writes them); a release must ship them"
+else
+  echo "bundle.sh: warning: tmux/libevent license files not found next to $tmux_src (fine for a dev build)" >&2
+fi
 printf '%s\n' "$MULTIPLEXER_VERSION" >"$c/Resources/multiplexer.version"
 if [ "$tmux_ver" != "tmux $TMUX_VERSION" ]; then
   [ "$RELEASE" != 1 ] || die "bundled tmux reports '$tmux_ver', versions.env pins $TMUX_VERSION"

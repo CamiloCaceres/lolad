@@ -14,7 +14,7 @@ You need a Mac (macOS 13 or newer) or a Windows 11 PC.
 
 ---
 
-## On a Mac
+## Mac
 
 ### 1. Download
 
@@ -57,7 +57,10 @@ Login Items**.
 
 ---
 
-## On Windows
+## Windows
+
+You need Windows 11 on a 64-bit Intel or AMD PC, and about 200 MB of free
+space. No administrator account is needed.
 
 ### 1. Download
 

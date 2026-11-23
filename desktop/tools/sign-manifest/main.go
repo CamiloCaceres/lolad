@@ -3,6 +3,7 @@
 //
 //	sign-manifest keygen [--out key.pem]
 //	sign-manifest sign --key key.pem --in update.json [--out update.json]
+//	sign-manifest verify --in update.json --pub <base64 public key>
 //	sign-manifest generate --version 1.2.3 --multiplexer-version 3.5a-1 \
 //	    --notes-url URL --url-base https://github.com/.../releases/download/v1.2.3/ \
 //	    --darwin-arm64 Lolad.app.zip --darwin-amd64 ... --windows-amd64 Lolad-Setup.exe \
@@ -45,8 +46,10 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return sign(args[1:], stdout)
 	case "generate":
 		return generate(args[1:], stdout)
+	case "verify":
+		return verify(args[1:], stdout)
 	}
-	return fmt.Errorf("unknown command %q (want keygen, sign or generate)", args[0])
+	return fmt.Errorf("unknown command %q (want keygen, sign, generate or verify)", args[0])
 }
 
 func newFlags(name string) *flag.FlagSet {
@@ -140,6 +143,34 @@ func sign(args []string, stdout io.Writer) error {
 		return err
 	}
 	fmt.Fprintf(stdout, "signed %s\n", dst)
+	return nil
+}
+
+// verify checks a signed manifest against the base64 public key a build is
+// stamped with (UPDATE_PUBLIC_KEY), exactly as the installed app will.
+func verify(args []string, stdout io.Writer) error {
+	fs := newFlags("verify")
+	in := fs.String("in", "", "signed manifest")
+	pubB64 := fs.String("pub", "", "base64 Ed25519 public key (what UPDATE_PUBLIC_KEY holds)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *in == "" || *pubB64 == "" {
+		return errors.New("--in and --pub are required")
+	}
+	pub, err := base64.StdEncoding.DecodeString(strings.TrimSpace(*pubB64))
+	if err != nil || len(pub) != ed25519.PublicKeySize {
+		return errors.New("--pub is not a base64 Ed25519 public key")
+	}
+	raw, err := os.ReadFile(*in)
+	if err != nil {
+		return err
+	}
+	m, err := updater.ParseAndVerify(raw, ed25519.PublicKey(pub))
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(stdout, "verified %s: version %s, %d platform(s)\n", *in, m.Version, len(m.Platforms))
 	return nil
 }
 
