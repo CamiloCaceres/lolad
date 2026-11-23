@@ -709,13 +709,18 @@ the request down the tunnel to the right lolad.
   and the sender's outbox retries as today.
 - **Direct and hub peers mix:** A lolad on the hub can pair with one reached
   directly, because `url` is per peer.
-- **Invite-only for now:** In v5 the operator mints sign-up codes. Opening it to
-  the public is on the roadmap.
+- **Sign-up is open or invite-only, per hub (v6):** In `open` mode (the
+  default) any lolad joins with no code, proving possession of its key, behind
+  the limits in "Sign-up". In `invite` mode only operator codes work. Operator
+  codes work in both modes.
 
 ### Names
 - **Handle:** A lolad joins the hub with a handle, `[a-z0-9-]{3,32}` and unique
-  on the hub. Reserved handles are `admin`, `api`, `hub`, `www`, `p` and `v1`.
-  A taken handle gets 409 `name_taken` with a `suggestion`.
+  on the hub. Reserved handles are `admin`, `api`, `hub`, `www`, `p`, `v1`,
+  `lolad`, `support`, `help`, `root`, `operator`, `security`, `console`,
+  `status`, `mail`, `abuse` and `info`. A taken handle gets 409 `name_taken`
+  with a `suggestion`; an invalid or reserved one gets 400 `invalid_handle`,
+  with a `suggestion` when one exists.
 - **URL:** Its federation URL becomes `<hub>/p/<handle>`. Everything else
   appends to that unchanged, for example `<hub>/p/<handle>/v1/federation/deliver`.
 - **Provider name:** Unchanged (`<tenant>.lolad.local`), and the duplicate rule
@@ -734,8 +739,13 @@ the request down the tunnel to the right lolad.
   config.
 - **Tables:**
   - `hub_accounts`: handle, public_key, display, created_at, last_seen,
-    disabled.
+    disabled, joined_via (`open` | `invite`), first_tunnel (NULL until the
+    first tunnel).
   - `hub_invites`: code sha256, note, expires_at, used_by, used_at.
+  - `hub_settings`: key, value (`signup_mode`).
+  - `hub_banned_keys`: public_key, handle, banned_at.
+  - `OpenStore` migrates older databases in place (idempotent `ALTER`s; old
+    accounts get `joined_via = invite` and `first_tunnel = last_seen`).
 - **Admin:** The CLI below, run on the VPS against the DB. When
   `LOLAD_HUB_ADMIN_TOKEN` (24+ chars) is set, there is also an operator console
   at `/console` and a JSON admin API under `/v1/hub/admin/`, both behind that
@@ -748,6 +758,10 @@ the request down the tunnel to the right lolad.
   - `lolad-hub disable|enable <handle>`: disabled means the tunnel is refused
     and requests to it get 403.
   - `lolad-hub rm <handle>`
+  - `lolad-hub block <handle>`: removes the account and bans its key from
+    signing up again.
+  - `lolad-hub signup open|invite`: overrides `LOLAD_HUB_SIGNUP` (the console's
+    Pause sign-ups switch does the same).
   - The CLI writes the DB directly. A running hub checks accounts on every
     forward and closes tunnels of disabled or removed accounts within 30 s.
 - **Logs:** Metadata only: handle, path, status, size and duration. Never a body
@@ -757,15 +771,35 @@ the request down the tunnel to the right lolad.
 **Endpoints.** Signed requests use the Federation header scheme
 (`X-AMP-Provider` = handle or `-`, `X-AMP-Timestamp`, `X-AMP-Signature` over
 `<ts>.<body>`), with a ±300 s window. Errors are `{error, message}`.
-- `GET /v1/hub/info` (unsigned): `{name, version, public_url,
-  signup: "invite"}`.
+- `GET /v1/hub/info` (unsigned): `{name, version, public_url, signup}`, where
+  `signup` is `open`, `invite` or `closed` (open, but a cap is reached).
 - `POST /v1/hub/register` (signed by the new key):
-  - Body: `{code, handle, display, public_key}`.
+  - Body: `{code?, hub, handle, display, public_key}`. `hub` is this hub's
+    public URL, binding the signature to it; it is required without a code
+    (else 400 `wrong_hub`).
   - Response: `{handle, url}`.
-  - The code must be live and unused. Failures are limited to 10 per hour per
-    IP, then 429.
-  - The same key again with the same handle gives an idempotent 200. A key that
-    already holds a different handle gets 409.
+  - With a code, the code must be live and unused. Without one, the hub must be
+    in `open` mode (else 403 `invalid_invite`) and within the sign-up limits.
+    Failures are limited to 10 per hour per IP, then 429.
+  - The same key again with the same handle gives an idempotent 200, never
+    counted against the limits. A key that already holds a different handle
+    gets 409 `key_registered` with `handle`. A banned key gets 403
+    `signup_refused`.
+
+**Sign-up (v6).** Open sign-ups are limited, all by env (0 turns one off):
+- per source IP 3 and per IPv4 /24 or IPv6 /56 10 successful sign-ups per 24 h
+  (`LOLAD_HUB_SIGNUPS_PER_IP`, `LOLAD_HUB_SIGNUPS_PER_NET`), then 429;
+- hub-wide 60 per hour and 300 per 24 h (`LOLAD_HUB_SIGNUPS_HOURLY`,
+  `LOLAD_HUB_SIGNUPS_DAILY`), counted from the database, then 503
+  `signup_closed` with `Retry-After`;
+- 2,000 accounts in total (`LOLAD_HUB_MAX_ACCOUNTS`), then `closed`.
+- Open sign-ups that never open a tunnel are removed after 72 h
+  (`LOLAD_HUB_REAP_UNUSED`). Invited accounts are never reaped.
+- An optional cap on bytes carried per handle per 24 h
+  (`LOLAD_HUB_BYTES_PER_DAY`, default off), then 429.
+- The mode is `LOLAD_HUB_SIGNUP` (`open` by default), overridden by the
+  `hub_settings` value the console or CLI sets. The sign-up IP is logged with
+  `registered`, never stored.
 - `DELETE /v1/hub/account` (signed): releases the handle and closes the
   tunnel.
 - `GET /v1/hub/tunnel` (WebSocket): the lolad side of the pipe. See Tunnel.
@@ -881,7 +915,8 @@ the request down the tunnel to the right lolad.
 
 `serve` reads `LOLAD_HUB_PUBLIC_URL`, `LOLAD_HUB_LISTEN` (default
 `127.0.0.1:8095`), `LOLAD_HUB_DB`, `LOLAD_HUB_TRUSTED_PROXIES` and the secret
-`LOLAD_HUB_ADMIN_TOKEN` (environment only, never a flag). The client IP
+`LOLAD_HUB_ADMIN_TOKEN` (environment only, never a flag), plus the sign-up
+settings above. The client IP
 used for rate limits is the rightmost `X-Forwarded-For` entry only when the
 connection comes from loopback or a trusted proxy range (the Docker image
 trusts the private ranges); otherwise it is the connection's address.
@@ -897,6 +932,56 @@ trusts the private ranges); otherwise it is the connection's address.
   - Rate limits.
   - A disabled handle.
 - No real VPS or live daemon in tests.
+
+## Friend links (v6)
+
+One link connects two lolads (docs/friend-connect-design.md). It pairs them,
+joins the hub when needed, and pre-approves each side.
+
+- **Link:** `<join_url>#2.<base64url(JSON)>`, where `join_url` defaults to
+  `https://lolad.caceresdev.com/join`.
+  - The secret is in the fragment, which browsers never send.
+  - Keys: `t` tenant, `d` display, `n` the human's local name, `k` raw Ed25519
+    provider key, `s` a 16-byte pairing secret, `h` the hub handle (with `H`, the
+    hub URL, only when not the default) or `u` a direct URL, `a`
+    `[[slug, display]…]` (at most 8 offered agents), and `e` expiry.
+  - Valid 7 days, single use.
+  - A link is at most 1,500 characters when made (display names are dropped
+    first) and 4,096 when read.
+  - `k` pins the inviter's key. `d`, `n` and `a` are hints. What the inviter
+    shares is stored on its side (`fed_invites.kind = 'friend'`, `offer`,
+    `for_note`).
+- **Create:** if the lolad is on no hub and has no direct URL, it joins
+  `federation.hub_url` (default `https://lolad-hub.caceresdev.com`, env
+  `LOLAD_HUB_URL`; empty turns this off) with open sign-up. The handle is the
+  tenant, or the hub's suggestion when that is taken.
+- **Accept, in one call:**
+  1. Local checks, with no side effects: format, expiry, same name, key
+     mismatch, and the offered agents.
+  2. Join the inviter's hub if on none.
+  3. `pair` with `pairBody.user` and `pairBody.offer` (both optional; older
+     lolads ignore them).
+- **Pre-approval, on both sides:**
+  - the peer gets `user_reachable`;
+  - each own offered agent is shared ("anyone there can ask");
+  - every pair of {other human and other offered agents} × {own human and own
+    offered agents} gets an allowed grant with `origin: "invited"`, unless
+    blocked.
+  - Agents that were not offered still need approval.
+- **Offline inviter:** a 503 or an unreachable inviter stores a `fed_pending`
+  row and returns `waiting`. It is retried when the hub reports the inviter
+  online (pending URLs are in the watch list), every 10 min, and at start,
+  until the link expires.
+- **Events:** `friend_connected` (both sides), `friend_waiting`,
+  `friend_expired`, `friend_failed`.
+- **v1 codes:** `lolad-invite:` codes keep working, through the same accept
+  call.
+- **API:** `core.FriendInviter` and `/api/friends/*`:
+  - `POST invites`, `GET invites`, `DELETE invites/{id}`;
+  - `POST preview`, `POST accept`.
+
+  Links go in POST bodies only. Refusals carry `UserMessage()`, which the API
+  returns as `message`.
 
 ## Windows (v4)
 

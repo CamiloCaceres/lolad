@@ -19,6 +19,7 @@ import (
 // federation URL <hub>/p/<handle> while joined.
 
 var _ core.Hubber = (*App)(nil)
+var _ core.FriendInviter = (*App)(nil)
 
 type hubRuntime struct {
 	mu     sync.Mutex

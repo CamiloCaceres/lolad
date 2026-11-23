@@ -66,6 +66,9 @@ func federationRoutes(m *http.ServeMux, s core.Federator) {
 	if h, ok := s.(core.Hubber); ok {
 		hubRoutes(m, h)
 	}
+	if f, ok := s.(core.FriendInviter); ok {
+		friendRoutes(m, f)
+	}
 	m.HandleFunc("GET /api/remote-contacts", func(w http.ResponseWriter, r *http.Request) {
 		v, e := s.RemoteContacts(r.Context(), r.URL.Query().Get("local"))
 		write(w, v, e)

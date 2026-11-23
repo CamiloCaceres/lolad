@@ -373,8 +373,10 @@ fed does not import `internal/hub` or `internal/app`. It declares:
 type HubMember interface {
 	Membership() (hubURL, handle string, ok bool)
 	Join(ctx context.Context, hubURL, preferredHandle string) (memberURL string, err error) // open sign-up
-	Watch(handles []string)                                                                 // pending accepts join the presence watch
 }
+// Wired with Engine.SetHub(member, defaultHub, joinURL). Pending accepts need
+// no Watch: their URLs are added to PeerURLs, which the tunnel client already
+// watches, and RetryURL retries them when the hub reports the inviter online.
 ```
 
 - `internal/hub` gains the codeless `Register`, the `handle` in the
