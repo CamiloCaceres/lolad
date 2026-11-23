@@ -295,7 +295,7 @@ func TestConsole(t *testing.T) {
 	}
 	res, body = h.do(t, areq{method: "POST", path: "/console/invites", cookie: cookie, body: "note=Ana&csrf=" + csrf, ctype: "application/x-www-form-urlencoded"})
 	code := regexp.MustCompile(`hubinv_[A-Za-z0-9_-]+`).FindString(body)
-	if res.StatusCode != 200 || code == "" || !strings.Contains(body, "Invite for Ana is ready") {
+	if res.StatusCode != 200 || code == "" || !strings.Contains(body, "Invite for Ana is ready") || !strings.Contains(body, "this hub’s address, "+h.url) {
 		t.Fatal(res.StatusCode, body)
 	}
 	// Shown once: the page afterwards does not have it.

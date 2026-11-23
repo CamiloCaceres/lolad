@@ -139,6 +139,7 @@ type pageView struct {
 	Nav      string
 	CSRF     string
 	Host     string
+	HubURL   string // the public URL members join with
 	Uptime   string
 	Version  string
 	Flash    string
@@ -151,7 +152,7 @@ func (a *admin) frame(s session, nav, title string, data any) pageView {
 	if u, err := url.Parse(host); err == nil && u.Host != "" {
 		host = u.Host
 	}
-	return pageView{Title: title, Nav: nav, CSRF: s.csrf, Host: host, Uptime: span(a.s.o.Clock().Sub(a.s.started)), Version: Version, Data: data}
+	return pageView{Title: title, Nav: nav, CSRF: s.csrf, Host: host, HubURL: a.s.o.PublicURL, Uptime: span(a.s.o.Clock().Sub(a.s.started)), Version: Version, Data: data}
 }
 
 func (a *admin) render(w http.ResponseWriter, status int, name string, v any) {
