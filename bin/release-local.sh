@@ -3,7 +3,7 @@
 # It never tags, pushes or publishes: a person uploads the folder afterwards
 # (docs/desktop.md section 10).
 #
-#   bin/release-local.sh <version> [--throwaway-key]
+#   bin/release-local.sh <version> [--throwaway-key | --dry-run-key <pem>]
 #
 #   <version>        e.g. 0.2.0-beta.1 (a leading v is dropped)
 #   --throwaway-key  a dry run: make a one-off update key in the work dir and
@@ -11,6 +11,10 @@
 #                    exactly like a release, but no installed app trusts that
 #                    key, so the folder is marked DRY-RUN and must not be
 #                    published.
+#   --dry-run-key <pem>  like --throwaway-key, but reuse a test key made with
+#                    `sign-manifest keygen` (its .pub.pem must sit beside it), so
+#                    two test versions can update one to the other (docs/desktop.md
+#                    section 17). Also marked DRY-RUN.
 #
 # Environment:
 #   UPDATE_SIGNING_KEY_FILE  the Ed25519 private key (PEM) that signs update.json.
@@ -39,11 +43,14 @@ usage() { sed -n '2,33p' "$0"; exit 1; }
 version=${1#v}
 shift
 throwaway=0
-for a in "$@"; do
-  case "$a" in
+testkey=""
+while [ $# -gt 0 ]; do
+  case "$1" in
     --throwaway-key) throwaway=1 ;;
+    --dry-run-key) [ $# -ge 2 ] || usage; throwaway=1; testkey=$2; shift ;;
     *) usage ;;
   esac
+  shift
 done
 case "$version" in [0-9]*.[0-9]*.[0-9]*) ;; *) echo "release-local: '$version' is not a version" >&2; exit 1 ;; esac
 
@@ -65,7 +72,15 @@ done
 
 # ------------------------------------------------------------- update key
 step "update key"
-if [ "$throwaway" = 1 ]; then
+if [ -n "$testkey" ]; then
+  [ -r "$testkey" ] || die "cannot read $testkey"
+  key=$(cd "$(dirname "$testkey")" && pwd)/$(basename "$testkey")
+  pubpem="${key%.*}.pub.pem"
+  [ -r "$pubpem" ] || die "no $pubpem beside the test key"
+  # SubjectPublicKeyInfo DER for Ed25519 is a 12-byte header plus the 32-byte key.
+  UPDATE_PUBLIC_KEY=$(sed '/-----/d' "$pubpem" | tr -d '\n' | base64 -d | tail -c 32 | base64)
+  echo "test key (dry run): public $UPDATE_PUBLIC_KEY"
+elif [ "$throwaway" = 1 ]; then
   key="$work/throwaway-update-key.pem"
   UPDATE_PUBLIC_KEY=$(cd desktop && go run ./tools/sign-manifest keygen --out "$key" | sed -n 's/^ldflags:.*PublicKeyB64=//p')
   [ -n "$UPDATE_PUBLIC_KEY" ] || die "could not create the throwaway key"
