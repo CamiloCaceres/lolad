@@ -256,6 +256,39 @@ func (v newView) DefaultPath() string {
 }
 func (v newView) Field(key string) string { return v.Fields[key] }
 
+// TeamWith names a team's assistants in plain words: "Lola, Atlas and Mo".
+func (v newView) TeamWith(t core.Team) string {
+	display := map[string]string{}
+	for _, a := range v.Agents {
+		display[a.Name] = a.Display
+		if a.Display == "" {
+			display[a.Name] = a.Name
+		}
+	}
+	var names []string
+	seen := map[string]bool{}
+	for _, slug := range append([]string{t.Head}, t.Members...) {
+		if slug == "" || seen[slug] {
+			continue
+		}
+		seen[slug] = true
+		if d, ok := display[slug]; ok {
+			names = append(names, d)
+		}
+	}
+	return plainNames(names)
+}
+
+func plainNames(names []string) string {
+	switch len(names) {
+	case 0:
+		return ""
+	case 1:
+		return names[0]
+	}
+	return strings.Join(names[:len(names)-1], ", ") + " and " + names[len(names)-1]
+}
+
 func (v newView) AvailableCandidates() []core.AdoptCandidate {
 	var out []core.AdoptCandidate
 	for _, c := range v.Options.Candidates {

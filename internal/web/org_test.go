@@ -71,7 +71,7 @@ func TestOrgProtectAgentOverridesEarlierRules(t *testing.T) {
 func TestOrgSenderViewAndCreateTeam(t *testing.T) {
 	e := setup(t)
 	code, page := e.get("/org?sender=iris&create=1")
-	for _, want := range []string{`value="iris" selected`, `id="org-add-team" class="org-disclosure" open`, "Compare all senders", "Only I may message an agent", "Engineering and its sub-teams", `id="org-pair"`, `id="org-rule-1"`, `id="org-defaults"`} {
+	for _, want := range []string{`value="iris" selected`, `id="org-add-team" class="org-disclosure org-new-team" open`, "Who can message whom", "Only I may message an assistant", "Engineering and its sub-teams", `id="org-pair"`, `id="org-rule-1"`, `id="org-defaults"`} {
 		if code != 200 || !strings.Contains(page, want) {
 			t.Errorf("page missing %s (status %d)", want, code)
 		}

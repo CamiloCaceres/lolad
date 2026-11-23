@@ -91,6 +91,13 @@ func (s *Supervisor) sweep(ctx context.Context) {
 				p.Next = now
 				s.savePending(name, p)
 			}
+			if p != nil && p.Confirmations == 0 && p.Attempts >= len(retryDelays) && !p.GaveUpAt.IsZero() && now.Sub(p.GaveUpAt) >= giveUpPause {
+				p.Attempts = 0
+				p.Next = now
+				p.GaveUpAt = time.Time{}
+				s.savePending(name, p)
+				s.event(name, "delivery", "trying again to tell it about "+m.ID)
+			}
 		}
 		for id := range q {
 			if !unread[id] {
@@ -105,6 +112,10 @@ func (s *Supervisor) sweep(ctx context.Context) {
 }
 
 var retryDelays = []time.Duration{0, 30 * time.Second, 2 * time.Minute, 10 * time.Minute}
+
+// giveUpPause is how long mail whose every notice failed waits before the
+// sweep starts a new round of attempts.
+const giveUpPause = 30 * time.Minute
 
 // deliver does not age out idle: an agent quiet for hours must still wake on
 // mail. Reconcile re-checks the pane once hooks go stale, and the notifier
@@ -155,6 +166,10 @@ func (s *Supervisor) deliver(ctx context.Context, r *record, now time.Time) {
 			}
 		} else if e != nil {
 			s.event(r.Status.Name, "delivery", e.Error())
+		}
+		if p.Attempts >= len(retryDelays) && p.Confirmations == 0 && result != core.NotifyConfirmed {
+			p.GaveUpAt = now
+			s.event(r.Status.Name, "delivery", "could not tell it about "+id+"; trying again in 30 minutes")
 		}
 		s.savePending(r.Status.Name, p)
 		// One notice starts a new turn. A fresh idle hook is needed before typing another.

@@ -1,9 +1,10 @@
 {{define "content"}}<div class="page page-wide">
   <header class="page-head">
     <div>
-      <h1 class="page-title">Org</h1>
-      <p class="page-sub">Build your teams, connect their heads, and decide who can talk to whom.</p>
+      <h1 class="page-title">Team</h1>
+      <p class="page-sub">Who works with whom. Assistants only message the people they’re allowed to.</p>
     </div>
+    <a class="btn btn-primary" href="/org?create=1#org-add-team">{{template "icon" "plus"}}<span>New team</span></a>
   </header>
   {{template "org-body" .Data}}
 </div>{{end}}

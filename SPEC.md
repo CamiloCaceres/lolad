@@ -58,6 +58,25 @@ EXISTS`. `internal/store` only opens the DB (WAL, busy_timeout, foreign keys)
 and hands out `*sql.DB`. Deleting the DB loses mail and history but no
 configuration — config and org stay in YAML.
 
+**Versions.** The DB file carries a schema version in `PRAGMA user_version`.
+`internal/store` keeps an ordered, forward-only list of migrations; version 1
+is the baseline (the tables each package creates itself), so a pre-versioning
+file (0) moves to 1 unchanged. On open the store runs `PRAGMA quick_check`
+(a damaged file is refused with a message pointing at `<state>/backups`; it
+never auto-restores), refuses a file whose version is newer than the binary
+knows ("written by a newer version of Lolad") without touching it, and
+otherwise copies an existing file to `lolad.db.v<old>-before-v<new>-<time>.bak`
+before running each pending step in its own transaction together with the
+version bump. Steps are only ever appended. `config.yaml` may carry a
+top-level `version:` (absent = 1); a higher one than the binary supports is
+refused, and the file is never rewritten just to add it. YAML errors in
+`config.yaml`, `org.yaml` and `lolabot.yaml` read "<path>, line N: …".
+
+**Port conflict.** When `listen` is busy at `lolad serve`: another lolad →
+exit (single instance); another program and no `listen:` in config.yaml →
+first free `127.0.0.1:4101…4199`, saved as `listen:` in config.yaml; an
+explicit `listen:` → exit with a plain message (docs/desktop.md §6.1).
+
 ## AMP provider (`internal/amp`)
 
 Spec: https://github.com/agentmessaging/protocol v0.1.2-draft (see
@@ -229,6 +248,24 @@ owns *how*.
 - State from hooks with Seq ordering + TTLs; fallback: pane `PromptReady` ⇒
   idle, otherwise unknown. A turn longer than 15 min stays busy if the last
   event was prompt_submit/pre_tool and the pane is not prompt-ready.
+- Problems (`AgentStatus.problem`, plain words for the dashboard): a turn
+  ended by an API error (Claude Code `StopFailure` with its error type,
+  Codewhale `session_error`; both map to hook event `stop_failure`) is
+  classified. Only the user can fix login, billing, account, model and
+  rejected-request errors, so they set `waiting` with `problem.needs_you`.
+  Usage and rate limits, an overloaded service and network errors set
+  `paused`, with `problem.until` at the limit's reset (parsed from the
+  message) or a few minutes away. At `until` lolad clears the problem and
+  re-checks the pane. Mail is never typed into a paused or waiting agent, and
+  notices that failed meanwhile are re-armed when the problem clears. Work
+  hooks (prompt_submit, pre/post_tool, session_start) clear a problem; the
+  idle hook after the failure does not. A restart clears it. A busy turn with no
+  hook for 45 min gets a `stuck` problem (state stays busy) until the next
+  hook. A blocking startup dialog sets a `dialog` or `login` problem read
+  off the screen. It clears when the prompt shows. A dead pane's last printed
+  line is kept in `last_error`.
+- Mail notices that fail all 4 attempts unconfirmed get a new round 30 min later
+  (the sweep), so unread mail is never left unannounced.
 - Rotation at `rotate` HH:MM: when idle (or wait up to 30 min for idle, then
   do it anyway), restart fresh with on_wake.
 - Mail: subscribe to `Mailer.OnMail`; mail to an agent → enqueue; if stopped
@@ -282,6 +319,7 @@ lolad msg reply <id> "<body>"
 lolad msg who                             # directory: who I may message, with roles/teams
 lolad msg tell-user say|update|deliver "<text>"
 lolad msg tell-user ask "<question>" --option "Yes" --option "No"
+lolad msg tell-user ask "<question>" --field "Label[?][:text|longtext|number|date|choice:A|B]"... --secret ENV_NAME[:Label]...
 lolad msg thread <id>
 ```
 Exit non-zero with the server's reason on 403 so agents see policy denials.
@@ -300,8 +338,8 @@ Server-rendered Go `html/template` + htmx + SSE, assets embedded with
 `go:embed`, no CDN, no node build step at runtime (vendored htmx and xterm.js
 files are fine). Works against `core.Service` only. Pages, in priority order:
 1. **Inbox** (home): the user's conversations with agents, chat thread view,
-   composer, `ask` messages render their options as buttons that send a
-   `decision`, unread badges, live via SSE.
+   composer, open `ask` messages answered in place (see Requests below),
+   unread badges, live via SSE.
 2. **Agents**: fleet list with state, last activity, unread mail, restarts,
    controls (start/stop/restart/fresh/interrupt); agent detail with events
    timeline, its mail traffic, config summary, and a read-only live terminal
@@ -313,6 +351,55 @@ files are fine). Works against `core.Service` only. Pages, in priority order:
 4. **New agent**: form for `CreateRequest` (and adopt existing dir).
 5. **Traffic**: all mail, newest first, filter by participant — the audit log.
 Muted, desaturated palette; hue only as a state/scanning anchor. Light and dark.
+
+### Requests (`internal/web/requests.go`, `core/ask.go`)
+An agent's `ask` is a request the user answers when ready. `UserChat` carries
+`Options` (buttons), `Fields` (`AskField`: text, longtext, number, date,
+choice, secret, logs, file; at most 12), or neither (an answer in words).
+`Task` marks an ask for something the user does themselves: its two
+`Options` are the done and couldn't buttons, and the user may add a note.
+- An open request stays where it was asked, in the thread, with a small
+  "Answer" under it that opens its choices, form or text box only when the
+  user wants. One quiet line above the composer counts waiting requests
+  ("Show" jumps to the oldest) and, once answers are staged, offers Send.
+  Home lists one row per assistant linking to the question
+  (`/inbox/{peer}#m-<id>`). Chatting never answers one: the composer's
+  `reply_to` skips open asks and `send` drops an ask parent.
+- Each answer is staged (choice, words, form, or Skip) in the dashboard's
+  memory; nothing is sent until **Send**, which mails all staged answers to
+  that assistant at once: `userchat {kind: "answers", answers: [AskAnswer…]}`,
+  a readable body for the agent, `in_reply_to` the last ask.
+- Secret fields are saved with `SetEnv` when the card is staged (local agents
+  only); the answer lists the keys in `secrets`, never values. An empty secret
+  input keeps a key that is already set.
+- An ask is closed by a `decision` replying to it (`POST /inbox/{peer}/decide`
+  still works), an `answers` mail naming it, or a reply to it from before this
+  feature. Asks older than 2026-11-21 04:00 UTC keep the old rule: anything the
+  user wrote after them closes them.
+- File fields upload when the card is staged (multipart, the composer's
+  limits); the answers mail carries the files (at most 10) and `AskAnswer.Files`
+  maps each field to its attachment IDs. Logs fields keep the text verbatim.
+- Routes: `POST /inbox/{peer}/requests/{id}` (`do` = save | skip | change, or
+  `option` with an optional `text`) and `…/requests/send`; both answer with
+  the thread refresh.
+
+### User tools and blocks (`internal/msgcli/mcp.go`, `tools.go`, `core/blocks.go`)
+Agents reach the user through two MCP tools served by `lolad msg mcp` (stdio,
+newline JSON-RPC): `message_user` (say | update | deliver) and `ask_user`
+(options, fields, task, or words). The harness lists the server at launch:
+Claude gets `--mcp-config=<state>/agents/<name>/mcp.json` and an allow rule for
+both tools; Codewhale gets a `lolad` entry merged into `$CODEWHALE_HOME/mcp.json`.
+`lolad msg tell-user <kind> --json` takes the same arguments. Unknown keys and
+invalid blocks are errors returned to the model so it corrects the call.
+- A message is laid out as `UserChat.Blocks`: `text` (Markdown), `command`
+  (code, where, admin), `code` (a snippet to paste), `values` (label/value rows),
+  `link` (http/https only), `steps` (a checklist). A message that is only text
+  carries no blocks. The body always holds the same content as plain text
+  (`BlocksText`) for email, agents and older dashboards.
+- The dashboard draws blocks in the bubble: Copy on commands and snippets, one
+  click per value (and Copy all), the link's host beside its label, step ticks
+  kept in the browser. Inline code in an assistant's message also copies on
+  click. Message bodies keep single line breaks.
 
 ## Conventions
 - Go 1.25, `gofmt`, `go vet`, table tests. `go test ./...` must pass for your
@@ -586,6 +673,207 @@ fail all).
   conversations in the Inbox, labelled with the peer; the agent page shows who
   it is shared with; Traffic shows delivery state; Org shows connected lolads
   as external boxes with their shared edges.
+
+## Hub (v5)
+
+Federation needs each lolad to be reachable at its `federation.url`. Two people
+on different networks with no shared tailnet have no such URL. The **hub**
+gives them one. It is a small server (`lolad-hub`) on a VPS that each lolad
+dials out to. Peers deliver to the hub's public HTTPS URL, and the hub passes
+the request down the tunnel to the right lolad.
+
+**The hub is a pipe, not a provider.**
+- **No change to trust:** Pairing, grants, shares, sender-key pins, signatures,
+  the outbox and the approval flow are exactly as in Federation.
+- **What the hub can and cannot do:** It cannot forge a request, because every
+  request is signed by the caller's provider key and checked by the receiving
+  lolad. It can drop or delay requests, and it can read them, since TLS ends at
+  the hub. End-to-end encryption is on the roadmap.
+- **No mail storage:** The hub stores no mail. A peer that is offline gets 503
+  and the sender's outbox retries as today.
+- **Direct and hub peers mix:** A lolad on the hub can pair with one reached
+  directly, because `url` is per peer.
+- **Invite-only for now:** In v5 the operator mints sign-up codes. Opening it to
+  the public is on the roadmap.
+
+### Names
+- **Handle:** A lolad joins the hub with a handle, `[a-z0-9-]{3,32}` and unique
+  on the hub. Reserved handles are `admin`, `api`, `hub`, `www`, `p` and `v1`.
+  A taken handle gets 409 `name_taken` with a `suggestion`.
+- **URL:** Its federation URL becomes `<hub>/p/<handle>`. Everything else
+  appends to that unchanged, for example `<hub>/p/<handle>/v1/federation/deliver`.
+- **Provider name:** Unchanged (`<tenant>.lolad.local`), and the duplicate rule
+  between paired peers is unchanged. Globally unique provider names are a
+  public-hub item on the roadmap.
+- **Account:** The hub account is the provider public key. One key holds one
+  handle.
+
+### Hub server (`internal/hub`, `cmd/lolad-hub`)
+- **Shape:** One static binary with SQLite (`modernc.org/sqlite`, already a
+  dependency) and `coder/websocket`. It listens on loopback (default
+  `127.0.0.1:8095`) behind Caddy, which serves TLS.
+- **Flags:** `lolad-hub serve --listen --db --public-url` (for example
+  `https://hub.example.com`). `LOLAD_HUB_DB` and `LOLAD_HUB_PUBLIC_URL` set the
+  defaults (the database defaults to `/var/lib/lolad-hub/hub.db`). No other
+  config.
+- **Tables:**
+  - `hub_accounts`: handle, public_key, display, created_at, last_seen,
+    disabled.
+  - `hub_invites`: code sha256, note, expires_at, used_by, used_at.
+- **Admin:** CLI only, run on the VPS against the DB. There is no admin HTTP API.
+  - `lolad-hub invite [--note ""] [--ttl 168h]` prints a `hubinv_…` code once.
+    It is single use.
+  - `lolad-hub accounts`
+  - `lolad-hub disable|enable <handle>`: disabled means the tunnel is refused
+    and requests to it get 403.
+  - `lolad-hub rm <handle>`
+  - The CLI writes the DB directly. A running hub checks accounts on every
+    forward and closes tunnels of disabled or removed accounts within 30 s.
+- **Logs:** Metadata only: handle, path, status, size and duration. Never a body
+  or an invite code.
+
+**Endpoints.** Signed requests use the Federation header scheme
+(`X-AMP-Provider` = handle or `-`, `X-AMP-Timestamp`, `X-AMP-Signature` over
+`<ts>.<body>`), with a ±300 s window. Errors are `{error, message}`.
+- `GET /v1/hub/info` (unsigned): `{name, version, public_url,
+  signup: "invite"}`.
+- `POST /v1/hub/register` (signed by the new key):
+  - Body: `{code, handle, display, public_key}`.
+  - Response: `{handle, url}`.
+  - The code must be live and unused. Failures are limited to 10 per hour per
+    IP, then 429.
+  - The same key again with the same handle gives an idempotent 200. A key that
+    already holds a different handle gets 409.
+- `DELETE /v1/hub/account` (signed): releases the handle and closes the
+  tunnel.
+- `GET /v1/hub/tunnel` (WebSocket): the lolad side of the pipe. See Tunnel.
+- `ANY /p/<handle>/v1/federation/<rest>`: the public side of the pipe.
+  - Only `GET` and `POST` are allowed (else 405). Bodies over 1 MB get 413.
+  - An unknown handle gets 404 `recipient_not_found`. A disabled handle gets
+    403 `provider_disabled`. An offline handle gets 503 `provider_offline`
+    with `Retry-After: 30`.
+  - The source IP is the connection's address. Behind a loopback or trusted
+    proxy (see Deploy) it is the rightmost `X-Forwarded-For` entry, the one
+    the proxy added.
+  - The tunnel has 12 s to answer, else 504.
+  - At most 32 requests in flight per tunnel, else 503.
+  - At most 300 requests per minute per handle and 600 per minute per source
+    IP, else 429.
+  - The hub does not check signatures here. The receiving lolad does.
+- Any other path gets 404.
+
+### Tunnel
+- **Opening:** The lolad opens `wss://<hub>/v1/hub/tunnel`.
+- **Authentication:** The first frame from the hub is `{type: "challenge",
+  nonce}`. The lolad answers `{type: "auth", handle, sig}`, with
+  `sig = ed25519("lolad-hub-tunnel." + <hub public URL> + "." + nonce)`.
+  Including the URL binds the signature to this hub. Then the hub sends
+  `{type: "ready", url}`. A bad signature, an unknown handle or a disabled
+  handle closes the connection with code 4401 or 4403.
+- **One tunnel per handle:** A new authenticated tunnel replaces the old one,
+  which is closed with code 4409. This covers restarts.
+- **Frames:** JSON text. Bodies are base64.
+  - Hub to lolad: `{type: "req", id, method, path, headers, body,
+    client_ip}`. `path` is `/v1/federation/<rest>` with the query string.
+  - Lolad to hub: `{type: "res", id, status, headers, body}`.
+  - Several requests can be in flight at once, matched by `id`.
+- **Forwarded headers:** Only an allowlist is passed through in each direction:
+  `Content-Type`, `X-AMP-Provider`, `X-AMP-Timestamp`, `X-AMP-Signature`, and
+  `Retry-After` on responses. Everything else is stripped, notably
+  `Tailscale-*` and `X-Forwarded-*`.
+- **Keepalive:** A ping every 30 s. After 90 s of silence the connection is
+  dropped.
+
+**Tunnel client** (`hub.Client`, in `internal/hub`, wired by the integrator):
+- **Inputs:** `hub.ClientOptions{HubURL, Handle, Signer, Handler, Peers,
+  OnPeerOnline, OnState}`. `Signer` wraps `fed.Engine.ProviderSign` and
+  `ProviderPublicKey`; the private key stays in fed. `Handler` is
+  `fed.Engine.Handler()` **only**, never the daemon mux, so nothing else of
+  lolad is reachable through the hub.
+- **Path check:** Before `Handler`, the client refuses any path outside
+  `/v1/federation/` itself, with 404.
+- **Requests:** It builds an `http.Request` with `RemoteAddr = client_ip:0`, so
+  fed's per-source pairing limit counts the real caller.
+- **Reconnects:** With backoff 1 s, 2 s, 5 s, 15 s, 30 s, then 60 s (with
+  jitter). The state is published for the UI.
+- **Presence:**
+  - The client sends `{type: "watch", handles: [...]}`, listing the handles of
+    peers whose `url` starts with `<hub>/p/` (from `fed.Engine.PeerURLs`). It
+    sends it after `ready`, then whenever the list changes. The list is
+    checked every 2 s, or at once on `Client.Refresh()`.
+  - The hub sends `{type: "online", handle}` when a watched handle's tunnel
+    becomes ready. It also sends one for each watched handle that is already
+    online when it receives a watch, so mail queued while this lolad was away
+    goes out at once.
+  - The client then calls `OnPeerOnline(<hub>/p/<handle>)`.
+- **Flushing queued mail:** `fed.Engine.RetryURL(url)` makes queued outbox
+  entries for peers with that URL due now. This is new and small. Without it,
+  mail queued while a peer was offline could wait up to an hour.
+
+### lolad side
+- **Membership file:** `<config dir>/hub.yaml` (0600, atomic writes):
+  `{url, handle, joined_at}`. It holds no secret, because the tunnel
+  authenticates with the provider key. `config.yaml` is not touched.
+- **URL:** While joined, the effective federation URL is `<url>/p/<handle>`,
+  over `federation.url` and `remote.public_url`. Leaving restores the
+  configured one (`fed.Engine.SetURL`).
+- **Wiring:** `internal/app/hub.go`. The tunnel runs for the life of
+  `App.Run`. `App.Info` adds `Hub` to the engine's info. `App` implements
+  `core.Hubber`, and the API and dashboard use it when the service has it.
+- **Status:** `core.FederationInfo` gains `Hub *HubStatus`
+  (`{url, handle, state: "connected"|"connecting"|"error"|"disabled", error,
+  since}`). `Problem` reports a hub that is unreachable or refusing.
+- **CLI:**
+  - `lolad hub join <hub-url> --handle <h>` reads the sign-up code (one line)
+    from stdin, never argv. It registers with the provider key, writes
+    `hub.yaml` and starts the tunnel. A lolad can be on one hub at a time;
+    joining another needs `leave` first.
+  - `lolad hub status`
+  - `lolad hub leave` closes the tunnel and releases the handle. Releasing is
+    best effort: an unreachable hub is recorded in an event, and the operator
+    can `rm` the handle. Then it removes `hub.yaml`. Peers keep the old URL and
+    their deliveries start failing, so tell them or unpair first.
+- **API:** `GET /api/hub` (`null` when not joined), `POST /api/hub/join
+  {url, handle, code}`, `DELETE /api/hub`. The code is never echoed.
+- **Dashboard:** The Connections page shows a "Hub" card between the
+  identity and pairing sections.
+  - Not joined: a join form (`POST /connections/hub/join`). The code field is a
+    password field and the code is never echoed. Errors show the hub's fixed
+    refusal message, for example "handle is taken (try "milo-2")".
+  - Joined: the hub, the handle, the status and the last error, with a leave
+    control that asks for confirmation (`POST /connections/hub/leave`).
+  - The invite flow works unchanged once the URL is set.
+- **Peers moving to the hub:** Peers paired before joining keep the old URL.
+  Pairing again with the same key and a new invite updates `url` and
+  `display` on both sides. The inviter takes the acceptor's URL from the
+  `pair` body, and the acceptor takes the inviter's from the response.
+
+### Deploy
+`deploy/hub/` contains:
+- A `Dockerfile` (with `Dockerfile.dockerignore`) for Coolify or any Docker
+  host: build from the repo root, a volume on `/var/lib/lolad-hub`, port 8095
+  behind the platform's TLS proxy.
+- A systemd unit (`lolad-hub.service`, an unprivileged user, state in
+  `/var/lib/lolad-hub`) and a Caddyfile snippet
+  (`hub.example.com { reverse_proxy 127.0.0.1:8095 }`).
+
+`serve` reads `LOLAD_HUB_PUBLIC_URL`, `LOLAD_HUB_LISTEN` (default
+`127.0.0.1:8095`), `LOLAD_HUB_DB` and `LOLAD_HUB_TRUSTED_PROXIES`. The client IP
+used for rate limits is the rightmost `X-Forwarded-For` entry only when the
+connection comes from loopback or a trusted proxy range (the Docker image
+trusts the private ranges); otherwise it is the connection's address.
+
+### Tests
+- **Hub:** `httptest` hub plus two in-process fed engines on temporary DBs, each
+  behind a tunnel client. Cover:
+  - Pairing through the hub.
+  - Delivery, receipt and directory requests.
+  - An offline peer getting 503, then the outbox flushing on `online`.
+  - Tunnel takeover.
+  - Path and header filtering.
+  - Rate limits.
+  - A disabled handle.
+- No real VPS or live daemon in tests.
 
 ## Windows (v4)
 

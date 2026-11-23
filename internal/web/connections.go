@@ -37,12 +37,15 @@ func (s *server) connectionData(r *http.Request) (connectionsView, error) {
 	ctx := r.Context()
 	v := connectionsView{Info: s.svc.Info(ctx)}
 	if h, ok := s.svc.(core.Hubber); ok {
-		v.HubAvailable = true
 		st, err := h.Hub(ctx)
 		if err != nil {
 			return v, err
 		}
 		v.Hub = st
+		// No public hub is deployed yet (ROADMAP M4): show the card only to
+		// someone who already joined one (`lolad hub join`), never a join form
+		// that needs an address and code nobody can give them.
+		v.HubAvailable = st != nil
 	}
 	cs, err := s.svc.Connections(ctx)
 	if err != nil {
@@ -286,6 +289,7 @@ func (s *server) hubJoin(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		v.Error, v.HubURL, v.HubHandle = msg, url, handle
+		v.HubAvailable = true // keep the attempted join on screen with its error
 		s.page(w, r, 422, "connections", layout{Title: "Connections", Data: v})
 	}
 	if url == "" || handle == "" || strings.TrimSpace(code) == "" {

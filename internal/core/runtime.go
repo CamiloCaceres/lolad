@@ -73,10 +73,13 @@ type Notifier interface {
 
 // HookEvent is what an agent's harness hook reports (through `lolad hook <event>`).
 type HookEvent struct {
-	Agent     string    `json:"agent"`
-	Event     string    `json:"event"` // session_start | prompt_submit | stop | notification | permission | session_end | pre_tool | post_tool
-	State     State     `json:"state"` // the state this event implies ("" = no change)
-	Detail    string    `json:"detail,omitempty"`
+	Agent  string `json:"agent"`
+	Event  string `json:"event"` // session_start | prompt_submit | stop | stop_failure | notification | permission | session_end | pre_tool | post_tool
+	State  State  `json:"state"` // the state this event implies ("" = no change)
+	Detail string `json:"detail,omitempty"`
+	// Error is the harness's error type for stop_failure (Claude Code's
+	// StopFailure: rate_limit, authentication_failed, billing_error, …).
+	Error     string    `json:"error,omitempty"`
 	SessionID string    `json:"session_id,omitempty"`
 	Seq       int64     `json:"seq"` // monotonic per agent process, for ordering
 	At        time.Time `json:"at"`

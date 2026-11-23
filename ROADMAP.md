@@ -108,7 +108,7 @@ daemon if absent, offline page, hide on close, tray with Open / Open in Browser 
 Start / Reload / Quit, single instance, standard Edit menu, download and
 external-link bridge.
 
-- [x] Daemon discovery and start, version banner; [ ] port conflict handling
+- [x] Daemon discovery and start, version banner; [x] port conflict handling
 - [x] Main window, close vs quit, Dock behavior; [ ] navigation policy (no hook in Wails v3.1.0)
 - [x] Webview parity fallbacks from S2
 - [x] Tray / menu bar with state from `/api/stream`
@@ -152,9 +152,61 @@ the terminal is only a snapshot viewer.
 
 Measure first: if the bundled tmux and psmux prove reliable, this can wait.
 
+### M4 — Hub: federation without a shared network
+
+Spec: SPEC.md "Hub (v5)". A small Go relay on our VPS (`lolad-hub`) that lolads
+dial out to. A friend on another network can then pair and message without a
+tailnet. The hub is a signed-request pipe: it stores no mail and changes
+nothing about trust. It is invite-only to start.
+
+- [x] `internal/hub` server: accounts, invites, `/v1/hub/register`, tunnel,
+      `/p/<handle>/v1/federation/*` forwarding, limits, admin CLI
+- [x] `cmd/lolad-hub` binary; `deploy/hub/` Dockerfile (Coolify) and systemd unit + Caddyfile
+- [ ] Choose the hub domain; deploy on the VPS
+- [x] Tunnel client (`hub.Client`) with reconnect and presence (`watch` / `online`)
+- [x] `fed.Engine.RetryURL`; re-pairing updates a peer's `url`
+- [x] `hub.yaml` membership, `FederationInfo.Hub`, `lolad hub join|status|leave`,
+      `/api/hub`
+- [x] Connections page Hub card (needs a visual review in the browser)
+- [~] Two-lolad e2e through the real hub: passes with both on one machine
+      (real binaries, loopback). Still to do: two different networks through
+      the deployed hub
+
+### Later — public hub
+
+The hub opens to anyone. Needed first:
+
+- [ ] Self-serve sign-up: an emailed code, as Crabmail does, in place of
+      operator invites
+- [ ] Globally unique provider names (`<handle>.<hub domain>`) and a resolve
+      endpoint
+- [ ] Per-account quotas, abuse reports, and a way to suspend an account
+- [ ] End-to-end encryption: payloads sealed to the recipient provider key, so
+      the hub cannot read them
+- [ ] Optional AMP interop (`/v1/route`, `/.well-known/agent-messaging.json`)
+      with other providers such as Crabmail and AI Maestro
+- [ ] A terms of service and a privacy note for the hub
+
+### Later — renting an agent
+
+Not in v1. A share becomes a **lease**: a friend can talk to one of our agents
+until it expires or we revoke it.
+
+- [ ] Lease fields on a share: `expires_at` and `revoked_at`. Expiry and revoke
+      only, with no quotas or metering at first.
+- [ ] The owner's lolad enforces a lease, since it is the authority. The hub
+      also stops routing for a revoked lease.
+- [ ] `lolad connect lend <provider> <agent> --until <time>`, `lolad connect
+      revoke …`; a dashboard control with the remaining time
+- [ ] Only a dedicated rental agent can be lent: no credentials, no personal
+      memory. Credentials are added one at a time, deliberately. Remote mail
+      stays marked external, because the renter is a prompt-injection source.
+- [ ] The renter can message the agent only. They cannot see its terminal,
+      files or output.
+
 ### Toward 1.0 (cross-cutting)
 
-- [ ] Config and state schema versions with forward-only migrations (needed by M2.6)
+- [x] Config and state schema versions with forward-only migrations (needed by M2.6)
 - [ ] API versioning so the Android client and daemon can update independently
 - [ ] Local API hardening for a general audience: the loopback dashboard has no
       auth and relies on cross-origin protection; consider a per-install token
@@ -170,5 +222,9 @@ Measure first: if the bundled tmux and psmux prove reliable, this can wait.
 3. Apple Developer and Windows signing accounts: who owns them, and in whose
    name?
 4. Windows arm64: ship at launch or later (psmux arm64 is unverified)?
-5. Bundle ID / identifier (`dev.caceres.lolad` is a placeholder) and the
-   product name in menus ("Lolad").
+5. ~~Bundle ID / identifier and the product name in menus.~~ Decided
+   2026-11-23: the bundle ID stays `dev.caceres.lolad` (app
+   `dev.caceres.lolad.desktop`, LaunchAgent label `dev.caceres.lolad`) and
+   the product name is "Lolad". Changing the ID later would orphan the login
+   item and reset notification permission on every install, so treat it as
+   permanent.

@@ -70,7 +70,8 @@ long-running assistants:
 **Mac app (easiest):** download `Lolad.dmg` from the
 [latest release](https://github.com/CamiloCaceres/lolad/releases/latest) and
 follow the [install guide](docs/install.md). The app is not notarized yet, so
-the first open needs right-click, Open. A Windows app is not released yet.
+the first open needs System Settings, Privacy & Security, Open Anyway (the guide
+shows how). A Windows app is not released yet.
 
 **From source:** requires Go 1.26+, tmux (psmux on Windows), a
 [lolabot](https://github.com/23blocks-OS/lolabot) checkout for creating new
@@ -184,6 +185,7 @@ lolad msg read <id>
 lolad msg send researcher "Review" "The report is ready"
 lolad msg reply <id> "Here is the result"
 lolad msg tell-user ask "Publish the report?" --option Yes --option No
+lolad msg tell-user ask "I need your OpenAI key" --secret OPENAI_API_KEY
 lolad msg who
 ```
 

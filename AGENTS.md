@@ -15,6 +15,7 @@ different packages:
 | integrate (later) | `main.go`, `internal/app`, `internal/api`, `internal/cli` |
 | desktop | `desktop/` (own Go module, Wails app), `.github/workflows/release.yml`, `docs/install.md` |
 | setup | `internal/setup` (new), onboarding screens in `internal/web` (`welcome*`) |
+| federation | `internal/fed`, `internal/hub` (new), `cmd/lolad-hub` (new), `deploy/hub/` (new) |
 | coordinator | `internal/core`, `internal/store`, `SPEC.md`, `AGENTS.md`, `go.mod` |
 
 Rules:

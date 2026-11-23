@@ -1,28 +1,57 @@
-/* Settings is a workspace: one section switcher, then the task at full width. */
+/* Assistant settings: back to the assistant, a pill tab row, then one task
+   at a time in plain words. Raw files live under Instructions & memory. */
 .page-settings { max-width: 1440px; }
-.page-settings .set-layout { display: block; }
-.page-settings .set-nav { position: static; flex-direction: row; gap: 20px; overflow-x: auto; border-bottom: 1px solid var(--line); margin-bottom: 24px; padding: 0; border-radius: 0; scrollbar-width: thin; }
-.page-settings .set-nav a { min-height: 46px; padding: 0 2px; border-radius: 0; border-bottom: 2px solid transparent; }
-.page-settings .set-nav a[aria-current="page"] { background: transparent; border-color: var(--ink); }
+.set-back { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; margin-bottom: 14px; color: var(--ink-2); text-decoration: none; font-weight: 600; }
+.set-back:hover { color: var(--ink); }
+.set-back .i { width: 16px; height: 16px; }
+.page-settings .set-head { margin-bottom: 24px; }
+.page-settings .set-head .agent-title { gap: 22px; }
+.page-settings .set-head h1 { font: 200 clamp(2.25rem, 3.5vw, 3rem)/1.05 var(--display); letter-spacing: -0.03em; }
+.page-settings .set-head .agent-role { margin-top: 8px; }
+.page-settings .set-head-sub { color: var(--ink-2); font-weight: 400; }
+.page-settings .set-dir { margin-top: 40px; white-space: normal; overflow-wrap: anywhere; }
+.page-settings .set-nav { position: static; display: flex; flex-direction: row; flex-wrap: wrap; gap: 8px; margin: 0 0 32px; padding: 0; }
+.page-settings .set-nav a { min-height: 40px; padding: 0 18px; border-radius: 999px; border: 1px solid var(--line-2); background: rgba(255, 255, 255, 0.02); color: var(--ink-2); font-weight: 600; font-size: var(--t-sm); }
+.page-settings .set-nav a:hover { background: rgba(255, 255, 255, 0.06); color: var(--ink); }
+.page-settings .set-nav a[aria-current="page"] { border-color: var(--action); background: rgba(122, 162, 255, 0.14); color: var(--ink); }
 .page-settings .set-panel { max-width: 1040px; }
 .page-settings .set-panel.is-files { max-width: none; }
-.page-settings .set-head { margin-bottom: 16px; }
-.page-settings .set-section-title { margin-top: 24px; padding-bottom: 12px; font-size: var(--t-lg); }
-.page-settings .set-row { grid-template-columns: minmax(180px, 0.75fr) minmax(0, 2fr); gap: 24px; padding: 22px 0; }
-.page-settings .models { grid-template-columns: repeat(2, minmax(0, 1fr)); border: none; gap: 8px; overflow: visible; }
-.page-settings .model { border: 1px solid var(--line); border-radius: var(--r); grid-template-columns: 16px minmax(0, 1fr); align-content: start; min-height: 76px; }
+.page-settings .set-panel-head { margin-bottom: 20px; }
+.page-settings .set-panel-head h2 { font: 300 1.75rem/1.2 var(--display); letter-spacing: -0.02em; }
+.page-settings .set-panel-head p { color: var(--ink-2); margin-top: 6px; }
+.page-settings .set-section-title { margin-top: 28px; padding-bottom: 12px; font: 300 1.35rem/1.25 var(--display); letter-spacing: -0.015em; }
+.page-settings .set-row { grid-template-columns: minmax(200px, 0.8fr) minmax(0, 2fr); align-items: start; gap: 28px; padding: 26px 0; border-top-color: var(--line); }
+.page-settings .set-label h3 { font-weight: 600; }
+.page-settings .set-label p { color: var(--muted); }
+.page-settings .models { grid-template-columns: repeat(2, minmax(0, 1fr)); border: none; gap: 10px; overflow: visible; border-radius: 0; }
+.page-settings .model { border: 1px solid var(--line-2); border-radius: 16px; background: rgba(255, 255, 255, 0.02); grid-template-columns: 18px minmax(0, 1fr); align-content: start; min-height: 80px; padding: 14px 16px; }
+.page-settings .model input[type=radio] { accent-color: var(--action); }
+.page-settings .model-name { font-weight: 600; }
 .page-settings .model-id { grid-column: 2; grid-row: auto; overflow-wrap: anywhere; }
-.page-settings .model:has(input:checked) { border-color: var(--ink-2); }
+.page-settings .model:has(input:checked) { border-color: var(--action); background: rgba(122, 162, 255, 0.08); }
 .page-settings .model.is-custom { grid-column: 1 / -1; min-height: auto; }
 .page-settings .model.is-custom > input:not([type=radio]) { grid-column: 2; }
 .page-settings .set-count { font-size: var(--t-xs); color: var(--muted); font-weight: 400; }
-.page-settings .skill-filter { max-width: none; min-height: 40px; }
-.page-settings .skill { padding: 14px; }
+.page-settings .skill-filter { max-width: none; border-radius: 999px; }
+.page-settings .skills { border: 0; border-radius: 0; display: grid; gap: 8px; }
+.page-settings .skill { padding: 14px 18px; border: 1px solid var(--line); border-radius: 16px; background: var(--card); }
+.page-settings .skill-name { font-family: var(--font); font-weight: 600; }
 .page-settings .skill-desc { max-width: 65ch; }
-.page-settings .secret-add { background: transparent; border-top: 1px solid var(--line); padding: 24px 0; border-radius: 0; }
+.page-settings .secrets { display: grid; gap: 10px; border: 0; }
+.page-settings .secret { padding: 18px 20px; border: 1px solid var(--line); border-radius: 18px; background: var(--card); }
+.page-settings .secret-key { font-size: var(--t-sm); }
+.page-settings .secret-state.is-set { color: var(--st-idle-text, var(--ink-2)); }
+.page-settings .secret-add { background: transparent; border-top: 1px solid var(--line); margin-top: 28px; padding: 26px 0; border-radius: 0; }
+.page-settings .secret-add h3 { font: 300 1.35rem/1.25 var(--display); margin-bottom: 14px; }
+.page-settings .accounts { display: grid; gap: 10px; }
+.page-settings .acct { padding: 18px 20px; border: 1px solid var(--line); border-radius: 18px; background: var(--card); }
+.page-settings .acct-addr { font-weight: 600; }
+.page-settings .pending { border-color: var(--you-line); background: var(--you-wash); border-radius: 18px; padding: 14px 14px 14px 18px; }
+.page-settings .pending-icon { background: rgba(255, 181, 71, 0.16); color: var(--you-text); }
+.page-settings .set-actions { background: linear-gradient(180deg, rgba(7, 8, 15, 0), rgba(7, 8, 15, 0.92) 30%); border-top: 0; padding: 18px 0; }
 .page-settings .files { grid-template-columns: 300px minmax(0, 1fr); gap: 20px; align-items: stretch; }
 .page-settings .file-list { position: static; max-height: max(460px, calc(100dvh - 290px)); overflow: auto; padding: 0 12px 12px 0; scrollbar-width: thin; border-right: 1px solid var(--line); }
-.page-settings .file-search { position: sticky; top: 0; z-index: 1; background: var(--bg); display: grid; gap: 8px; padding-bottom: 16px; }
+.page-settings .file-search { position: sticky; top: 0; z-index: 1; background: #090A14; display: grid; gap: 8px; padding-bottom: 16px; }
 .page-settings .file-search > label:first-child { display: flex; align-items: center; justify-content: space-between; font-weight: 600; }
 .page-settings .file-search kbd { color: var(--muted); font-weight: 400; border: 1px solid var(--line); padding: 0 6px; border-radius: 4px; }
 .page-settings .file-search-row { display: flex; gap: 6px; }
@@ -44,8 +73,6 @@
 .page-settings .editor-path { white-space: normal; overflow-wrap: anywhere; }
 .page-settings textarea.editor-text { flex: 1; min-height: 160px; resize: none; }
 .page-settings .md-preview { flex: 1; min-height: 160px; max-width: none; overflow: auto; }
-.page-settings .pending { border-color: var(--you-line); background: var(--you-wash); }
-.page-settings .set-actions { background: var(--bg); }
 .page-settings :is(input, textarea) { caret-color: var(--ink); }
 .page-settings ::selection { background: var(--bg-4); color: var(--ink); }
 @media (max-width: 900px) {
@@ -54,8 +81,8 @@
 }
 @media (max-width: 640px) {
   .page-settings .set-head-actions { display: none; }
-  .page-settings .set-nav { gap: 18px; margin-bottom: 20px; }
-  .page-settings .set-nav .i { display: none; }
+  .page-settings .set-nav { flex-wrap: nowrap; overflow-x: auto; margin: 0 -20px 24px; padding: 0 20px; scrollbar-width: none; }
+  .page-settings .set-nav a { white-space: nowrap; }
   .page-settings .set-row { grid-template-columns: minmax(0, 1fr); gap: 14px; padding: 20px 0; }
   .page-settings .set-label p { max-width: none; }
   .page-settings .models { grid-template-columns: minmax(0, 1fr); }

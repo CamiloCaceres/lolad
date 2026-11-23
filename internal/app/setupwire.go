@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"github.com/CamiloCaceres/lolad/internal/winproc"
 	"os"
 	"os/exec"
@@ -50,7 +51,25 @@ func (execService) run(ctx context.Context, args ...string) ([]byte, error) {
 
 func (s execService) Install(ctx context.Context) error {
 	_, err := s.run(ctx, "install", "--json")
-	return err
+	return serviceError(err)
+}
+
+// serviceError turns a failed `lolad service` run into its own message (the
+// last line it wrote to stderr) instead of a bare "exit status 1".
+func serviceError(err error) error {
+	var x *exec.ExitError
+	if !errors.As(err, &x) {
+		return err
+	}
+	lines := strings.Split(strings.TrimSpace(string(x.Stderr)), "\n")
+	msg := strings.TrimSpace(lines[len(lines)-1])
+	for _, p := range []string{"lolad: ", "error: ", "Error: "} {
+		msg = strings.TrimPrefix(msg, p)
+	}
+	if msg == "" {
+		return err
+	}
+	return errors.New(msg)
 }
 
 func (s execService) Status(ctx context.Context) (installed, running bool, err error) {

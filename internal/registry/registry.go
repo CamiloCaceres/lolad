@@ -90,12 +90,23 @@ func LoadConfig(path string) (Config, error) {
 	if e != nil {
 		return c, e
 	}
+	// The version is read on its own first: a newer layout may not even
+	// decode into this Config.
+	var head struct {
+		Version int `yaml:"version"`
+	}
+	if e = yaml.Unmarshal(b, &head); e != nil {
+		return c, YAMLError(path, e)
+	}
+	if head.Version > ConfigVersion {
+		return c, fmt.Errorf("%s was written by a newer version of Lolad (config version %d; this version understands up to %d). Update Lolad, then start it again", path, head.Version, ConfigVersion)
+	}
 	// An explicit config is an opt-in discovery boundary. Only a missing
 	// config inherits the built-in search directory.
 	c.AgentsDirs = nil
 	e = yaml.Unmarshal(b, &c)
 	if e != nil {
-		return c, e
+		return c, YAMLError(path, e)
 	}
 	if c.Federation.URL == "" {
 		c.Federation.URL = c.Remote.PublicURL
@@ -194,7 +205,7 @@ func ReadAgent(dir string) (core.Agent, error) {
 		Runtime *core.Runtime `yaml:"runtime"`
 	}
 	if e = yaml.Unmarshal(b, &f); e != nil {
-		return core.Agent{}, e
+		return core.Agent{}, YAMLError(filepath.Join(abs, "lolabot.yaml"), e)
 	}
 	if f.Runtime == nil {
 		return core.Agent{}, core.ErrNotFound

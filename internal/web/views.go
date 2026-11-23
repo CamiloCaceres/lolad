@@ -8,7 +8,9 @@ import (
 	"path"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -33,6 +35,11 @@ func funcs(s *server) template.FuncMap {
 		"initials":      initials,
 		"rich":          rich,
 		"markdown":      markdown, // v3 inbox messages use the full safe Markdown renderer.
+		"chatmd":        chatMarkdown,
+		"adminCmd":      adminCommand,
+		"safeLink":      core.SafeLinkURL,
+		"linkHost":      linkHost,
+		"valuesText":    valuesText,
 		"excerpt":       excerpt,
 		"short":         shortID,
 		"attention":     attention,
@@ -59,7 +66,12 @@ func funcs(s *server) template.FuncMap {
 			}
 			return ""
 		},
-		"bytes": bytesLabel,
+		"bytes":        bytesLabel,
+		"hue":          hue,      // orb identity colour class, h0-h5
+		"greeting":     greeting, // "Good morning" by local time of day
+		"firstName":    firstName,
+		"stateWord":    stateWord, // plain-words state label
+		"deliveryWord": deliveryWord,
 		"stateOf": func(a *core.AgentStatus) core.State {
 			if a == nil {
 				return ""
@@ -67,6 +79,118 @@ func funcs(s *server) template.FuncMap {
 			return a.State
 		},
 	}
+}
+
+// hue picks one of the six identity hues for an assistant's orb from its
+// name, so the same assistant keeps its colour everywhere.
+// hueIndex is a name's own identity hue: FNV-1a over the lowercased name.
+// static/new.js computes the same for its live preview.
+func hueIndex(name string) int {
+	var h uint32 = 2166136261
+	for _, b := range []byte(strings.ToLower(name)) {
+		h = (h ^ uint32(b)) * 16777619
+	}
+	return int(h % 6)
+}
+
+// hueTable spreads the six identity hues across the current team, so ten
+// assistants never end up five of one colour. Names are placed in sorted
+// order; each keeps its own hue unless that hue is already full.
+var hueTable atomic.Pointer[map[string]string]
+
+func setRoster(list []core.AgentStatus) {
+	names := make([]string, 0, len(list))
+	for _, a := range list {
+		d := a.Display
+		if d == "" {
+			d = a.Name
+		}
+		names = append(names, strings.ToLower(d))
+	}
+	slices.Sort(names)
+	names = slices.Compact(names)
+	limit := (len(names) + 5) / 6
+	var count [6]int
+	t := make(map[string]string, len(names))
+	for _, n := range names {
+		h := hueIndex(n)
+		for count[h] >= limit {
+			h = (h + 1) % 6
+		}
+		count[h]++
+		t[n] = "h" + strconv.Itoa(h)
+	}
+	hueTable.Store(&t)
+}
+
+// hue is the orb colour class (h0-h5) for an assistant's display name.
+func hue(name string) string {
+	if t := hueTable.Load(); t != nil {
+		if h, ok := (*t)[strings.ToLower(name)]; ok {
+			return h
+		}
+	}
+	return "h" + strconv.Itoa(hueIndex(name))
+}
+
+// deliveryWord turns an Activity delivery label into plain words.
+func deliveryWord(d string) string {
+	switch d {
+	case "Queued":
+		return "On the way"
+	case "Notified", "Delivered":
+		return "Delivered"
+	case "Awaiting approval":
+		return "Held for you"
+	case "Denied", "Blocked":
+		return "Stopped"
+	case "Failed":
+		return "Not delivered"
+	}
+	return d
+}
+
+func greeting() string {
+	switch h := time.Now().Hour(); {
+	case h < 5 || h >= 18:
+		return "Good evening"
+	case h < 12:
+		return "Good morning"
+	}
+	return "Good afternoon"
+}
+
+func firstName(name string) string {
+	if f := strings.Fields(name); len(f) > 0 {
+		return f[0]
+	}
+	return name
+}
+
+// stateWord is the plain-words name of a state, for people who don't know
+// what "idle" or "crashed" means for a program.
+func stateWord(st core.State) string {
+	switch st {
+	case core.StateIdle:
+		return "Ready"
+	case core.StateBusy:
+		return "Working"
+	case core.StateWaiting:
+		return "Needs you"
+	case core.StateStopped:
+		return "Asleep"
+	case core.StateStarting:
+		return "Waking up"
+	case core.StateCrashed:
+		return "Restarting"
+	case core.StateFailed:
+		return "Can't start"
+	case core.StateUnknown:
+		return "Not sure"
+	case core.StatePaused:
+		return "Paused"
+	}
+	return string(st)
 }
 
 func dict(kv ...any) (map[string]any, error) {

@@ -1,14 +1,14 @@
 {{define "content"}}<div class="page">
   <header class="page-head">
     <div>
-      <h1 class="page-title">Agents</h1>
-      <p class="page-sub">Check current work, spot a problem, and get an agent moving again.</p>
+      <h1 class="page-title">Assistants</h1>
+      <p class="page-sub">{{with .Data}}{{if not .Agents}}Nobody here yet.{{else if .NeedsAttention}}{{plural .Total "assistant" "assistants"}}. {{plural .NeedsAttention "needs" "need"}} a look.{{else}}{{plural .Total "assistant" "assistants"}}, all fine.{{end}}{{end}}</p>
     </div>
-    {{if .Data.Agents}}<div class="page-actions"><a class="btn" href="/new">{{template "icon" "plus"}}<span>New agent</span></a></div>{{end}}
+    {{if .Data.Agents}}<div class="page-actions"><a class="btn btn-primary" href="/new">{{template "icon" "plus"}}<span>New assistant</span></a></div>{{end}}
   </header>
   {{if .Data.Agents}}<form id="fleet-filters" class="roster-filters" method="get" action="/agents" hx-get="/fragments/fleet" hx-target="#fleet" hx-swap="outerHTML" hx-trigger="submit, input changed delay:250ms from:input, change from:select">
- <label for="agent-search">Find an agent<input id="agent-search" type="search" name="q" value="{{.Data.Query}}" placeholder="Name, role, model or team" autocomplete="off"></label>
- <label for="agent-filter">Show<select id="agent-filter" name="status"><option value="">All agents</option><option value="attention"{{if eq .Data.Filter "attention"}} selected{{end}}>Needs attention</option></select></label><button class="btn" type="submit">Filter</button>
+ <label for="agent-search"><span class="sr-only">Find an assistant</span><input id="agent-search" type="search" name="q" value="{{.Data.Query}}" placeholder="Find an assistant by name, job or team" autocomplete="off"></label>
+ <label for="agent-filter"><span class="sr-only">Show</span><select id="agent-filter" name="status"><option value="">Everyone</option><option value="attention"{{if eq .Data.Filter "attention"}} selected{{end}}>Needs a look</option></select></label><button class="btn btn-sm" type="submit">Show</button>
  </form>{{end}}
  {{template "fleet" .Data}}
 </div>{{end}}

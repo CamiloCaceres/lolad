@@ -1,20 +1,23 @@
 {{define "content"}}<div class="page page-agent">
-  <nav class="crumbs" aria-label="Breadcrumb"><a href="/agents">Agents</a>{{template "icon" "next"}}<span aria-current="page">{{.Data.A.Display}}</span></nav>
+  <nav class="crumbs" aria-label="Breadcrumb"><a href="/agents">Assistants</a>{{template "icon" "next"}}<span aria-current="page">{{.Data.A.Display}}</span></nav>
   {{template "agent-head" .Data}}
-  <nav class="agent-sections" aria-label="Agent sections"><a href="#h-activity">Recent activity</a><a href="#h-config">Configuration</a><a href="#term-panel">Live terminal</a></nav>
-  <section class="agent-shared" id="agent-shared" hx-get="/agents/{{.Data.A.Name}}" hx-select="#agent-shared" hx-target="this" hx-disinherit="hx-select hx-target hx-swap hx-push-url" hx-swap="outerHTML" hx-trigger="lolad:federation from:body delay:500ms" hx-push-url="false"><h2>Shared with</h2>{{range .Data.Shared}}<p><strong>{{.Display}}'s lolad</strong>{{if .Paused}} · Paused{{end}}</p>{{range .Shares}}<p>{{if .Remote}}Pre-approved: {{range .Remote}}<span>{{.}} </span>{{end}}{{else}}Anyone there may ask to message this agent. Each new sender needs your approval.{{end}}</p>{{end}}{{range .Grants}}<p class="muted">Approved sender: {{or .RemoteDisplay .Remote}}</p>{{end}}{{else}}<p class="muted">This agent is not shared with another lolad.</p>{{end}}<a href="/connections">Manage connections and sharing</a></section>
-  {{template "terminal" .Data}}
   <div class="agent-grid">
     <section class="panel" aria-labelledby="h-activity">
-      <header class="panel-head"><h2 id="h-activity">Recent activity</h2><span class="panel-note">Turns, triggers, mail &amp; lifecycle</span></header>
+      <header class="panel-head"><h2 id="h-activity">Recent activity</h2><span class="panel-note">What {{.Data.A.Display}} has been doing</span></header>
       {{template "agent-events" .Data}}
     </section>
     <div class="agent-side">
-      <section class="panel" aria-labelledby="h-config">
-        <header class="panel-head"><h2 id="h-config">Configuration</h2><a class="panel-link" href="/agents/{{.Data.A.Name}}/settings">{{template "icon" "edit"}}<span>Edit settings</span></a></header>
-        {{template "agent-facts" .Data}}
- <p class="panel-foot"><a href="/traffic?peer={{.Data.A.Name}}">All mail traffic {{template "icon" "next"}}</a></p>
-      </section>
+      {{template "agent-about" .Data}}
+      <section class="panel agent-shared" id="agent-shared" aria-labelledby="h-shared" hx-get="/agents/{{.Data.A.Name}}" hx-select="#agent-shared" hx-target="this" hx-disinherit="hx-select hx-target hx-swap hx-push-url" hx-swap="outerHTML" hx-trigger="lolad:federation from:body delay:500ms" hx-push-url="false"><header class="panel-head"><h2 id="h-shared">Shared with</h2></header>{{range .Data.Shared}}<p><strong>{{.Display}}'s lolad</strong>{{if .Paused}} · Paused{{end}}</p>{{range .Shares}}<p class="muted">{{if .Remote}}Pre-approved: {{range .Remote}}<span>{{.}} </span>{{end}}{{else}}Anyone there may ask to write to {{$.Data.A.Display}}. You approve each new person.{{end}}</p>{{end}}{{range .Grants}}<p class="muted">Approved sender: {{or .RemoteDisplay .Remote}}</p>{{end}}{{else}}<p class="muted">Only you and your own assistants can reach {{.Data.A.Display}}.</p>{{end}}<p class="panel-foot"><a href="/connections">Sharing settings {{template "icon" "next"}}</a></p></section>
     </div>
   </div>
+  <section class="agent-advanced" aria-labelledby="h-advanced">
+    <h2 id="h-advanced" class="eyebrow">Advanced</h2>
+    {{template "terminal" .Data}}
+    <details class="panel agent-tech">
+      <summary><span id="h-config">Configuration</span><span class="muted">Folder, address, harness and every setting</span>{{template "icon" "down"}}</summary>
+      {{template "agent-facts" .Data}}
+      <p class="panel-foot"><a href="/agents/{{.Data.A.Name}}/settings">Edit settings {{template "icon" "next"}}</a> · <a href="/traffic?peer={{.Data.A.Name}}">All of its messages {{template "icon" "next"}}</a></p>
+    </details>
+  </section>
 </div>{{end}}

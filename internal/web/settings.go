@@ -20,11 +20,11 @@ import (
 // ever puts an env value, or a password, into a response.
 
 var settingsTabs = []settingsTab{
-	{"runtime", "Model & runtime", "cpu"},
+	{"runtime", "Basics", "sliders"},
 	{"skills", "Skills", "puzzle"},
-	{"secrets", "Secrets", "key"},
-	{"files", "Files", "file"},
+	{"secrets", "Keys & passwords", "key"},
 	{"email", "Email", "mail"},
+	{"files", "Instructions & memory", "file"},
 }
 
 type settingsTab struct{ Key, Label, Icon string }

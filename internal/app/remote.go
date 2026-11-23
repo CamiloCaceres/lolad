@@ -186,8 +186,34 @@ func harden(next http.Handler, remote bool, logger *slog.Logger) http.Handler {
 			logger.Info("request", "method", r.Method, "path", r.URL.Path, "status", status, "duration", time.Since(start), "device", id)
 		}()
 		rw.Header().Set("X-Content-Type-Options", "nosniff")
+		// The local listener answers only to loopback names. Without this a web
+		// page could rebind its own domain to 127.0.0.1 (DNS rebinding) and pass
+		// the same-origin checks below with its own Host.
+		if !remote && !loopbackHost(r.Host) {
+			http.Error(rw, "forbidden host", http.StatusForbidden)
+			return
+		}
 		next.ServeHTTP(rw, r)
 	})
+}
+
+// loopbackHost reports whether a request's Host names this machine's loopback
+// interface: localhost, 127.0.0.0/8 or ::1, with or without a port. An empty
+// Host (HTTP/1.0, in-process callers) is allowed.
+func loopbackHost(hostport string) bool {
+	if hostport == "" {
+		return true
+	}
+	h := hostport
+	if host, _, err := net.SplitHostPort(hostport); err == nil {
+		h = host
+	}
+	h = strings.TrimSuffix(strings.Trim(h, "[]"), ".")
+	if strings.EqualFold(h, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(h)
+	return ip != nil && ip.IsLoopback()
 }
 
 // setupService avoids a typed-nil interface when onboarding is off.

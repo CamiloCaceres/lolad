@@ -416,27 +416,52 @@ func isTerminal(f *os.File) bool {
 func serve(parent context.Context, log io.Writer) error {
 	ctx, cancel := signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	a, e := app.New(ctx, "")
+	// The dashboard port is settled before the app is built: when it moves
+	// to a free port (listenLocal), the app must read the saved address.
+	cfgPath := registry.ConfigPath()
+	c, e := registry.LoadConfig(cfgPath)
 	if e != nil {
+		return e
+	}
+	if e = app.ValidateListeners(c.Listen, c.Remote.Listen, c.Remote.PublicURL); e != nil {
+		return e
+	}
+	var local net.Listener
+	if c.Listen != "" {
+		if local, e = listenLocal(cfgPath, c.Listen, log, fallbackPorts(), loladOnPort); e != nil {
+			return e
+		}
+	}
+	a, e := app.New(ctx, cfgPath)
+	if e != nil {
+		if local != nil {
+			local.Close()
+		}
 		return e
 	}
 	defer a.Close()
 	if e = app.ValidateListeners(a.Config.Listen, a.Config.Remote.Listen, a.Config.Remote.PublicURL); e != nil {
+		if local != nil {
+			local.Close()
+		}
 		return e
 	}
 	logger := slog.New(slog.NewTextHandler(log, nil))
 	var servers []*http.Server
 	var listeners []net.Listener
-	for _, addr := range []string{a.Config.Listen, a.Config.Remote.Listen} {
+	for i, addr := range []string{c.Listen, a.Config.Remote.Listen} {
 		if addr == "" {
 			continue
 		}
-		listener, err := net.Listen("tcp", addr)
-		if err != nil {
-			for _, l := range listeners {
-				l.Close()
+		listener := local
+		if i == 1 {
+			var err error
+			if listener, err = net.Listen("tcp", addr); err != nil {
+				for _, l := range listeners {
+					l.Close()
+				}
+				return err
 			}
-			return err
 		}
 		listeners = append(listeners, listener)
 		remote := len(servers) > 0

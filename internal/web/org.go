@@ -454,33 +454,46 @@ func orgExplanation(org core.Org, d core.Decision) string {
 	if _, err := fmt.Sscanf(d.Reason, "rule %d", &n); err == nil && n > 0 && n <= len(org.Rules) {
 		r := org.Rules[n-1]
 		if r.Note != "" {
-			return fmt.Sprintf("Exception %d: %s", n, r.Note)
+			return fmt.Sprintf("Rule %d: %s", n, r.Note)
 		}
-		return fmt.Sprintf("Exception %d is the first matching rule.", n)
+		return fmt.Sprintf("Rule %d decides this.", n)
 	}
 	switch {
 	case strings.HasPrefix(d.Reason, "system"):
-		return "The system may always send."
+		return "lolad itself can always send."
 	case strings.Contains(d.Reason, "user_to_agents"):
 		if d.Allow {
-			return "Your access to agents allows this."
+			return "You can message your assistants."
 		}
-		return "Your access to agents excludes this recipient."
+		return "Your settings don’t let you message this one."
 	case strings.Contains(d.Reason, "agents_to_user"):
 		if d.Allow {
-			return "Agent access to you allows this."
+			return "Assistants can message you."
 		}
-		return "Agent access to you excludes this sender."
+		return "Your settings don’t let this one message you."
 	case strings.HasPrefix(d.Reason, "vertical"):
-		return "Their head–member or direct reporting line allows this."
+		return "Same team, and one of them leads it."
 	case strings.Contains(d.Reason, "open"):
-		return "Members of this open team may talk directly."
+		return "Same team. They can talk to each other."
 	case strings.Contains(d.Reason, "independents"):
 		if d.Allow {
-			return "Independent agents may talk with everyone."
+			return "Assistants on their own may talk with everyone."
 		}
-		return "An agent is independent; agent access needs an exception."
+		return "One of them isn’t in a team, so it needs a rule."
 	default:
-		return "No direct reporting line, open team or exception connects them."
+		return "Not on the same team, and no rule connects them."
 	}
+}
+
+// SenderDisplay names the chosen sender in plain words for the access heading.
+func (v orgView) SenderDisplay() string {
+	for _, p := range v.People {
+		if p.Name == v.Sender {
+			if p.Kind == "user" {
+				return "you"
+			}
+			return p.Display
+		}
+	}
+	return v.Sender
 }

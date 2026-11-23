@@ -1,11 +1,13 @@
-/* Remote login: standalone, with no authenticated navigation or live requests. */
-.login-page { min-height:100dvh; display:grid; place-items:center; padding:24px; background:var(--bg); color:var(--ink); }
-.login-panel { width:100%; max-width:400px; }
-.login-brand { font-size:20px; font-weight:650; color:inherit; text-decoration:none; }
-.login-panel h1 { font-size:26px; line-height:1.2; margin:40px 0 16px; letter-spacing:-.6px; }
-.login-panel p { line-height:1.6; color:var(--muted); }
-.login-panel form { display:grid; gap:12px; margin:28px 0; }
-.login-panel input { width:100%; min-height:44px; font-size:16px; }
-.login-panel button { min-height:44px; justify-content:center; }
-.login-panel .login-note { font-size:12px; }
-.login-panel .login-error { padding:12px; border:1px solid currentColor; border-radius:6px; color:var(--ink); }
+/* Sign in on a phone or tablet: standalone, no navigation or live requests. */
+.login-page { min-height: 100dvh; display: grid; place-items: center; padding: 24px; color: var(--ink); }
+.login-panel { width: 100%; max-width: 400px; text-align: center; }
+.login-logo { display: block; margin: 0 auto; filter: drop-shadow(0 0 24px rgba(108, 125, 255, 0.45)); }
+.login-panel h1 { font: 200 2.5rem/1.1 var(--display); letter-spacing: -0.03em; margin: 28px 0 14px; }
+.login-panel p { line-height: 1.6; color: var(--ink-2); }
+.login-panel strong { color: var(--ink); font-weight: 600; }
+.login-panel form { display: grid; gap: 12px; margin: 28px 0; }
+.login-panel input { width: 100%; min-height: 56px; font: 300 1.25rem var(--display); text-align: center; letter-spacing: 0.12em; border-radius: 999px; }
+.login-panel input::placeholder { letter-spacing: 0; }
+.login-panel button { min-height: 52px; justify-content: center; }
+.login-panel .login-note { font-size: var(--t-xs); color: var(--muted); }
+.login-panel .login-error { padding: 12px 16px; border-radius: 14px; background: var(--st-failed-wash); color: var(--st-failed-text); }

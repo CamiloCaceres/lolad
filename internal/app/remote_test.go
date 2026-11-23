@@ -53,6 +53,7 @@ func TestRemoteComposition(t *testing.T) {
 	} {
 		r := httptest.NewRequest("GET", tc.path, nil)
 		r.RemoteAddr = "127.0.0.1:1"
+		r.Host = "127.0.0.1:4100" // the local listener only answers to loopback names
 		if tc.auth {
 			r.Header.Set("Authorization", "Bearer "+token)
 		}

@@ -221,3 +221,59 @@ func TestGlobalEnvPrecedence(t *testing.T) {
 		t.Fatal("shared keys must not be live-unset")
 	}
 }
+
+// Every agent gets lolad's user tools (message_user, ask_user) over MCP.
+func TestUserToolsMCP(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	opts := func(state string) core.LaunchOpts {
+		return core.LaunchOpts{Fresh: true, LoladBin: "/opt/lolad", LoladURL: "http://127.0.0.1:4100", StateDir: state}
+	}
+	state := t.TempDir()
+	a := core.Agent{Name: "test", Dir: t.TempDir(), Runtime: core.Runtime{Harness: core.HarnessClaude}}
+	s, e := New(core.HarnessClaude, "/bin/claude").Prepare(a, opts(state))
+	if e != nil {
+		t.Fatal(e)
+	}
+	path := filepath.Join(state, "agents/test/mcp.json")
+	if !strings.Contains(strings.Join(s.Argv, "|"), "|--mcp-config="+path+"|") {
+		t.Fatal("no --mcp-config=:", s.Argv)
+	}
+	var cfg struct {
+		MCPServers map[string]struct {
+			Command string
+			Args    []string
+			Env     map[string]string
+		} `json:"mcpServers"`
+	}
+	b, _ := os.ReadFile(path)
+	if json.Unmarshal(b, &cfg) != nil {
+		t.Fatal(string(b))
+	}
+	srv := cfg.MCPServers["lolad"]
+	if srv.Command != "/opt/lolad" || strings.Join(srv.Args, " ") != "msg --as test mcp" || srv.Env["LOLAD_AGENT"] != "test" || srv.Env["LOLAD_STATE"] != state || srv.Env["LOLAD_URL"] == "" {
+		t.Fatal(string(b))
+	}
+	if b, _ = os.ReadFile(filepath.Join(state, "agents/test/claude-settings.json")); !strings.Contains(string(b), "mcp__lolad__ask_user") {
+		t.Fatal("tools not allowed:", string(b))
+	}
+
+	// Codewhale reads its home's mcp.json: lolad adds its server, leaves the rest.
+	cw := core.Agent{Name: "cw", Dir: t.TempDir(), Runtime: core.Runtime{Harness: core.HarnessCodewhale}}
+	home := filepath.Join(cw.Dir, ".codewhale-home")
+	os.MkdirAll(home, 0700)
+	os.WriteFile(filepath.Join(home, "mcp.json"), []byte(`{"servers":{"mine":{"command":"/bin/mine","read_timeout":30}},"extra":true}`), 0600)
+	if _, e = New(core.HarnessCodewhale, "/bin/codewhale").Prepare(cw, opts(t.TempDir())); e != nil {
+		t.Fatal(e)
+	}
+	var doc map[string]any
+	b, _ = os.ReadFile(filepath.Join(home, "mcp.json"))
+	if json.Unmarshal(b, &doc) != nil || doc["extra"] != true {
+		t.Fatal(string(b))
+	}
+	servers := doc["servers"].(map[string]any)
+	mine, lolad := servers["mine"].(map[string]any), servers["lolad"].(map[string]any)
+	if mine["command"] != "/bin/mine" || mine["read_timeout"] != float64(30) || lolad["command"] != "/opt/lolad" || lolad["enabled"] != true {
+		t.Fatal(string(b))
+	}
+}

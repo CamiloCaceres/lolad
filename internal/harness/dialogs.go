@@ -137,6 +137,18 @@ func (a *Adapter) StartupDialog(pane string) (string, []string) {
 			}
 		}
 	}
+	// Claude Code >= 2.1.327 asks to trust each --add-dir directory. Accept only
+	// lolad's own generated per-agent user-skills directory.
+	if a.Kind == core.HarnessClaude && strings.Contains(p, "/lolad/agents/") && strings.Contains(p, "/user-skills") && strings.Contains(p, "yes, add it") && strings.Contains(p, "enter to confirm") {
+		for _, line := range strings.Split(p, "\n") {
+			if strings.Contains(line, "❯") && strings.Contains(line, "no, exit") {
+				return "claude add-dir trust", []string{"Down", "Enter"}
+			}
+			if strings.Contains(line, "❯") && strings.Contains(line, "yes, add it") {
+				return "claude add-dir trust", []string{"Enter"}
+			}
+		}
+	}
 	if a.Kind == core.HarnessCodewhale && strings.Contains(p, "working agreement") && strings.Contains(p, "this agreement guides behavior, not runtime permissions") && strings.Contains(p, "enter") {
 		return "codewhale working agreement", []string{"Enter"}
 	}

@@ -171,7 +171,7 @@ func (a *Adapter) prepare(agent core.Agent, o core.LaunchOpts, sessionID string)
 			args = append(args, "--permission-mode", "bypassPermissions")
 		}
 		hooks := map[string]any{}
-		for _, event := range []string{"SessionStart", "UserPromptSubmit", "Stop", "Notification", "PermissionRequest", "SessionEnd", "PreToolUse", "PostToolUse"} {
+		for _, event := range []string{"SessionStart", "UserPromptSubmit", "Stop", "StopFailure", "Notification", "PermissionRequest", "SessionEnd", "PreToolUse", "PostToolUse"} {
 			hooks[event] = []any{map[string]any{"hooks": []any{map[string]any{"type": "command", "command": hookCommand(agent.Name, o.LoladBin, event), "timeout": 3}}}}
 		}
 		overlay := map[string]any{"hooks": hooks}
@@ -186,6 +186,17 @@ func (a *Adapter) prepare(agent core.Agent, o core.LaunchOpts, sessionID string)
 			return spec, err
 		}
 		args = append(args, skillArgs...)
+		if server := loladMCP(agent, o); server != nil {
+			// The user tools (lolad msg mcp). "=" keeps the variadic flag
+			// from taking the arguments after it.
+			data, _ := json.MarshalIndent(map[string]any{"mcpServers": map[string]any{"lolad": server}}, "", "  ")
+			path := filepath.Join(dir, "mcp.json")
+			if e := managed(path, data); e != nil {
+				return spec, e
+			}
+			args = append(args, "--mcp-config="+path)
+			overlay["permissions"] = map[string]any{"allow": []string{"mcp__lolad__message_user", "mcp__lolad__ask_user"}}
+		}
 		data, _ := json.MarshalIndent(overlay, "", "  ")
 		path := filepath.Join(dir, "claude-settings.json")
 		if e := managed(path, data); e != nil {
@@ -209,6 +220,11 @@ func (a *Adapter) prepare(agent core.Agent, o core.LaunchOpts, sessionID string)
 			return spec, err
 		}
 		env["CODEWHALE_HOME"] = home
+		if server := loladMCP(agent, o); server != nil {
+			if err := codewhaleMCP(home, server); err != nil {
+				return spec, fmt.Errorf("codewhale mcp.json: %w", err)
+			}
+		}
 		if _, e := os.Stat(filepath.Join(home, "prompts", "constitution.md")); e == nil {
 			env["CODEWHALE_ALLOW_BASE_PROMPT_OVERRIDE"] = "1"
 		} else {
@@ -243,7 +259,7 @@ func (a *Adapter) prepare(agent core.Agent, o core.LaunchOpts, sessionID string)
 		}
 		text = codewhaleSkills(text, agent.Runtime.SkillsMode())
 		text += "\n# lolad managed hook overlay\n"
-		for _, event := range []string{"session_start", "session_end", "message_submit", "tool_call_before", "tool_call_after", "turn_end", "session_idle", "waiting_for_user", "session_busy"} {
+		for _, event := range []string{"session_start", "session_end", "message_submit", "tool_call_before", "tool_call_after", "turn_end", "session_idle", "session_error", "waiting_for_user", "session_busy"} {
 			cmd := hookCommand(agent.Name, o.LoladBin, event)
 			text += "\n[[hooks.hooks]]\nevent = " + strconv.Quote(event) + "\ncommand = " + strconv.Quote(cmd) + "\ntimeout_secs = 3\ncontinue_on_error = true\n"
 		}
@@ -378,4 +394,58 @@ func envValue(v string) string {
 		return strings.TrimSpace(v[:i])
 	}
 	return v
+}
+
+// loladMCP is the stdio MCP server that gives an agent the user tools
+// (message_user, ask_user: see msgcli/mcp.go), nil when lolad's own binary is
+// unknown. Its environment names the agent even if a harness filters what MCP
+// servers inherit.
+func loladMCP(agent core.Agent, o core.LaunchOpts) map[string]any {
+	if o.LoladBin == "" {
+		return nil
+	}
+	env := map[string]string{"LOLAD_AGENT": agent.Name, "LOLABOT_HOME": agent.Dir}
+	if o.LoladURL != "" {
+		env["LOLAD_URL"] = o.LoladURL
+	}
+	if o.StateDir != "" {
+		env["LOLAD_STATE"] = o.StateDir
+	}
+	return map[string]any{"type": "stdio", "command": o.LoladBin, "args": []string{"msg", "--as", agent.Name, "mcp"}, "env": env}
+}
+
+// codewhaleMCP puts the lolad server in Codewhale's mcp.json (it has no flag
+// for an extra file), keeping every other server and setting as it is.
+func codewhaleMCP(home string, server map[string]any) error {
+	path := filepath.Join(home, "mcp.json")
+	doc := map[string]any{}
+	data, err := os.ReadFile(path)
+	if err == nil {
+		if err = json.Unmarshal(data, &doc); err != nil {
+			return err
+		}
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	servers, _ := doc["servers"].(map[string]any)
+	if servers == nil {
+		servers = map[string]any{}
+	}
+	entry, _ := servers["lolad"].(map[string]any)
+	if entry == nil {
+		entry = map[string]any{}
+	}
+	for _, k := range []string{"command", "args", "env"} {
+		entry[k] = server[k]
+	}
+	entry["enabled"], entry["disabled"] = true, false
+	servers["lolad"], doc["servers"] = entry, servers
+	out, err := json.MarshalIndent(doc, "", "  ")
+	if err != nil {
+		return err
+	}
+	if string(out) == string(data) {
+		return nil
+	}
+	return managed(path, out)
 }

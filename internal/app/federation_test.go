@@ -15,6 +15,7 @@ func TestFederationListenerBoundary(t *testing.T) {
 	// cross-origin browser protection unchanged, even without a device session.
 	for _, remote := range []bool{false, true} {
 		r := httptest.NewRequest("POST", "/v1/federation/deliver", strings.NewReader(`{}`))
+		r.Host = "127.0.0.1:4100" // the local listener only answers to loopback names
 		r.Header.Set("Origin", "https://unrelated.example")
 		r.Header.Set("Sec-Fetch-Site", "cross-site")
 		expected := httptest.NewRecorder()

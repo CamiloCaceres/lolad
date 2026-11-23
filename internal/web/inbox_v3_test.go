@@ -13,7 +13,7 @@ import (
 func TestInboxHomePriorityAndLiveRefresh(t *testing.T) {
 	e := setup(t)
 	_, body := e.get("/")
-	waiting, unread, recent := strings.Index(body, "Waiting on you"), strings.Index(body, "New messages"), strings.Index(body, "Recent conversations")
+	waiting, unread, recent := strings.Index(body, ">Needs you · "), strings.Index(body, `class="eyebrow">New<`), strings.Index(body, `class="eyebrow">Earlier<`)
 	if waiting < 0 || unread <= waiting || recent <= unread {
 		t.Fatalf("home must order questions, unread, recent: %d %d %d", waiting, unread, recent)
 	}
@@ -30,7 +30,7 @@ func TestInboxHomePriorityAndLiveRefresh(t *testing.T) {
 	// Opening the unread conversation moves it to recent while keeping its thread available.
 	e.get("/inbox/forge")
 	_, body = e.get("/")
-	recent = strings.Index(body, "Recent conversations")
+	recent = strings.Index(body, `class="eyebrow">Earlier<`)
 	if strings.Index(body[recent:], `href="/inbox/forge"`) < 0 {
 		t.Error("read conversation missing from recent")
 	}

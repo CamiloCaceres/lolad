@@ -10,7 +10,7 @@
           <time class="conv-time" datetime="{{stamp .LastAt}}" title="{{long .LastAt}}" data-when>{{when .LastAt}}</time>
         </span>
         <span class="conv-bottom">
-          <span class="conv-preview">{{if .Pending}}<span class="tag is-you">Asks</span> {{with index .Asks (add (len .Asks) -1)}}{{with subject .Mail}}{{.}}{{else}}{{excerpt .Body 90}}{{end}}{{end}}{{else}}{{if .Mine}}<span class="conv-you">You:</span> {{end}}{{excerpt .Last.Body 110}}{{end}}</span>
+          <span class="conv-preview">{{if .Pending}}<span class="tag is-you">Needs you</span> {{with index .Asks (add (len .Asks) -1)}}{{with subject .Mail}}{{.}}{{else}}{{excerpt .Body 90}}{{end}}{{end}}{{else if eq .Chat.Kind "answers"}}<span class="conv-you">You answered {{plural (len .Chat.Answers) "request" "requests"}}</span>{{else}}{{if .Mine}}<span class="conv-you">You:</span> {{end}}{{excerpt .Last.Body 110}}{{end}}</span>
           {{if .Unread}}<span class="count{{if .Pending}} is-you{{end}}"><span class="sr-only">Unread: </span>{{.Unread}}</span>{{end}}
         </span>
       </span>
@@ -26,10 +26,10 @@
 </div>{{end}}
 
 {{define "new-message"}}
-<button class="btn btn-icon btn-ghost" type="button" popovertarget="new-message" aria-label="New message" title="New message">{{template "icon" "edit"}}</button>
+<button class="btn new-message-btn" type="button" popovertarget="new-message" title="Write to an assistant">{{template "icon" "edit"}}<span class="nm-label">Write to an assistant</span></button>
 <div id="new-message" class="sheet" popover>
-  <div class="sheet-head"><h2>New message</h2><button class="btn btn-icon btn-ghost" type="button" popovertarget="new-message" popovertargetaction="hide" aria-label="Close">{{template "icon" "x"}}</button></div>
-  <p class="sheet-note">Mail goes to the agent's inbox; it answers here.</p>
+  <div class="sheet-head"><h2>Write to…</h2><button class="btn btn-icon btn-ghost" type="button" popovertarget="new-message" popovertargetaction="hide" aria-label="Close">{{template "icon" "x"}}</button></div>
+  <p class="sheet-note">Pick an assistant. It answers you here.</p>
   <ul class="pick" role="list">
     {{range .}}<li><a href="/inbox/{{.Name}}">{{template "avatar" (dict "Display" .Display "State" .State "Size" "sm")}}<span class="pick-name">{{.Display}}</span><span class="pick-role">{{.Role}}</span>{{if .State}}{{template "state" .}}{{end}}</a></li>{{end}}
   </ul>
@@ -56,7 +56,7 @@
     <p class="thread-sub">{{with .Agent}}{{template "state" .}}<span class="thread-detail">{{if .Detail}}{{.Detail}}{{else}}{{.Role}}{{end}}</span>{{else}}{{if .Origin}}{{.Origin}} · External{{else}}System messages{{end}}{{end}}</p>
   </div>
   {{with .Agent}}<a class="btn btn-icon btn-ghost thread-settings" href="/agents/{{.Name}}/settings" aria-label="Settings for {{.Display}}" title="Settings">{{template "icon" "settings"}}</a>{{end}}
-  {{with .Agent}}<a class="btn btn-ghost thread-agent" href="/agents/{{.Name}}">Agent<span class="hide-sm"> details</span>{{template "icon" "next"}}</a>{{end}}
+  {{with .Agent}}<a class="btn btn-ghost thread-agent" href="/agents/{{.Name}}">About<span class="hide-sm"> {{.Display}}</span>{{template "icon" "next"}}</a>{{end}}
 {{with .Arrival}}<div class="arrival" role="status"><strong>{{.}}</strong><span><a href="/agents/{{$.Peer}}/settings/email">Give it an email</a><a href="/org">Add to a team</a></span><button class="btn btn-icon btn-ghost" type="button" data-dismiss-arrival aria-label="Dismiss welcome">{{template "icon" "x"}}</button></div>{{end}}
 </header>{{end}}
 
@@ -76,34 +76,30 @@
   <li class="msg is-update" id="m-{{short .ID}}">
     <div class="note">
       <p class="note-head">{{template "icon" "pulse"}}<span class="note-subj">{{with subject .Mail}}{{.}}{{else}}Update{{end}}</span><time datetime="{{stamp .CreatedAt}}" title="{{long .CreatedAt}}">{{clock .CreatedAt}}</time></p>
-      {{if not .HideBody}}<div class="note-body rich">{{markdown .Body}}</div>{{end}}
+      {{if .Chat.Blocks}}<div class="note-body">{{template "blocks" .}}</div>{{else if not .HideBody}}<div class="note-body rich">{{chatmd .Body}}</div>{{end}}
       {{template "atts" .Files}}
     </div>
   </li>
   {{else}}
-  <li class="msg {{if .Mine}}is-mine{{else}}is-theirs{{end}} k-{{.Kind}}{{if .Cont}} is-cont{{end}}{{if and (eq .Kind "ask") (not .Answered)}} is-open{{end}}" id="m-{{short .ID}}">
+  <li class="msg {{if .Mine}}is-mine{{else}}is-theirs{{end}} k-{{.Kind}}{{if .Chat.Blocks}} has-blocks{{end}}{{if .Cont}} is-cont{{end}}{{if and (eq .Kind "ask") (not .Answered)}} is-open{{end}}" id="m-{{short .ID}}">
     {{if not .Cont}}<p class="msg-meta">{{if not .Mine}}<span class="msg-from">{{$t.Display}}</span>{{end}}<time datetime="{{stamp .CreatedAt}}" title="{{long .CreatedAt}}">{{clock .CreatedAt}}</time></p>{{end}}
     {{if not .Bare}}<div class="bubble">
       {{if eq .Kind "deliver"}}<p class="bubble-kind">{{template "icon" "file"}}Delivered</p>{{end}}
       {{if eq .Kind "ask"}}<p class="bubble-kind">{{template "icon" "ask"}}{{if .Answered}}Question{{else}}Waiting on you{{end}}</p>{{end}}
       {{if .ShowSubj}}<p class="bubble-subj">{{subject .Mail}}</p>{{end}}
       {{if eq .Kind "decision"}}<p class="decision">{{template "icon" "check"}}<span>{{.Chat.Decision}}</span></p>
-      {{else if not .HideBody}}<div class="rich">{{markdown .Body}}</div>{{if eq .Kind "deliver"}}<button class="btn btn-ghost deliver-copy" type="button" data-copy-message>Copy deliverable</button><textarea hidden readonly aria-label="Deliverable Markdown" data-deliver-source>{{.Body}}</textarea>{{end}}{{end}}
+      {{else if and (eq .Kind "answers") .Lines}}<p class="answers-head">{{if eq (len .Lines) 1}}Answered a request{{else}}Answered {{len .Lines}} requests{{end}}</p><ul class="answers" role="list">{{range .Lines}}<li{{if .Skipped}} class="is-skip"{{end}}><span class="answers-q">{{.Q}}</span><span class="answers-a">{{.A}}</span></li>{{end}}</ul>
+      {{else}}{{if .Chat.Blocks}}{{template "blocks" .}}{{else if not .HideBody}}<div class="rich">{{chatmd .Body}}</div>{{end}}{{if and (eq .Kind "deliver") (not .HideBody)}}<button class="btn btn-ghost deliver-copy" type="button" data-copy-message>Copy deliverable</button><textarea hidden readonly aria-label="Deliverable Markdown" data-deliver-source>{{.Body}}</textarea>{{end}}{{end}}
     </div>{{end}}
     {{template "atts" .Files}}
-    {{if eq .Kind "ask"}}{{$m := .}}
-    <form class="options" method="post" action="/inbox/{{$t.Peer}}/decide" hx-post="/inbox/{{$t.Peer}}/decide" hx-target="#msgs" hx-disabled-elt="find button">
-      <input type="hidden" name="id" value="{{.ID}}">
-      {{range .Chat.Options}}<button class="option{{if eq . $m.Answer}} is-chosen{{end}}" type="submit" name="option" value="{{.}}"{{if $m.Answer}} disabled{{end}}>{{if eq . $m.Answer}}{{template "icon" "check"}}{{end}}{{.}}</button>{{end}}
-    </form>
-    {{if and .Answered (not .Answer)}}<p class="options-note">You replied in your own words; you can still pick one.</p>{{end}}
-    {{end}}
+    {{if eq .Kind "ask"}}{{with .Req}}{{template "ask-answer" (dict "R" . "T" $t)}}{{else}}<p class="ask-state">{{if .Skipped}}{{template "icon" "x"}}<span>Skipped</span>{{else if .Answer}}{{template "icon" "check"}}<span>{{.Answer}}</span>{{else}}{{template "icon" "check"}}<span>Answered in the chat</span>{{end}}</p>{{end}}{{end}}
     {{if and .Mine .Remote .DeliveryError}}<p class="remote-delivery is-{{.Delivery}}">{{.DeliveryError}}</p>{{end}}{{with .Receipt}}<p class="receipt{{if $t.Origin}} remote-delivery{{end}}">{{.}}</p>{{end}}
   </li>
   {{end}}
 {{end}}{{end}}
 
 {{define "composer"}}<div class="composer-wrap">
+  {{template "req-bar" (dict "T" .Tray "OOB" false)}}
   <div id="composer-error" class="composer-error">{{with .Error}}{{template "composer-error" .}}{{end}}</div>
   {{if .CanSend}}{{if .Policy.Allow}}
   <form class="composer" method="post" action="/inbox/{{.Peer}}" hx-post="/inbox/{{.Peer}}" hx-target="#msgs" hx-disabled-elt="find .send" data-composer data-upload="/inbox/{{.Peer}}/attachments" data-max-files="{{.MaxFiles}}" data-max-bytes="{{.MaxBytes}}" data-max-label="{{.MaxLabel}}"{{if not .Attach}} data-attach-off="{{.AttachNote}}"{{end}}>
@@ -113,7 +109,7 @@
     <button class="attach" type="button" data-attach hidden aria-label="{{if .Attach}}Attach files{{else}}Attach files (unavailable){{end}}" title="{{if .Attach}}Attach files{{else}}{{.AttachNote}}{{end}}"{{if not .Attach}} aria-disabled="true" aria-describedby="attach-note"{{end}}>{{template "icon" "paperclip"}}</button>
     {{if .Attach}}<input class="attach-input" type="file" multiple hidden tabindex="-1" aria-hidden="true" data-attach-input>{{end}}
     <label class="sr-only" for="composer-body">Message {{.Display}}</label>
-    <textarea id="composer-body" name="body" rows="1" placeholder="Message {{.Display}}" autocomplete="off" enterkeyhint="send"></textarea>
+    <textarea id="composer-body" name="body" rows="1" placeholder="Write to {{.Display}}…" autocomplete="off" enterkeyhint="send"></textarea>
     <button class="send" type="submit" aria-label="Send">{{template "icon" "send"}}</button>
   </form>
   <p class="sr-only" role="status" aria-live="polite" data-att-status></p>
@@ -133,42 +129,52 @@
 {{define "thread-refresh"}}{{template "msgs" .V.Thread}}
 <input type="hidden" id="reply-to" name="reply_to" value="{{.V.Thread.ReplyTo}}" hx-swap-oob="true">
 <div id="composer-error" class="composer-error" hx-swap-oob="true"></div>
+{{template "req-bar" (dict "T" .V.Thread.Tray "OOB" true)}}
 {{template "conv-list" .V}}
 {{template "nav-badges" .Badges}}{{end}}
 
-{{define "home"}}<section class="home" id="inbox-home" aria-label="Inbox" hx-get="/" hx-select="#inbox-home" hx-target="this" hx-disinherit="hx-select hx-target hx-swap hx-push-url" hx-swap="outerHTML" hx-trigger="lolad:mail from:body delay:400ms, lolad:federation from:body delay:400ms" hx-push-url="false">
+{{define "home"}}<section class="home" id="inbox-home" aria-label="Home" hx-get="/" hx-select="#inbox-home" hx-target="this" hx-disinherit="hx-select hx-target hx-swap hx-push-url" hx-swap="outerHTML" hx-trigger="lolad:mail from:body delay:400ms, lolad:federation from:body delay:400ms, lolad:agent from:body delay:900ms" hx-push-url="false">
   <div class="home-inner">
-  <header class="inbox-home-head"><div><h1>Inbox</h1><p>Conversations with your agents.</p></div>{{if .Agents}}{{template "new-message" .Agents}}{{end}}</header>
-  {{if .Approvals}}<section class="federation-approvals" aria-label="Sender approvals"><h2 class="home-h your-turn">New people need your approval <span class="count is-you">{{len .Approvals}}</span></h2>{{range .Approvals}}<article class="federation-approval"><strong>{{or .RemoteDisplay .Remote}} wants to message {{.LocalDisplay}}</strong><p>{{.Peer}} · “{{.FirstSubject}}” · {{.Held}} waiting</p><form method="post" action="/grants/decide"><input type="hidden" name="peer" value="{{.Peer}}"><input type="hidden" name="remote" value="{{.Remote}}"><input type="hidden" name="local" value="{{.Local}}"><button class="btn btn-sm" name="decision" value="allow">Allow</button><button class="btn btn-sm btn-ghost" name="decision" value="block">Block</button></form></article>{{end}}</section>{{end}}
-  {{if .Asks}}
-    <h2 class="home-h your-turn">Waiting on you <span class="count is-you">{{len .Asks}}</span></h2>
-    <ul class="asks" role="list">
-    {{range .Asks}}{{$c := .Conv}}
-      <li class="ask-card">
-        <a class="ask-who" href="/inbox/{{$c.Peer}}">{{template "avatar" (dict "Display" $c.Display "State" $c.State "Size" "sm")}}<span>{{$c.Display}}</span><time datetime="{{stamp .Ask.CreatedAt}}" title="{{long .Ask.CreatedAt}}" data-when>{{when .Ask.CreatedAt}}</time></a>
-        {{with subject .Ask.Mail}}<p class="ask-subj">{{.}}</p>{{end}}
-        <div class="ask-body rich">{{markdown .Ask.Body}}</div>
-        <form class="options" method="post" action="/inbox/{{$c.Peer}}/decide">
-          <input type="hidden" name="id" value="{{.Ask.ID}}">
-          {{range .Ask.Chat.Options}}<button class="option" type="submit" name="option" value="{{.}}">{{.}}</button>{{end}}
-          <a class="option is-quiet" href="/inbox/{{$c.Peer}}">Reply…</a>
-        </form>
-      </li>
+  <header class="hm-head"><div><h1 class="page-title">{{greeting}}, {{firstName .Me}}.</h1><p class="page-sub">{{.HomeLine}}</p></div>{{if .Agents}}{{template "new-message" .Agents}}{{end}}</header>
+  {{if .Team}}<ul class="hm-team" role="list" aria-label="Your assistants">{{range .Team}}<li><a href="/inbox/{{.Name}}">{{template "avatar" (dict "Display" .Display "State" .State "Size" "lg")}}<span class="hm-team-name">{{.Display}}</span>{{template "state" .}}</a></li>{{end}}</ul>{{end}}
+  {{if .Needs}}
+  <h2 class="eyebrow is-you">Needs you · {{.Needs}}</h2>
+  <div class="hm-needs">
+    {{template "home-asks" .Trays}}
+    {{range .Approvals}}
+    <article class="hm-strip" aria-label="Sender approval">
+      {{template "avatar" (dict "Display" (or .RemoteDisplay .Remote) "Size" "md")}}
+      <div class="hm-strip-text"><strong>{{or .RemoteDisplay .Remote}}, from {{.Peer}}, wants to talk to {{.LocalDisplay}}</strong><p class="muted">“{{.FirstSubject}}” · {{plural .Held "message" "messages"}} waiting</p></div>
+      <form method="post" action="/grants/decide"><input type="hidden" name="peer" value="{{.Peer}}"><input type="hidden" name="remote" value="{{.Remote}}"><input type="hidden" name="local" value="{{.Local}}"><button class="btn btn-you" name="decision" value="allow">Allow</button> <button class="btn" name="decision" value="block">Block</button></form>
+    </article>
     {{end}}
-    </ul>
+    {{range .Blocked}}
+    <article class="hm-strip">
+      {{template "avatar" (dict "Display" .Display "State" .State "Size" "md")}}
+      <div class="hm-strip-text">{{with .Problem}}<strong>{{$.Display}}: {{.Title}}</strong><p class="muted">{{.Hint}}</p>{{else}}<strong>{{.Display}} is waiting for your OK</strong><p class="muted">{{if .Detail}}{{.Detail}}{{else}}It stopped to ask before doing something.{{end}}</p>{{end}}</div>
+      <a class="btn" href="/agents/{{.Name}}">Open {{.Display}}</a>
+    </article>
+    {{end}}
+    {{range .Broken}}
+    <article class="hm-strip is-fault">
+      {{template "icon" "alert"}}
+      <div class="hm-strip-text"><strong>{{.Display}} {{if eq .State "failed"}}can't start.{{else}}stopped unexpectedly and is restarting.{{end}}</strong><p class="muted">{{template "state-detail" .}}</p></div>
+      <a class="btn" href="/agents/{{.Name}}">{{if eq .State "failed"}}Fix it{{else}}See why{{end}}</a>
+    </article>
+    {{end}}
+  </div>
   {{end}}
   {{if .Unread}}
-    <h2 class="home-h">New messages <span class="count">{{len .Unread}}</span></h2>
+    <h2 class="eyebrow">New</h2>
     {{template "home-rows" .Unread}}
   {{end}}
-  {{if .Recent}}<h2 class="home-h">Recent conversations</h2>{{template "home-rows" .Recent}}{{end}}
+  {{if .Recent}}<h2 class="eyebrow">Earlier</h2>{{template "home-rows" .Recent}}{{end}}
   {{if not .Agents}}{{if not .Convs}}{{template "first-run" (dict "Title" "Welcome to lolad")}}{{end}}
   {{else if not .Convs}}{{template "start-chat" .Agents}}
-  {{else if and (not .Asks) (not .Unread) (not .Recent)}}
+  {{else if and (not .Needs) (not .Unread) (not .Recent)}}
     <div class="empty empty-home">
-      {{template "icon" "check"}}
-      <p class="empty-title">You're caught up</p>
-      <p>Nothing is waiting on you. Pick a conversation, or start one with <strong>New message</strong>.</p>
+      <p class="empty-title">All caught up.</p>
+      <p>Nothing is waiting on you. Write to an assistant whenever you need something.</p>
     </div>
   {{end}}
   </div>
@@ -177,7 +183,7 @@
 {{define "home-rows"}}<ul class="home-rows" role="list">{{range .}}<li><a href="/inbox/{{.Peer}}">
 {{template "avatar" (dict "Display" .Display "State" .State "Size" "")}}
 <span class="home-row-content"><span class="home-row-top"><strong>{{.Display}}{{with .Origin}}<span class="remote-origin">{{.}}</span>{{end}}</strong>{{with .Agent}}{{template "state" .}}{{end}}<time datetime="{{stamp .LastAt}}" data-when>{{when .LastAt}}</time></span>
-<span class="home-row-preview">{{if eq .Chat.Kind "deliver"}}<span class="delivery-label">{{template "icon" "file"}}Deliverable</span>{{end}}{{if .Mine}}You: {{end}}{{excerpt .Last.Body 180}}</span></span>{{if .Unread}}<span class="count">{{.Unread}}<span class="sr-only"> unread</span></span>{{end}}{{template "icon" "next"}}</a></li>{{end}}</ul>{{end}}
+<span class="home-row-preview">{{if eq .Chat.Kind "deliver"}}<span class="delivery-label">{{template "icon" "file"}}Deliverable</span>{{end}}{{if eq .Chat.Kind "answers"}}You answered {{plural (len .Chat.Answers) "request" "requests"}}{{else}}{{if .Mine}}You: {{end}}{{excerpt .Last.Body 180}}{{end}}</span></span>{{if .Unread}}<span class="count">{{.Unread}}<span class="sr-only"> unread</span></span>{{end}}{{template "icon" "next"}}</a></li>{{end}}</ul>{{end}}
 
 
 {{define "atts"}}{{if .}}<div class="atts" hx-boost="false">

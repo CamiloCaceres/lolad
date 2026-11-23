@@ -86,6 +86,9 @@ type pending struct {
 	Confirmations int
 	LastNotice    time.Time
 	LastBlock     time.Time
+	// GaveUpAt: every attempt failed without a confirmed notice. The sweep
+	// tries again later instead of leaving the mail unannounced forever.
+	GaveUpAt time.Time `json:",omitzero"`
 }
 type Supervisor struct {
 	mu          sync.Mutex
@@ -210,6 +213,16 @@ func (s *Supervisor) event(name, kind, detail string) {
 	}
 }
 func (s *Supervisor) setState(r *record, state core.State, detail string) {
+	if p := r.Status.Problem; p != nil {
+		switch {
+		case state == core.StateStopped || state == core.StateStarting || state == core.StateCrashed || state == core.StateFailed:
+			r.Status.Problem = nil // a new process starts clean
+		case p.Kind == "stuck" && state != core.StateBusy:
+			r.Status.Problem = nil
+		case p.Screen && (state == core.StateIdle || state == core.StateBusy):
+			r.Status.Problem = nil // the screen moved on
+		}
+	}
 	if r.Status.State != state {
 		r.Status.State = state
 		s.event(r.Status.Name, "state", string(state))
@@ -297,10 +310,17 @@ func (s *Supervisor) reconcileAgent(ctx context.Context, r *record, now time.Tim
 			return e
 		}
 		if dead {
+			// Keep what it printed last: "exit 1" alone tells nobody why.
+			detail := fmt.Sprintf("exit %d", exit)
+			if pane, ce := s.opts.Sessions.Capture(name, 30, false); ce == nil {
+				if why := crashReason(pane); why != "" {
+					detail += ": " + why
+				}
+			}
 			if e = s.opts.Sessions.Kill(name); e != nil {
 				return e
 			}
-			s.crash(r, now, fmt.Sprintf("exit %d", exit))
+			s.crash(r, now, detail)
 			return nil
 		}
 	}
@@ -323,7 +343,8 @@ func (s *Supervisor) reconcileAgent(ctx context.Context, r *record, now time.Tim
 			return err
 		}
 	}
-	if !startupFallback && now.Sub(r.Status.LastActivity) > 15*time.Minute {
+	problem := !startupFallback && s.checkProblem(r, now)
+	if !startupFallback && !problem && now.Sub(r.Status.LastActivity) > 15*time.Minute {
 		pane, e := s.opts.Sessions.Capture(name, 40, false)
 		if e != nil {
 			return e
@@ -460,6 +481,7 @@ func (s *Supervisor) launch(r *record) error {
 	}
 	r.Status.NextRestart = time.Time{}
 	r.Status.LastError = ""
+	r.Status.Problem = nil
 	r.Status.PID, _ = s.opts.Sessions.PanePID(r.Status.Name)
 	s.setState(r, core.StateStarting, "")
 	s.event(r.Status.Name, "started", fmt.Sprintf("fresh=%t", opts.Fresh))
@@ -744,6 +766,16 @@ func (s *Supervisor) HandleHook(ctx context.Context, ev core.HookEvent) core.Hoo
 	if ev.SessionID != "" && r.HookSession != "" && ev.SessionID != r.HookSession && ev.Event != "session_start" {
 		return core.HookReply{}
 	}
+	// A process that a restart killed fires SessionEnd as it dies, and that
+	// hook can land after the replacement launched. A resumed Claude reuses
+	// the session id, so the id check above cannot tell them apart. Marking
+	// the new run stopped would skip its startup checks and leave it stuck on
+	// a dialog. A launch that has sent no hook yet cannot have ended; a real
+	// exit before its first hook is caught by the pane check in reconcile.
+	if ev.Event == "session_end" && r.LastHook == "" && r.Status.State == core.StateStarting {
+		s.event(ev.Agent, "hook", "ignored session_end from the previous process")
+		return core.HookReply{}
+	}
 	newSession := ev.Event == "session_start" && ev.SessionID != "" && ev.SessionID != r.HookSession
 	if !newSession && ev.Seq > 0 && ev.Seq <= r.Seq {
 		return core.HookReply{}
@@ -761,6 +793,33 @@ func (s *Supervisor) HandleHook(ctx context.Context, ev core.HookEvent) core.Hoo
 	r.LastHook = ev.Event
 	r.ResumeFailures = 0 // the session is alive, so the resume worked
 	r.Status.LastActivity = s.opts.Clock.Now()
+	if ev.Event == "stop_failure" {
+		// An API error ended the turn: explain it, and hold mail until it clears.
+		if p, ok := classifyFailure(r.Status.Runtime.Harness, ev.Error, ev.Detail, s.opts.Clock.Now()); ok {
+			s.setProblem(r, p)
+		} else {
+			s.setState(r, core.StateIdle, "")
+		}
+		s.event(ev.Agent, "hook", ev.Event)
+		_ = s.persist(r)
+		return core.HookReply{}
+	}
+	if p := r.Status.Problem; p != nil {
+		switch {
+		case p.Kind == "stuck":
+			r.Status.Problem = nil // it made progress
+		case p.Screen:
+			// cleared by setState once the screen moves on
+		case ev.Event == "prompt_submit" || ev.Event == "pre_tool" || ev.Event == "post_tool" || ev.Event == "session_start":
+			s.clearProblem(r, "working again", false)
+		case ev.Event == "stop" || ev.Event == "notification":
+			// The failed turn has ended (Codewhale reports idle after
+			// session_error). Keep the problem and its state.
+			s.event(ev.Agent, "hook", ev.Event)
+			_ = s.persist(r)
+			return core.HookReply{}
+		}
+	}
 	state := ev.State
 	if state == "" {
 		switch ev.Event {

@@ -1,52 +1,56 @@
-/* Traffic: a mail audit, with attention reserved for blocked and queued mail. */
+/* Activity: every message and stop, newest first. Rose marks what lolad
+   stopped; amber marks what is held for you. */
 .traffic-page { max-width: 1500px; }
 .traffic-page .page-head { align-items: center; }
-.traffic-filters { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; padding: 18px 0 22px; border-top: 1px solid var(--line); }
+.traffic-filters { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; padding: 4px 0 24px; }
 .traffic-filters label { display: grid; gap: 6px; color: var(--muted); font-size: var(--t-xs); min-width: 180px; }
 .traffic-filters label:first-child { min-width: 230px; }
-.traffic-filters select { min-height: 38px; color: var(--ink); width: 100%; font-size: var(--t-sm); }
-.traffic-filters .btn { min-height: 38px; }
+.traffic-filters select { min-height: 44px; color: var(--ink); width: 100%; font-size: var(--t-sm); border-radius: 999px; }
+.traffic-filters .btn { min-height: 44px; }
 .traffic-reset { padding: 9px 4px; font-size: var(--t-sm); }
 .traffic-filter-note { flex-basis: 100%; color: var(--muted); font-size: var(--t-xs); }
-.traffic-tools { display: flex; justify-content: space-between; align-items: center; gap: 16px; border-bottom: 1px solid var(--line); }
-.traffic-scopes, .traffic-modes { display: flex; gap: 18px; }
-.traffic-scopes a, .traffic-modes a { display: inline-flex; align-items: center; gap: 7px; min-height: 44px; text-decoration: none; color: var(--muted); font-size: var(--t-sm); border-bottom: 2px solid transparent; }
+.traffic-tools { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+.traffic-scopes, .traffic-modes { display: flex; gap: 8px; flex-wrap: wrap; }
+.traffic-scopes a, .traffic-modes a { display: inline-flex; align-items: center; gap: 7px; min-height: 40px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--line-2); text-decoration: none; color: var(--ink-2); font-size: var(--t-sm); font-weight: 600; }
 .traffic-scopes a:hover, .traffic-modes a:hover { color: var(--ink); }
-.traffic-scopes a[aria-current], .traffic-modes a[aria-current] { border-color: var(--ink); color: var(--ink); font-weight: 600; }
-.traffic-scopes span { font-size: var(--t-xs); font-variant-numeric: tabular-nums; background: var(--bg-3); border-radius: 4px; padding: 1px 5px; }
+.traffic-scopes a[aria-current], .traffic-modes a[aria-current] { border-color: var(--action); background: rgba(122, 162, 255, 0.14); color: var(--ink); }
+.traffic-scopes span { font-size: var(--t-xs); font-variant-numeric: tabular-nums; color: var(--muted); }
 .traffic-caption { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 18px; padding: 16px 0; font-size: var(--t-xs); color: var(--muted); }
 .traffic-pair-filter { margin-top: 14px; font-size: var(--t-sm); display: flex; flex-wrap: wrap; gap: 8px; }
-.traffic-warning { background: var(--you-wash); color: var(--you-text); padding: 12px; margin-bottom: 12px; font-size: var(--t-sm); }
-.audit-list, .audit-pairs { border-top: 1px solid var(--line); }
+.traffic-warning { background: var(--you-wash); color: var(--you-text); padding: 12px 16px; border-radius: 14px; margin-bottom: 12px; font-size: var(--t-sm); }
+.audit-list, .audit-pairs { border-radius: var(--r-lg); border: 1px solid var(--line); background: var(--card); overflow: hidden; }
 .audit-entry { border-bottom: 1px solid var(--line); scroll-margin-top: 20px; }
-.audit-entry > summary { display: grid; grid-template-columns: 108px minmax(0,1fr) 80px 18px; align-items: start; gap: 18px; padding: 16px 8px; cursor: pointer; list-style: none; }
+.audit-list > .audit-entry:last-child { border-bottom: 0; }
+.audit-entry > summary { display: grid; grid-template-columns: 96px minmax(0,1fr) 110px 18px; align-items: start; gap: 18px; padding: 16px 20px; cursor: pointer; list-style: none; }
 .audit-entry > summary::-webkit-details-marker, .audit-pair > summary::-webkit-details-marker { display: none; }
-.audit-entry > summary:hover, .audit-entry[open] > summary { background: var(--bg-2); }
+.audit-entry > summary:hover, .audit-entry[open] > summary { background: rgba(255, 255, 255, 0.04); }
 .audit-entry time { color: var(--muted); font-size: var(--t-xs); font-variant-numeric: tabular-nums; padding-top: 2px; }
 .audit-message { min-width: 0; display: grid; grid-template-columns: minmax(150px, 190px) minmax(0,1fr); gap: 3px 20px; align-items: baseline; }
 .audit-route { display: flex; gap: 6px; align-items: center; color: var(--ink-2); font-size: var(--t-sm); overflow-wrap: anywhere; }
 .audit-route .i { width: 13px; height: 13px; color: var(--muted); }
 .audit-subject { color: var(--ink); font-size: var(--t-sm); font-weight: 600; overflow-wrap: anywhere; }
 .audit-preview { grid-column: 2; font-size: var(--t-sm); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.audit-state { justify-self: end; font-size: var(--t-xs); line-height: 1.6; font-weight: 550; padding: 1px 7px; border-radius: 4px; color: var(--muted); }
-.state-Denied { color: var(--st-failed-text); background: var(--st-failed-wash); }
-.state-Queued { color: var(--you-text); background: var(--you-wash); }
+.audit-state { justify-self: end; font-size: var(--t-xs); line-height: 1.6; font-weight: 600; padding: 3px 10px; border-radius: 999px; color: var(--muted); background: rgba(255, 255, 255, 0.05); white-space: nowrap; }
+.state-Denied, .state-Blocked, .state-Failed { color: var(--st-failed-text); background: var(--st-failed-wash); }
+.state-Awaiting { color: var(--you-text); background: var(--you-wash); }
+.state-Queued { color: var(--ink-2); }
 .audit-expand { color: var(--muted); padding-top: 2px; }
 .audit-entry[open] > summary .audit-expand { transform: rotate(180deg); }
 .audit-entry.is-denied .audit-subject { color: var(--st-failed-text); }
-.audit-detail { display: grid; grid-template-columns: minmax(0,1.6fr) minmax(220px,1fr); gap: 32px; padding: 20px 26px 26px 134px; background: var(--bg-2); border-top: 1px solid var(--line); }
+.audit-detail { display: grid; grid-template-columns: minmax(0,1.6fr) minmax(220px,1fr); gap: 32px; padding: 20px 26px 26px 134px; background: rgba(0, 0, 0, 0.18); border-top: 1px solid var(--line); }
 .audit-detail > div { min-width: 0; max-width: 75ch; overflow-wrap: anywhere; }
 .audit-detail h3 { font-size: var(--t-md); margin-bottom: 8px; }
 .audit-detail p + p { margin-top: 10px; }
 .audit-actions { display: flex; flex-wrap: wrap; gap: 10px 20px; margin-top: 24px; font-size: var(--t-sm); }
+.audit-actions a, .audit-pair-link, .traffic-pair-filter a { color: var(--link); }
 .audit-meta { display: grid; gap: 10px; font-size: var(--t-xs); align-content: start; }
 .audit-meta dt { color: var(--muted); }
 .audit-meta dd { overflow-wrap: anywhere; }
 .audit-pair { border-bottom: 1px solid var(--line); }
-.audit-pair > summary { display: flex; align-items: center; gap: 18px; padding: 18px 10px; cursor: pointer; list-style: none; }
+.audit-pair > summary { display: flex; align-items: center; gap: 18px; padding: 18px 20px; cursor: pointer; list-style: none; }
 .audit-pair > summary strong { font-size: var(--t-md); font-weight: 550; }
 .audit-pair > summary span { margin-left: auto; color: var(--muted); font-size: var(--t-xs); }
-.audit-pair[open] { background: var(--bg-2); }
+.audit-pair[open] { background: rgba(255, 255, 255, 0.02); }
 .audit-pair-link { display: inline-flex; gap: 6px; align-items: center; margin: 0 10px 16px; font-size: var(--t-sm); }
 @media (max-width: 1100px) {
  .audit-message { grid-template-columns: minmax(0,1fr); }

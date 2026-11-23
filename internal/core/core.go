@@ -108,7 +108,8 @@ const (
 	StateStarting State = "starting" // launched, harness has not reported in yet
 	StateIdle     State = "idle"     // waiting for input
 	StateBusy     State = "busy"     // working on a turn
-	StateWaiting  State = "waiting"  // blocked on a permission prompt or question in the TUI
+	StateWaiting  State = "waiting"  // blocked on a permission prompt or question in the TUI, or on a Problem only the user can fix
+	StatePaused   State = "paused"   // alive but held back by something outside it (a usage limit, the service down); lolad retries by itself
 	StateCrashed  State = "crashed"  // exited while desired up; restart pending (backoff)
 	StateFailed   State = "failed"   // crashed too often; supervisor gave up until someone acts
 	StateUnknown  State = "unknown"  // running, no signal either way
@@ -136,6 +137,24 @@ type AgentStatus struct {
 	// applied live) changed since its process started; a restart applies it.
 	PendingRestart bool   `json:"pending_restart,omitempty"`
 	PendingReason  string `json:"pending_reason,omitempty"` // e.g. "model changed, .env changed"
+	// Problem is set while something stops a running agent from working: an
+	// API error that ended its turn (expired login, usage limit, billing), a
+	// question on its screen at startup, or a step that has run for very long.
+	// The supervisor clears it once the agent works again.
+	Problem *AgentProblem `json:"problem,omitempty"`
+}
+
+// AgentProblem explains, in plain words, why an agent isn't working.
+type AgentProblem struct {
+	Kind     string    `json:"kind"`             // login | billing | account | usage_limit | rate_limit | overloaded | network | model | request | dialog | stuck | error
+	Title    string    `json:"title"`            // one short sentence for the user
+	Hint     string    `json:"hint,omitempty"`   // what to do next
+	Detail   string    `json:"detail,omitempty"` // the harness's own words
+	NeedsYou bool      `json:"needs_you"`        // only the user can fix it (State is waiting); otherwise lolad retries (State is paused)
+	Since    time.Time `json:"since"`
+	Until    time.Time `json:"until,omitzero"` // when lolad tries again by itself (a usage limit's reset)
+	// Screen: read off the agent's screen; it clears once the screen moves on.
+	Screen bool `json:"screen,omitempty"`
 }
 
 // Event is one line in an agent's history: lifecycle, state change, trigger, delivery.
@@ -210,12 +229,19 @@ type Attachment struct {
 // UserChat is the structured part of mail between the user and an agent,
 // carried at payload.context.userchat (Maestro Lite's convention).
 //
-//	agent → user kinds: say | update | deliver | ask (Options = buttons)
-//	user → agent kinds: say | reply | decision (Decision = chosen option)
+//	agent → user kinds: say | update | deliver | ask (Options = buttons, Fields = a form; see ask.go)
+//	user → agent kinds: say | reply | decision (Decision = chosen option) | answers (Answers, one per ask)
 type UserChat struct {
-	Kind     string   `json:"kind"`
-	Options  []string `json:"options,omitempty"`
-	Decision string   `json:"decision,omitempty"`
+	Kind     string      `json:"kind"`
+	Options  []string    `json:"options,omitempty"`
+	Decision string      `json:"decision,omitempty"`
+	Fields   []AskField  `json:"fields,omitempty"`
+	Answers  []AskAnswer `json:"answers,omitempty"`
+	// Blocks lay the message out (see blocks.go); the body has the same
+	// content as text. Task marks an ask that asks the user to do something:
+	// Options are then its done and couldn't buttons.
+	Blocks []Block `json:"blocks,omitempty"`
+	Task   bool    `json:"task,omitempty"`
 }
 
 // Outgoing is what a sender supplies; the provider fills id, from, timestamps.

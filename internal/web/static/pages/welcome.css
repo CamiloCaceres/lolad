@@ -1,10 +1,8 @@
 /* First-run onboarding (/welcome): one calm card at a time, no navigation. */
-.welcome-body { min-height: 100dvh; background: var(--bg); }
+.welcome-body { min-height: 100dvh; }
 .welcome { max-width: 720px; margin: 0 auto; padding: var(--s5) var(--s4) var(--s7); }
 .welcome-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); margin-bottom: var(--s6); }
-.welcome-brand { display: flex; align-items: center; gap: var(--s2); font-weight: 650; font-size: var(--t-lg); letter-spacing: -0.02em; text-decoration: none; }
-.welcome-brand .brand-mark { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; }
-.welcome-brand .brand-mark circle:last-child { fill: var(--you); stroke: var(--you); }
+.welcome-brand { display: flex; align-items: center; gap: 10px; font: 600 1.25rem/1 var(--display); letter-spacing: -0.02em; text-decoration: none; }
 .welcome-main { outline: none; }
 
 /* progress: numbered steps, the current one is inked */
@@ -12,24 +10,25 @@
 .ws { display: flex; align-items: center; gap: var(--s2); font-size: var(--t-sm); color: var(--muted); }
 .ws a { display: flex; align-items: center; gap: var(--s2); color: inherit; text-decoration: none; border-radius: var(--r-sm); }
 .ws a:hover .ws-label { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
-.ws-n { display: grid; place-items: center; flex: none; width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line-2); font-size: var(--t-xs); font-weight: 650; font-variant-numeric: tabular-nums; }
+.ws-n { display: grid; place-items: center; flex: none; width: 26px; height: 26px; border-radius: 50%; border: 1.5px solid var(--line-2); font-size: var(--t-xs); font-weight: 650; font-variant-numeric: tabular-nums; }
 .ws-n .i { width: 12px; height: 12px; }
-.ws-current { color: var(--ink); font-weight: 620; }
-.ws-current .ws-n { background: var(--ink); border-color: var(--ink); color: var(--bg); }
-.ws-done .ws-n { border-color: var(--st-idle); color: var(--st-idle); }
+.ws-current { color: var(--ink); font-weight: 600; }
+.ws-current .ws-n { border-color: var(--action); color: #C9D6FF; box-shadow: 0 0 12px rgba(122, 162, 255, 0.45); }
+.ws-done .ws-n { border-color: rgba(61, 232, 208, 0.6); color: #9FE8C9; }
 .ws-done { color: var(--ink-2); }
 
-.welcome-card { border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--bg); padding: var(--s6); display: grid; gap: var(--s4); align-content: start; }
-.welcome-title { font-size: var(--t-xl); letter-spacing: -0.02em; line-height: 1.25; margin: 0; }
+.welcome-card { border: 1px solid var(--line); border-radius: 28px; background: var(--card); padding: 44px 48px; display: grid; gap: var(--s4); align-content: start; }
+.welcome-title { font: 200 clamp(2rem, 4vw, 2.75rem)/1.1 var(--display); letter-spacing: -0.03em; margin: 0; }
+.welcome-orb { margin-bottom: 8px; }
 .welcome-lede { margin: 0; color: var(--ink-2); max-width: 60ch; line-height: 1.6; text-wrap: pretty; }
 .welcome-note, .welcome-meta, .welcome-status { margin: 0; color: var(--muted); font-size: var(--t-sm); line-height: 1.6; max-width: 62ch; }
 .welcome-status { display: flex; align-items: center; gap: var(--s2); color: var(--ink-2); }
 .welcome-form { display: grid; gap: var(--s4); max-width: 560px; }
-.welcome-form input, .welcome-form textarea, .welcome-form select { min-height: 42px; font-size: var(--t-msg); }
+.welcome-form input, .welcome-form textarea, .welcome-form select { min-height: 48px; font-size: var(--t-msg); }
 .welcome-form textarea { line-height: 1.6; }
 .welcome-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); }
 .welcome-actions .btn { min-height: 40px; }
-.welcome .btn-primary:disabled { background: var(--bg-3); border-color: var(--line-2); color: var(--muted); }
+.welcome .btn-primary:disabled { background: rgba(255, 255, 255, 0.06); border-color: var(--line-2); color: var(--muted); box-shadow: none; }
 .welcome-actions form { margin: 0; }
 .welcome-alt { display: flex; flex-wrap: wrap; gap: var(--s2); border-top: 1px solid var(--line); padding-top: var(--s3); }
 .welcome-alt form { margin: 0; }
@@ -45,7 +44,7 @@
 .wh-row { display: flex; align-items: center; gap: var(--s4); padding: var(--s4) 0; border-bottom: 1px solid var(--line); }
 .wh-main { min-width: 0; flex: 1; display: grid; gap: 4px; }
 .wh-title { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); }
-.wh-title strong { font-weight: 620; font-size: var(--t-msg); }
+.wh-title strong { font: 300 1.25rem/1.2 var(--display); }
 .wh-meta, .wh-note { margin: 0; font-size: var(--t-sm); line-height: 1.55; color: var(--muted); overflow-wrap: anywhere; max-width: 62ch; }
 .wh-note { color: var(--ink-2); }
 .wh-meta code { font-size: var(--t-xs); }
@@ -66,13 +65,13 @@
 
 .welcome-progress { display: none; font-size: var(--t-sm); line-height: 1.65; }
 .welcome-progress p { color: var(--muted); margin: 6px 0; }
-.welcome-progress progress { width: 100%; height: 5px; accent-color: var(--ink-2); }
+.welcome-progress progress { width: 100%; height: 5px; accent-color: var(--action); }
 .welcome-agent-form.htmx-request .welcome-progress { display: block; }
 
 @media (max-width: 760px) {
   .welcome { padding: var(--s4) var(--s4) calc(var(--s6) + env(safe-area-inset-bottom)); }
   .welcome-head { margin-bottom: var(--s4); }
-  .welcome-card { padding: var(--s4); border-radius: var(--r); }
+  .welcome-card { padding: 24px 20px; border-radius: 22px; }
   .welcome-steps { gap: var(--s2) var(--s3); }
   .ws:not(.ws-current) .ws-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .wh-row { flex-wrap: wrap; align-items: flex-start; }

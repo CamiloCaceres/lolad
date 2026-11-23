@@ -52,9 +52,11 @@ func TestHubCard(t *testing.T) {
 		b, _ := io.ReadAll(resp.Body)
 		return resp.StatusCode, string(b)
 	}
+	// No public hub exists yet: someone who has not joined one sees no hub
+	// card (joining is `lolad hub join`); the endpoints below still work.
 	_, b := do("GET", "/connections", nil)
-	if !strings.Contains(b, `action="/connections/hub/join"`) || !strings.Contains(b, `name="code" type="password"`) {
-		t.Fatal("join form missing")
+	if strings.Contains(b, `action="/connections/hub/join"`) || strings.Contains(b, "hub-title") {
+		t.Fatal("hub card shown before joining a hub")
 	}
 	code := "hubinv_SECRET-MUST-NOT-ECHO"
 	sp.joinErr = &hubErr{"invalid request: hub: handle is taken (try \"milo-2\")"}

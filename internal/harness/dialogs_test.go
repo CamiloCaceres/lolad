@@ -129,6 +129,7 @@ func TestStartupDialogCaptures(t *testing.T) {
 		keys string
 	}{
 		{core.HarnessClaude, "claude-trust.txt", "claude workspace trust", "Down,Enter"},
+		{core.HarnessClaude, "claude-adddir-trust.txt", "claude add-dir trust", "Down,Enter"},
 		{core.HarnessCodewhale, "cw-working-agreement.txt", "codewhale working agreement", "Enter"},
 		{core.HarnessCodewhale, "cw-no-provider.txt", "", ""},
 		{core.HarnessCodewhale, "cw-provider-chooser.txt", "", ""},
@@ -153,7 +154,7 @@ func TestStartupDialogCaptures(t *testing.T) {
 	if strings.Join(keys, ",") != "Enter" {
 		t.Fatal(keys)
 	}
-	for _, pane := range []string{"Allow this tool? Enter to confirm", "Yes, I trust this folder", "Working agreement\nEnter to confirm"} {
+	for _, pane := range []string{"Allow this tool? Enter to confirm", "Yes, add it\nEnter to confirm", "Yes, I trust this folder", "Working agreement\nEnter to confirm"} {
 		name, _ := l.StartupDialog(pane)
 		if name != "" {
 			t.Fatal("accepted ambiguous dialog", pane)

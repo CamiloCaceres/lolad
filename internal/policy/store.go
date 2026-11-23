@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 
 	"github.com/CamiloCaceres/lolad/internal/core"
@@ -29,11 +30,32 @@ func Load(path string) (core.Org, error) {
 		return o, e
 	}
 	if e = yaml.Unmarshal(b, &o); e != nil {
-		return o, e
+		return o, yamlError(path, e)
 	}
 	_, e = Validate(o)
 	return o, e
 }
+
+// yamlError puts the file path in front of a YAML error and drops yaml.v3's
+// "yaml: " prefix, so the user reads "<path>, line 3: did not find expected
+// key". The original error stays wrapped.
+func yamlError(path string, e error) error {
+	msg := strings.TrimPrefix(e.Error(), "yaml: ")
+	msg = strings.TrimPrefix(msg, "unmarshal errors:\n  ")
+	msg = strings.ReplaceAll(msg, "\n  ", "; ")
+	if strings.HasPrefix(msg, "line ") {
+		return &fileError{path + ", " + msg, e}
+	}
+	return &fileError{path + ": " + msg, e}
+}
+
+type fileError struct {
+	msg string
+	err error
+}
+
+func (e *fileError) Error() string { return e.msg }
+func (e *fileError) Unwrap() error { return e.err }
 
 // Save replaces the file atomically. YAML comments are not retained.
 func Save(path string, org core.Org) error {

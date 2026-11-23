@@ -141,7 +141,7 @@ func TestFederationRemoteScreens(t *testing.T) {
 	for _, tc := range []struct {
 		path string
 		want []string
-	}{{"/", []string{"Jugui wants to message Ultron", "2 waiting", "Jugui&#39;s lolad"}}, {"/inbox/jugui@jugui.lolad.local", []string{"Awaiting approval", "Queued", "Failed", "Delivered", "recipient is no longer shared", "Message Jugui"}}, {"/inbox/nova@jugui.lolad.local", []string{"Message Nova", "No messages with Nova yet"}}, {"/connections", []string{"Studio", "3 messages queued", "Agents they can reach", "Nova"}}, {"/agents/ultron", []string{"Shared with", "Approved sender: Nova"}}, {"/org", []string{"Outside this lolad", "external-edge"}}, {"/traffic?connection=jugui.lolad.local", []string{"External · jugui.lolad.local", "Awaiting approval", "Received"}}} {
+	}{{"/", []string{"Jugui, from jugui.lolad.local, wants to talk to Ultron", "2 messages waiting", "Jugui&#39;s lolad"}}, {"/inbox/jugui@jugui.lolad.local", []string{"Awaiting approval", "Queued", "Failed", "Delivered", "recipient is no longer shared", "Message Jugui"}}, {"/inbox/nova@jugui.lolad.local", []string{"Message Nova", "No messages with Nova yet"}}, {"/connections", []string{"Studio", "3 messages on the way", "You share", "Nova"}}, {"/agents/ultron", []string{"Shared with", "Approved sender: Nova"}}, {"/org", []string{"Outside this lolad", "external-edge"}}, {"/traffic?connection=jugui.lolad.local", []string{"From a friend’s lolad · jugui.lolad.local", "Held for you", "Remote delivery"}}} {
 		status, b := do("GET", tc.path, nil)
 		if status != 200 {
 			t.Fatalf("%s: %d", tc.path, status)

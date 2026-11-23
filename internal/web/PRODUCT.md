@@ -5,46 +5,60 @@
 product
 
 ## Users
-One operator, milo (Camilo Caceres), running a small staff of long-running AI
-agents (roughly 5-15) under lolad. He checks in several times a day, at a desk
-or on a phone between other things. His primary job on the dashboard is to read
-and answer agent mail fast, above all the `ask` messages that block an agent
-until he decides. His secondary job is to notice an agent that is crashed,
-failed or stuck waiting, and kick it. He talks to agents only through mail; he
-never wants to read terminals or transcripts. The terminal exists for debugging.
+People who don't write code and want a few AI assistants (roughly 1-15) working
+for them on their own computer: a personal assistant, an inbox helper, a
+writer, a bookkeeper. They check in several times a day, at a desk or on a
+phone between other things. Their main job in lolad is to answer what an
+assistant needs from them, above all the questions that block an assistant
+until they decide. Their second job is to notice an assistant that can't start
+or is stuck, and fix it with one guided step. They talk to assistants only by
+message. Terminals, models, folders and policy rules exist, but behind
+Advanced.
 
 ## Product Purpose
-The lolad dashboard is the operator's console for that staff: an inbox that
-feels like a focused messaging client, a fleet view, the org chart and its
-messaging policy, agent creation, and an audit log of all mail. Success is the
-operator answering what agents need in seconds, and trusting at a glance that
-everyone else is fine.
+lolad is home for a small team of assistants: Home (what needs you, then your
+conversations), Assistants, Team (who works with whom), Sharing (with a
+friend's lolad) and Settings. Success is answering what an assistant needs in
+seconds, and trusting at a glance that everyone else is fine.
 
 ## Brand Personality
-Calm, exact, quiet. A well-run control room, not a hacker terminal. Dense but
-legible; nothing shouts unless it needs the operator.
-References: Linear's density and keyboardability; Apple Mail / Messages for the
-inbox thread feel; Grafana-like discipline about state color, but far quieter.
+Calm, warm, a little magical. "lolad Night": a midnight sky where each
+assistant is a softly moving orb of light. Plain words everywhere: assistant,
+not agent; Asleep, not stopped; "Can't start", not failed.
+References: a calm night-mode messaging app; the orb as a living presence, not
+a status chip.
 
 ## Anti-references
-- Neon-on-black "AI ops" dashboards.
+- Hacker terminals and log viewers on the main path.
 - SaaS hero-metric KPI cards.
-- An inbox that reads like a log viewer.
-- Glassmorphism.
+- Jargon: harness, slug, daemon, policy, exception, on the main path.
+- Fake controls: a toggle on screen does something real, or it isn't there.
 - Cream / paper / sand backgrounds.
 
 ## Design Principles
-1. The inbox is home. Everything else is one click away and secondary.
-2. Hue means state. Neutrals carry the interface; color appears only where the
-   operator should look (an agent's state, something waiting on him).
-3. Your turn is unmistakable. Pending asks and unread mail are the loudest
-   things on any screen, and nothing else competes with them.
-4. Density with air. Many rows, small type, but generous line height and a
-   strict rhythm so it never feels cramped.
-5. Familiar over clever. Standard controls and patterns; the tool disappears
-   into the task.
+1. Home is home. What needs you first, then everything else is one click away.
+2. Assistants are orbs; people are rings. Each assistant has its own colour
+   from its name, and its orb moves with its state.
+3. Amber means your turn, and only that. Rose means something broke, and only
+   that. Blue is the action colour. Nothing else competes.
+4. Plain words, one idea per sentence. Explain what happened and what to do.
+5. Advanced is one click away, never in the way. Every technical control still
+   exists, folded under Advanced.
+
+## Visual system
+- Dark only for now. Midnight gradient background (#07080F), cards at 3.5%
+  white, hairlines at 8%.
+- Type: Sora 200-300 for display, Manrope for UI, mono only behind Advanced.
+  Both self-hosted in `static/vendor/fonts`.
+- Pills for buttons, chips and tabs (44px tall); 22px card radius.
+- Identity hues: Ion #6C9BFF, Lilac #A98BFF, Plasma #FF6BD6, Aqua #3DE8D0,
+  Volt #C4F25A, Frost #DCE6FF. Your turn #FFB547. Failure #FF5C7A. Action
+  #7AA2FF.
+- Logo: an orb with a silk band of light and the amber "your turn" moon
+  (`static/logo.svg`; the desktop icons are drawn from the same geometry in
+  `desktop/assets/icons/gen.go`).
 
 ## Accessibility & Inclusion
-WCAG 2.2 AA contrast. State is never conveyed by hue alone: always a word or a
-glyph too. Full keyboard use. prefers-reduced-motion respected. Usable at phone
-width.
+WCAG 2.2 AA contrast. State is never conveyed by colour or motion alone: always
+a word too. Full keyboard use. prefers-reduced-motion stops orb motion. Usable
+at phone width.

@@ -1,20 +1,33 @@
-/* Device access and single-use pairing. */
-.devices-page { max-width:960px; margin:0 auto; padding:28px; }
-.devices-page .page-head { display:flex; align-items:start; justify-content:space-between; gap:16px; }
-.devices-page h1 { margin:0; font-size:24px; letter-spacing:-.5px; }
-.devices-page h2 { font-size:16px; margin:0 0 12px; }
-.devices-page p { line-height:1.6; }
-.device-pair { padding:24px 0; margin:20px 0 28px; border-block:1px solid var(--line); }
-.device-pair form { display:flex; gap:10px; flex-wrap:wrap; margin-top:18px; }
-.device-pair input { min-height:40px; min-width:220px; }
-.pair-result { display:flex; gap:40px; align-items:center; margin-top:28px; }
-.pair-code { font:600 32px ui-monospace,monospace; letter-spacing:5px; }
-.pair-qr { width:176px; flex-shrink:0; }
-.pair-qr svg { display:block; width:100%; height:auto; }
-.device-row { display:flex; align-items:center; gap:24px; padding:18px 0; border-bottom:1px solid var(--line); }
-.device-identity,.device-seen { display:grid; gap:4px; }
-.device-identity { flex:1; overflow-wrap:anywhere; }
-.device-seen { font-size:13px; }
-.device-seen small { overflow-wrap:anywhere; }
-.device-row button { min-height:40px; }
-@media(max-width:600px){.devices-page{padding:20px 16px}.device-row{flex-wrap:wrap;gap:12px}.device-identity{flex-basis:60%}.device-seen{flex-basis:100%;order:3}.pair-result{gap:16px;flex-wrap:wrap}.pair-code{font-size:28px}.device-pair form>*{width:100%}.devices-page .page-head{align-items:center}}
+/* Your phone: three plain steps to connect, then the devices that can sign in. */
+.devices-page { max-width: 900px; }
+.devices-page h2 { font: 300 1.5rem/1.25 var(--display); letter-spacing: -0.02em; margin: 0 0 18px; }
+.devices-page h2 .muted { font: 400 var(--t-sm) var(--font); margin-left: 6px; }
+.device-pair { padding: 28px; margin: 8px 0 40px; border-radius: var(--r-lg); background: var(--card); border: 1px solid var(--line); }
+.device-steps { display: grid; gap: 0; }
+.device-steps li { display: flex; gap: 16px; padding: 16px 0; border-top: 1px solid var(--line); }
+.device-steps li:first-child { border-top: 0; padding-top: 0; }
+.device-steps li > div { flex: 1; min-width: 0; }
+.device-steps strong { font-weight: 600; }
+.device-steps p { color: var(--muted); font-size: var(--t-sm); margin-top: 2px; }
+.device-steps form { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; max-width: 560px; }
+.device-steps input { flex: 1; min-width: 220px; }
+.pair-result { display: flex; gap: 40px; align-items: center; margin-top: 18px; padding: 24px; border-radius: 18px; background: rgba(122, 162, 255, 0.07); border: 1px solid rgba(122, 162, 255, 0.25); }
+.pair-code { display: block; margin: 6px 0; font: 300 2.5rem/1.1 var(--display); letter-spacing: 0.18em; }
+.pair-qr { width: 168px; flex-shrink: 0; padding: 10px; border-radius: 14px; background: #fff; }
+.pair-qr svg { display: block; width: 100%; height: auto; }
+.device-list { display: grid; gap: 10px; }
+.device-row { display: flex; align-items: center; gap: 16px; padding: 16px 20px; border-radius: 18px; border: 1px solid var(--line); background: var(--card); }
+.device-row.is-revoked { opacity: 0.6; }
+.device-ico { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: rgba(255, 255, 255, 0.06); color: var(--ink-2); flex: none; }
+.device-identity { flex: 1; min-width: 0; display: grid; gap: 2px; overflow-wrap: anywhere; }
+.device-identity strong { font-weight: 600; }
+.device-identity small { font-size: var(--t-xs); }
+.device-empty { padding: 12px 0; }
+.device-note { margin-top: 14px; font-size: var(--t-xs); max-width: 70ch; }
+.device-signout { margin-top: 36px; }
+@media (max-width: 600px) {
+  .device-pair { padding: 20px; }
+  .pair-result { flex-wrap: wrap; gap: 16px; }
+  .device-steps form > * { width: 100%; }
+  .device-row { flex-wrap: wrap; }
+}

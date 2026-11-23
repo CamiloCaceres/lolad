@@ -81,10 +81,10 @@ func setupSettings(t *testing.T) *cfgEnv {
 func TestSettingsPages(t *testing.T) {
 	e := setupSettings(t)
 	for _, tc := range []struct{ path, want string }{
-		{"/agents/ultron/settings", "Model &amp; runtime"},
+		{"/agents/ultron/settings", "How smart"},
 		{"/agents/ultron/settings/runtime", `value="claude-opus-5-5" checked`},
 		{"/agents/ultron/settings/skills", "Inherit my skills"},
-		{"/agents/iris/settings/skills", "Not visible under Barebones"},
+		{"/agents/iris/settings/skills", "until you add them"},
 		{"/agents/ultron/settings/secrets", "GOOGLE_CALENDAR_TOKEN"},
 		{"/agents/ultron/settings/secrets", "email: ultron@mail.example.com"},
 		{"/agents/lola/settings/files", "Pick a file"},
@@ -93,8 +93,8 @@ func TestSettingsPages(t *testing.T) {
 		{"/agents/ultron/settings/email", "A mail mod watches this inbox"},
 		{"/agents/iris/settings/email", "aim-secret"},
 		{"/agents/patch/settings/email", "use email yet"},
-		{"/agents/lola/settings", "Pending restart"},
-		{"/agents/lola", "Restart to apply"},
+		{"/agents/lola/settings", "Needs a quick restart"},
+		{"/agents/lola", "Restart Lola"},
 		{"/agents/lola", `href="/agents/lola/settings"`},
 		{"/inbox/lola", `href="/agents/lola/settings"`},
 		{"/agents/lola/part/pending", `id="pending-settings"`},
@@ -113,7 +113,7 @@ func TestSettingsPages(t *testing.T) {
 			t.Errorf("GET %s = %d, want 404", p, code)
 		}
 	}
-	if _, body := e.get("/agents/ultron"); strings.Contains(body, "Pending restart") {
+	if _, body := e.get("/agents/ultron"); strings.Contains(body, "Needs a quick restart") {
 		t.Error("ultron has nothing pending but shows the banner")
 	}
 }
@@ -145,7 +145,7 @@ func TestRuntimeSave(t *testing.T) {
 	if rt.Harness != before.Runtime.Harness || len(rt.Triggers) != len(before.Runtime.Triggers) || rt.Skills != before.Runtime.Skills {
 		t.Errorf("fields the form doesn't edit changed: %+v", rt)
 	}
-	if !strings.Contains(body, `id="settings-panel"`) || !strings.Contains(body, `hx-swap-oob="true"`) || !strings.Contains(body, "Pending restart") {
+	if !strings.Contains(body, `id="settings-panel"`) || !strings.Contains(body, `hx-swap-oob="true"`) || !strings.Contains(body, "Needs a quick restart") {
 		t.Error("answer should be the panel plus the pending-restart banner, out of band")
 	}
 	if !strings.Contains(resp.Header.Get("HX-Trigger"), "Restart to apply") {
@@ -181,7 +181,7 @@ func TestRuntimeSave(t *testing.T) {
 func TestRestartFromSettings(t *testing.T) {
 	e := setupSettings(t)
 	resp, body := e.do("POST", "/agents/lola/restart", url.Values{"from": {"settings"}}, true)
-	if resp.StatusCode != 200 || !strings.Contains(body, `id="pending-settings"`) || strings.Contains(body, "Pending restart") {
+	if resp.StatusCode != 200 || !strings.Contains(body, `id="pending-settings"`) || strings.Contains(body, "Needs a quick restart") {
 		t.Errorf("restart from settings: %d %s", resp.StatusCode, body)
 	}
 	if a, _ := e.cfg.Get(context.Background(), "lola"); a.PendingRestart {
@@ -217,7 +217,7 @@ func TestSkills(t *testing.T) {
 	if resp.StatusCode != 200 || len(e.cfg.runtimes) != 1 || e.cfg.runtimes[0].Skills != core.SkillsBarebones {
 		t.Fatalf("mode: %d %+v", resp.StatusCode, e.cfg.runtimes)
 	}
-	if !strings.Contains(body, `value="barebones" checked`) || !strings.Contains(body, "Not visible under Barebones") {
+	if !strings.Contains(body, `value="barebones" checked`) || !strings.Contains(body, "until you add them") {
 		t.Error("panel doesn't show barebones")
 	}
 }
@@ -235,7 +235,7 @@ func TestSecretsAreWriteOnly(t *testing.T) {
 		resp, body := e.do("POST", "/agents/ultron/settings/secrets", url.Values{"key": {"STRIPE_KEY"}, "value": {secret}}, hx)
 		check("add", body)
 		check("add headers", resp.Header.Get("HX-Trigger"))
-		if hx && (resp.StatusCode != 200 || !strings.Contains(body, "STRIPE_KEY") || !strings.Contains(body, "31 chars")) {
+		if hx && (resp.StatusCode != 200 || !strings.Contains(body, "STRIPE_KEY") || !strings.Contains(body, "31 characters")) {
 			t.Errorf("add (htmx): %d", resp.StatusCode)
 		}
 		if !hx && resp.StatusCode != http.StatusSeeOther {

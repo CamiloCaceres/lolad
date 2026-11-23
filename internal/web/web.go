@@ -60,7 +60,8 @@ type server struct {
 	reload        bool
 	maxUpload     int64
 	setup         setup.Service
-	uploads       pending // files uploaded in a conversation, not sent yet
+	uploads       pending       // files uploaded in a conversation, not sent yet
+	drafts        requestDrafts // staged answers to requests, not sent yet
 
 	mu     sync.Mutex
 	base   *template.Template
@@ -97,6 +98,8 @@ func New(svc core.Service, opts Options) http.Handler {
 	mux.HandleFunc("GET /inbox/{peer}", s.thread)
 	mux.HandleFunc("POST /inbox/{peer}", s.send)
 	mux.HandleFunc("POST /inbox/{peer}/decide", s.decide)
+	mux.HandleFunc("POST /inbox/{peer}/requests/send", s.sendRequests)
+	mux.HandleFunc("POST /inbox/{peer}/requests/{id}", s.stageRequest)
 	mux.HandleFunc("POST /inbox/{peer}/attachments", s.upload)
 	mux.HandleFunc("GET /inbox/{peer}/attachments/{id}", s.download)
 	mux.HandleFunc("GET /inbox/{peer}/messages", s.messages)
@@ -139,6 +142,7 @@ func New(svc core.Service, opts Options) http.Handler {
 	mux.HandleFunc("POST /adopt", s.adopt)
 
 	// Email provisioning routes (optional mailprov.Service).
+	mux.HandleFunc("GET /settings", s.appSettings)
 	mux.HandleFunc("GET /email", s.emailPage)
 	mux.HandleFunc("POST /email/provider", s.emailProviderSave)
 	mux.HandleFunc("POST /email/{name}/{op}", s.emailAction)
@@ -253,7 +257,7 @@ func (s *server) templates() (*template.Template, map[string]*template.Template)
 type layout struct {
 	Version string
 	Title   string
-	Nav     string // inbox | agents | org | traffic | new
+	Nav     string // inbox | agents | org | connections | settings | email | devices | traffic | new
 	Class   string // extra body class
 	Me      core.User
 	Badges  badges

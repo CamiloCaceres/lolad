@@ -26,6 +26,10 @@ func canonical(event string) string {
 		return "post_tool"
 	case "Stop", "turn_end", "stop", "session_idle":
 		return "stop"
+	case "StopFailure", "session_error", "stop_failure":
+		// The turn ended because of an API error (Claude Code) or a terminal
+		// failure (Codewhale). Fires instead of Stop for Claude.
+		return "stop_failure"
 	case "Notification", "notification":
 		return "notification"
 	case "PermissionRequest", "waiting_for_user", "permission":
@@ -61,6 +65,18 @@ func Map(event string, payload map[string]any, agent string) core.HookEvent {
 		case "compact":
 		default:
 			e.State = core.StateStarting
+		}
+	case "stop_failure":
+		// The supervisor decides the state from the error.
+		e.Error = str("error")
+		for _, k := range []string{"last_assistant_message", "error_details", "message"} {
+			if v := strings.TrimSpace(str(k)); v != "" {
+				e.Detail = v
+				break
+			}
+		}
+		if r := []rune(e.Detail); len(r) > 400 {
+			e.Detail = string(r[:400]) + "…"
 		}
 	case "permission":
 		e.State = core.StateWaiting

@@ -15,12 +15,13 @@ type harnessSpec struct {
 	id, name string
 	bin      string // executable base name
 	nodeCLI  bool   // an npm package whose launcher needs node
+	runs     bool   // lolad can run assistants on it (ROADMAP M1: not Codex yet)
 }
 
 var harnessSpecs = []harnessSpec{
-	{id: "claude", name: "Claude Code", bin: "claude"},
+	{id: "claude", name: "Claude Code", bin: "claude", runs: true},
 	{id: "codex", name: "Codex", bin: "codex", nodeCLI: true},
-	{id: "codewhale", name: "Codewhale", bin: "codewhale"},
+	{id: "codewhale", name: "Codewhale", bin: "codewhale", runs: true},
 }
 
 // configBinKey is the config.yaml key naming a harness's absolute path.
@@ -36,7 +37,7 @@ func installHint(goos, id string) string {
 		if goos == "windows" {
 			return `Run in PowerShell: irm https://claude.ai/install.ps1 | iex`
 		}
-		return "Run: curl -fsSL https://claude.ai/install.sh | bash"
+		return "Press Install. It downloads Claude Code from Anthropic and takes about a minute."
 	case "codex":
 		return "Run: npm install -g @openai/codex (needs Node.js; install it from nodejs.org first if `node` is not found)"
 	case "codewhale":
@@ -189,7 +190,7 @@ func (m *Manager) detect(ctx context.Context, captured string, configured map[st
 	}
 	out := make([]Harness, 0, len(harnessSpecs))
 	for _, s := range harnessSpecs {
-		h := Harness{ID: s.id, Name: s.name, InstallHint: installHint(m.goos, s.id), CanInstall: canInstall(s.id), CanLogin: canLogin(s.id)}
+		h := Harness{ID: s.id, Name: s.name, InstallHint: installHint(m.goos, s.id), CanInstall: canInstall(s.id), CanLogin: canLogin(s.id), Supported: s.runs}
 		path := ""
 		if c := configured[s.id]; c != "" && executable(c, m.goos) {
 			path = c

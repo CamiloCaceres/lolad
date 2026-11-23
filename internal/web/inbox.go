@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -27,14 +28,17 @@ type msgView struct {
 	core.Mail
 	Mine     bool
 	Chat     core.UserChat
-	Kind     string // say | update | deliver | ask | decision | reply | system
-	Day      string // set on the first message of a day
-	ShowSubj bool   // show the subject line
-	Cont     bool   // continues a run from the same sender
-	New      bool   // first message that was unread when the thread was opened
-	Answered bool   // ask: the user has answered (by decision or text); no longer waiting
-	Answer   string // ask: the option the user chose; set, the choice is final
-	Receipt  string // last message from the user: Sent | Delivered | Read
+	Kind     string       // say | update | deliver | ask | decision | reply | system
+	Day      string       // set on the first message of a day
+	ShowSubj bool         // show the subject line
+	Cont     bool         // continues a run from the same sender
+	New      bool         // first message that was unread when the thread was opened
+	Answered bool         // ask: the user has answered (by decision or text); no longer waiting
+	Answer   string       // ask: what the user answered (the option, or a summary of their answers)
+	Skipped  bool         // ask: the user chose not to answer
+	Lines    []answerLine // answers: each request and what the user said
+	Req      *reqView     // open ask: how to answer it, and the staged answer
+	Receipt  string       // last message from the user: Sent | Delivered | Read
 	Files    []attView
 	HideBody bool // the body only lists the files (a message sent with no text)
 	Bare     bool // nothing to show in a bubble: just the files
@@ -57,7 +61,8 @@ type threadView struct {
 	AttachNote string
 	MaxFiles   int
 	MaxBytes   int64
-	MaxLabel   string // "500 MB"
+	MaxLabel   string    // "500 MB"
+	Tray       *trayView // open requests from the peer, above the composer
 }
 
 type inboxView struct {
@@ -68,9 +73,30 @@ type inboxView struct {
 	Convs     []convView
 	Thread    *threadView
 	Asks      []askView          // home: questions waiting on the user, newest first
+	Trays     []trayView         // home: the same asks grouped by assistant, as request panels
 	Unread    []convView         // home: unread conversations without an ask
 	Others    []core.AgentStatus // agents with no conversation yet
 	Agents    []core.AgentStatus // everyone the user could write to
+	Team      []core.AgentStatus // home: this lolad's own assistants, for the orb strip
+	Broken    []core.AgentStatus // home: assistants that crashed or can't start
+	Blocked   []core.AgentStatus // home: assistants stuck on a permission prompt
+	Needs     int                // home: asks + approvals + blocked + broken
+	Me        string             // home: the user's display name, for the greeting
+}
+
+// homeLine is the one sentence under the greeting: how much needs the user.
+func (v inboxView) HomeLine() string {
+	switch {
+	case len(v.Team) == 0:
+		return "Make your first assistant to get started."
+	case v.Needs == 0:
+		return "Nothing needs you. Everyone is fine."
+	case v.Needs == 1 && len(v.Team) > 1:
+		return "One thing needs you. Everyone else is fine."
+	case v.Needs == 1:
+		return "One thing needs you."
+	}
+	return strconv.Itoa(v.Needs) + " things need you."
 }
 
 type approvalView struct {
@@ -98,10 +124,7 @@ func (s *server) openAsks(ctx context.Context, convs []core.Conversation) map[st
 		defer func() { c.asks = out }()
 	}
 	for _, c := range convs {
-		if c.Last.FromName == me {
-			continue // anything earlier was answered by what the user wrote last
-		}
-		msgs, err := s.svc.Conversation(ctx, c.Peer, 40, time.Time{})
+		msgs, err := s.svc.Conversation(ctx, c.Peer, 200, time.Time{})
 		if err != nil {
 			continue
 		}
@@ -127,6 +150,13 @@ func (c convView) State() core.State {
 	return c.Agent.State
 }
 
+func stateOf(a *core.AgentStatus) core.State {
+	if a == nil {
+		return ""
+	}
+	return a.State
+}
+
 func agentMap(list []core.AgentStatus) map[string]*core.AgentStatus {
 	m := make(map[string]*core.AgentStatus, len(list))
 	for i := range list {
@@ -147,6 +177,16 @@ func (s *server) inboxData(ctx context.Context, active string) (inboxView, map[s
 	}
 	slices.SortFunc(list, func(a, b core.AgentStatus) int { return strings.Compare(a.Name, b.Name) })
 	v.Agents = slices.Clone(list)
+	v.Team = slices.Clone(list)
+	v.Me = cmp.Or(s.svc.Me().Display, s.svc.Me().Name)
+	for _, a := range list {
+		switch a.State {
+		case core.StateFailed, core.StateCrashed:
+			v.Broken = append(v.Broken, a)
+		case core.StateWaiting:
+			v.Blocked = append(v.Blocked, a)
+		}
+	}
 	contacts, err := s.svc.RemoteContacts(ctx, s.svc.Me().Name)
 	if err != nil {
 		return v, nil, err
@@ -224,6 +264,17 @@ func (s *server) inboxData(ctx context.Context, active string) (inboxView, map[s
 	}
 	slices.SortFunc(v.Unread, func(a, b convView) int { return b.LastAt.Compare(a.LastAt) })
 	slices.SortFunc(v.Asks, func(a, b askView) int { return b.Ask.CreatedAt.Compare(a.Ask.CreatedAt) })
+	if active == "" { // only Home shows the request panels
+		v.Trays = s.homeTrays(ctx, v.Asks)
+	}
+	// An agent stuck on a permission prompt that also asked in mail is shown
+	// once, by its ask.
+	asked := map[string]bool{}
+	for _, a := range v.Asks {
+		asked[a.Conv.Peer] = true
+	}
+	v.Blocked = slices.DeleteFunc(v.Blocked, func(a core.AgentStatus) bool { return asked[a.Name] })
+	v.Needs = len(v.Asks) + len(v.Approvals) + len(v.Blocked) + len(v.Broken)
 	return v, agents, nil
 }
 
@@ -242,6 +293,11 @@ func (s *server) inbox(w http.ResponseWriter, r *http.Request) {
 // loadThread reads the conversation, marks the peer's mail to the user read,
 // and builds the view.
 func (s *server) loadThread(ctx context.Context, peer string, agents map[string]*core.AgentStatus) (*threadView, error) {
+	return s.loadThreadWith(ctx, peer, agents, nil)
+}
+
+// loadThreadWith is loadThread showing what was posted with refused answers.
+func (s *server) loadThreadWith(ctx context.Context, peer string, agents map[string]*core.AgentStatus, edits map[string]reqEdit) (*threadView, error) {
 	msgs, err := s.svc.Conversation(ctx, peer, 200, time.Time{})
 	if err != nil {
 		return nil, err
@@ -306,10 +362,19 @@ func (s *server) loadThread(ctx context.Context, peer string, agents map[string]
 	if !t.Attach {
 		t.AttachNote = noRemoteFiles
 	}
+	// A typed message never answers a request: it replies to the peer's last
+	// message that isn't an open ask.
 	for i := len(t.Msgs) - 1; i >= 0; i-- {
-		if !t.Msgs[i].Mine {
-			t.ReplyTo = t.Msgs[i].ID
+		if m := t.Msgs[i]; !m.Mine && (m.Kind != "ask" || m.Answered) {
+			t.ReplyTo = m.ID
 			break
+		}
+	}
+	tray := s.buildTray(ctx, peer, t.Display, stateOf(a), openOf(t.Msgs), false, edits)
+	t.Tray = &tray
+	for i := range tray.Reqs {
+		if j := slices.IndexFunc(t.Msgs, func(m msgView) bool { return m.ID == tray.Reqs[i].Ask.ID }); j >= 0 {
+			t.Msgs[j].Req = &tray.Reqs[i]
 		}
 	}
 	return t, nil
@@ -346,7 +411,7 @@ func shape(msgs []msgView, me string) {
 			lastDay = day
 		}
 		subj := subject(m.Mail)
-		m.ShowSubj = !m.Mine && subj != "" && (subj != lastSubject || m.Kind == "ask" || m.Kind == "deliver")
+		m.ShowSubj = !m.Mine && subj != "" && (subj != lastSubject || m.Kind == "ask" || m.Kind == "deliver") && !restates(subj, m.Body)
 		lastSubject = subj
 		if i > 0 && m.Day == "" && !m.New {
 			p := msgs[i-1]
@@ -367,21 +432,8 @@ func shape(msgs []msgView, me string) {
 			break
 		}
 	}
-	for i := range msgs {
-		if msgs[i].Mine || msgs[i].Kind != "ask" {
-			continue
-		}
-		for j := i + 1; j < len(msgs); j++ {
-			if !msgs[j].Mine {
-				continue
-			}
-			msgs[i].Answered = true
-			if msgs[j].InReplyTo == msgs[i].ID && msgs[j].Chat.Kind == "decision" {
-				msgs[i].Answer = msgs[j].Chat.Decision
-			}
-			break
-		}
-	}
+	closeAsks(msgs)
+	answerLines(msgs)
 }
 
 func dayLabel(t time.Time) string {
@@ -431,18 +483,30 @@ func (s *server) messages(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) renderThread(w http.ResponseWriter, r *http.Request, peer, errMsg string, code int) {
+	s.renderThreadFull(w, r, peer, code, errMsg, nil, "")
+}
+
+// renderThreadWith refreshes the thread after a request action.
+func (s *server) renderThreadWith(w http.ResponseWriter, r *http.Request, peer string, code int, edits map[string]reqEdit, barErr string) {
+	s.renderThreadFull(w, r, peer, code, "", edits, barErr)
+}
+
+func (s *server) renderThreadFull(w http.ResponseWriter, r *http.Request, peer string, code int, errMsg string, edits map[string]reqEdit, barErr string) {
 	ctx := r.Context()
 	list, err := s.list(ctx)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	t, err := s.loadThread(ctx, peer, agentMap(list))
+	t, err := s.loadThreadWith(ctx, peer, agentMap(list), edits)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	t.Error = errMsg
+	if t.Tray != nil {
+		t.Tray.Error = barErr
+	}
 	v, _, err := s.inboxData(ctx, peer)
 	if err != nil {
 		s.fail(w, r, err)
@@ -549,6 +613,9 @@ func (s *server) send(w http.ResponseWriter, r *http.Request) {
 	out := core.Outgoing{To: peer, Body: body, Type: "request", Attachments: ids,
 		Context: map[string]any{"userchat": map[string]any{"kind": "say"}}}
 	parent := findMail(msgs, r.FormValue("reply_to"))
+	if parent != nil && userChat(*parent).Kind == "ask" {
+		parent = nil // chatting doesn't answer a request; its panel does
+	}
 	if parent != nil && parent.FromName == peer {
 		out.InReplyTo, out.Type = parent.ID, "response"
 		out.Context = map[string]any{"userchat": map[string]any{"kind": "reply"}}

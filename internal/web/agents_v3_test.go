@@ -16,11 +16,11 @@ func TestAgentsRosterFiltering(t *testing.T) {
 		path         string
 		want, absent []string
 	}{
-		{"/agents", []string{"Find an agent", "Engineering", "Pending restart", "Next trigger", "crash restarts / 24h"}, nil},
-		{"/fragments/fleet?q=LEDGER", []string{"Ledger", `id="fleet"`}, []string{"Forge", "Lola", "No agents yet"}},
+		{"/agents", []string{"Find an assistant", "Engineering", "Restart to apply changes", "Next check-in", "× in 24h"}, nil},
+		{"/fragments/fleet?q=LEDGER", []string{"Ledger", `id="fleet"`}, []string{"Forge", "Lola", "No assistants yet"}},
 		{"/agents?q=engineering", []string{"Forge", "Relay", "Patch"}, []string{"Ledger", "Ultron"}},
-		{"/agents?status=attention", []string{"Ledger", "Relay", "Quill", "Lola"}, []string{"Iris", "Forge", "Scout"}},
-		{"/fragments/fleet?q=nobody-matches", []string{"No matching agents"}, []string{"No agents yet", "Create your first"}},
+		{"/agents?status=attention", []string{"Ledger", "Relay", "Quill", "Lola", "Iris"}, []string{"Ultron", "Forge", "Scout"}},
+		{"/fragments/fleet?q=nobody-matches", []string{"No matching assistants"}, []string{"No assistants yet", "Create your first"}},
 	} {
 		t.Run(tc.path, func(t *testing.T) {
 			resp, body := e.do("GET", tc.path, nil, false)
@@ -66,7 +66,7 @@ func TestAgentsFilteredControlResumesAndFreshWakes(t *testing.T) {
 func TestAgentDetailJobsAndConsequences(t *testing.T) {
 	e := setup(t)
 	_, body := e.do("GET", "/agents/lola", nil, false)
-	for _, want := range []string{"Open conversation", "Recent activity", "Mail sent to milo", "Mail received from forge", "Trigger fired", "Configuration", "Skills mode", "/settings/skills", "/settings/email", "/settings/files", "Read-only", "Restart · resume", "Wake · fresh conversation", "New mail can wake it again", "Next scheduled trigger"} {
+	for _, want := range []string{"Open conversation", "Recent activity", "Mail sent to milo", "Mail received from forge", "Automation ran", "Configuration", "Skills mode", "/settings/skills", "/settings/email", "/settings/files", "Read-only", "A quick restart", "Start fresh", "New mail can wake it again", "Next check-in"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("missing %q", want)
 		}
@@ -76,10 +76,10 @@ func TestAgentDetailJobsAndConsequences(t *testing.T) {
 		t.Errorf("expected separate sent and received mail, without duplicate raw mail events")
 	}
 	_, body = e.do("GET", "/agents/scout", nil, false)
-	if !strings.Contains(body, "Start when needed") || strings.Contains(body, "New mail can wake it again") {
+	if !strings.Contains(body, "Press Start when you need it") || strings.Contains(body, "New mail can wake it again") {
 		t.Error("stopped agent must describe its disabled wake-on-mail setting")
 	}
-	if !strings.Contains(body, "Wake · fresh conversation") {
+	if !strings.Contains(body, "Start fresh") {
 		t.Error("fresh wake must be available to stopped agents")
 	}
 }

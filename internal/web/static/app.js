@@ -22,7 +22,7 @@
     if (!el) return;
     el.classList.toggle("is-on", live === "on");
     el.classList.toggle("is-off", live === "off");
-    const label = live === "on" ? "Live" : live === "off" ? "Reconnecting" : "Connecting";
+    const label = live === "on" ? "lolad is running" : live === "off" ? "Can't reach lolad" : "Connecting…";
     el.title = live === "on" ? "Live updates on" : "Live updates paused: reconnecting";
     const span = el.querySelector("span");
     if (span) span.textContent = label;
@@ -125,6 +125,8 @@
   function openThread() {
     const s = scroller();
     if (!s) return;
+    const m = /^#m-([0-9a-z]+)$/i.exec(location.hash);
+    if (m && showQuestion(m[1], false)) return;
     const fresh = document.getElementById("new");
     if (fresh && fresh.offsetTop > s.clientHeight * 0.6) s.scrollTop = fresh.offsetTop - 24;
     else toBottom(false);
@@ -137,7 +139,10 @@
   });
   document.addEventListener("htmx:afterSwap", (e) => {
     if (e.detail.target && e.detail.target.id === "msgs") {
-      const mine = e.detail.requestConfig && e.detail.requestConfig.verb === "post";
+      // Your own message or a batch of answers lands at the bottom; staging an
+      // answer to an older question stays where you are.
+      const elt = e.detail.requestConfig && e.detail.requestConfig.elt;
+      const mine = e.detail.requestConfig && e.detail.requestConfig.verb === "post" && elt && elt.closest && !!elt.closest("[data-composer], [data-req-send]");
       if (stick || mine) toBottom(true);
     }
   });
@@ -496,6 +501,82 @@
     }
   });
 
+  // Blocks (partials/blocks.html): one click copies a command, a snippet or a
+  // value; so does inline code in an assistant's message. Without the
+  // Clipboard API (plain HTTP from another device) a hidden field copies.
+  let copyLive;
+  function announce(text) {
+    if (!copyLive) {
+      copyLive = document.createElement("p");
+      copyLive.className = "sr-only"; copyLive.setAttribute("role", "status"); copyLive.setAttribute("aria-live", "polite");
+      body.append(copyLive);
+    }
+    copyLive.textContent = ""; setTimeout(() => { copyLive.textContent = text; }, 30);
+  }
+  async function copyText(text) {
+    try {
+      if (!navigator.clipboard || !window.isSecureContext) throw new Error("no clipboard");
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      const area = document.createElement("textarea");
+      area.value = text; area.setAttribute("readonly", ""); area.className = "copy-scratch";
+      body.append(area); area.select();
+      let ok = false;
+      try { ok = document.execCommand("copy"); } catch { ok = false; }
+      area.remove();
+      return ok;
+    }
+  }
+  function flashCopied(el) {
+    el.classList.add("is-copied");
+    const label = el.matches(".blk-copy") && el.querySelector("span");
+    if (label) { label.dataset.was = label.dataset.was || label.textContent; label.textContent = "Copied"; }
+    clearTimeout(el._copyTimer);
+    el._copyTimer = setTimeout(() => {
+      el.classList.remove("is-copied");
+      if (label) label.textContent = label.dataset.was;
+    }, 1600);
+  }
+  document.addEventListener("click", async (e) => {
+    if (!e.target.closest) return;
+    let el = e.target.closest("[data-copy]");
+    let text = "";
+    if (el) {
+      text = el.dataset.copy;
+      if (!text) { const src = el.closest("[data-copy-scope]")?.querySelector("[data-copy-src]"); text = src ? src.textContent : ""; }
+    } else {
+      el = e.target.closest(".msg.is-theirs .rich code");
+      if (!el || el.closest("pre")) return;
+      const sel = window.getSelection();
+      if (sel && !sel.isCollapsed) return; // selecting part of it: leave it alone
+      text = el.textContent;
+      e.preventDefault();
+    }
+    if (!text) return;
+    if (await copyText(text)) { flashCopied(el); announce("Copied"); }
+    else toast("Couldn’t copy. Select the text and copy it", "error");
+  });
+
+  // Steps: ticks stay on this device.
+  const STEPS = "lolad.steps";
+  function stepMarks() { try { return JSON.parse(localStorage.getItem(STEPS) || "{}"); } catch { return {}; } }
+  document.addEventListener("change", (e) => {
+    const box = e.target.closest && e.target.closest("[data-step]");
+    if (!box) return;
+    const marks = stepMarks();
+    if (box.checked) marks[box.dataset.step] = Date.now(); else delete marks[box.dataset.step];
+    const keys = Object.keys(marks);
+    if (keys.length > 500) keys.sort((a, b) => marks[a] - marks[b]).slice(0, keys.length - 500).forEach((k) => delete marks[k]);
+    try { localStorage.setItem(STEPS, JSON.stringify(marks)); } catch { /* full or private: ticks just don't persist */ }
+  });
+  function restoreSteps(root) {
+    const boxes = (root || document).querySelectorAll ? (root || document).querySelectorAll("[data-step]") : [];
+    if (!boxes.length) return;
+    const marks = stepMarks();
+    boxes.forEach((b) => { b.checked = !!marks[b.dataset.step]; });
+  }
+
   // ------------------------------------------------------------ org matrix
   let tip;
   function showTip(cell) {
@@ -647,9 +728,96 @@
   }, true);
   window.addEventListener("beforeunload", (e) => { if (dirty()) { e.preventDefault(); e.returnValue = ""; } });
 
+  // ------------------------------------------------------------ requests
+  // Questions are answered in place. What was typed, and which "Answer"
+  // sections were open, survive live refreshes (htmx re-renders the thread
+  // whenever mail arrives), and so does focus.
+  const typed = new Map();
+  const chosen = new Map(); // file inputs with files: moved into the new page as they are
+  let opened = new Set();
+  let typing = null;
+  function keepTyped() {
+    document.querySelectorAll("[data-req-input]").forEach((el) => { if (el.value) typed.set(el.dataset.key, el.value); });
+    document.querySelectorAll("input[data-req-file]").forEach((el) => { if (el.files && el.files.length) chosen.set(el.id, el); });
+    document.querySelectorAll("details[data-ask][open]").forEach((d) => opened.add(d.dataset.ask));
+    const a = document.activeElement;
+    if (a && a.matches && a.matches("[data-req-input]")) typing = { key: a.dataset.key, start: a.selectionStart, end: a.selectionEnd };
+  }
+  function restoreTyped() {
+    document.querySelectorAll("details[data-ask]").forEach((d) => { if (opened.has(d.dataset.ask)) d.open = true; });
+    chosen.forEach((el, id) => {
+      const fresh = document.getElementById(id);
+      if (fresh && fresh !== el && fresh.matches("input[data-req-file]")) {
+        fresh.replaceWith(el);
+        const d = el.closest("details");
+        if (d) d.open = true;
+      }
+    });
+    chosen.clear();
+    document.querySelectorAll("[data-req-input]").forEach((el) => {
+      const v = typed.get(el.dataset.key);
+      if (v && !el.value) {
+        el.value = v;
+        const d = el.closest("details");
+        if (d) d.open = true;
+      }
+    });
+    if (typing) {
+      const el = [...document.querySelectorAll("[data-req-input]")].find((x) => x.dataset.key === typing.key);
+      if (el && document.activeElement !== el && !document.activeElement.matches("input, textarea, select")) {
+        el.focus({ preventScroll: true });
+        try { el.setSelectionRange(typing.start, typing.end); } catch { /* not a text field */ }
+      }
+    }
+    typed.clear();
+    opened = new Set();
+    typing = null;
+  }
+  document.addEventListener("htmx:beforeSwap", keepTyped);
+  document.addEventListener("htmx:oobBeforeSwap", keepTyped);
+  // An answer that was accepted closes its section: don't reopen it, and
+  // its files were sent with it.
+  document.addEventListener("htmx:beforeSwap", (e) => {
+    const d = e.detail.requestConfig && e.detail.requestConfig.elt.closest && e.detail.requestConfig.elt.closest("details[data-ask]");
+    if (d && e.detail.xhr.status < 400) {
+      opened.delete(d.dataset.ask);
+      d.querySelectorAll("input[data-req-file]").forEach((el) => chosen.delete(el.id));
+    }
+  });
+
+  // Jump to a question (the bar's "Show", Home's rows): scroll it into view,
+  // mark it briefly and open its answer.
+  function showQuestion(short, focus) {
+    const msg = document.getElementById("m-" + short);
+    if (!msg) return false;
+    msg.scrollIntoView({ block: "center", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    msg.classList.add("is-flash");
+    setTimeout(() => msg.classList.remove("is-flash"), 1600);
+    const d = msg.querySelector("details[data-ask]");
+    if (d) {
+      d.open = true;
+      if (focus) { const f = d.querySelector("button.req-option, [data-req-input], button"); if (f) f.focus({ preventScroll: true }); }
+    }
+    return true;
+  }
+  document.addEventListener("click", (e) => {
+    const jump = e.target.closest && e.target.closest("[data-req-jump]");
+    if (jump && showQuestion(jump.dataset.reqJump, true)) e.preventDefault();
+  });
+  // Opening "Answer" brings the choices into view.
+  document.addEventListener("toggle", (e) => {
+    const d = e.target;
+    if (!d.matches || !d.matches("details[data-ask]") || !d.open || restoring) return;
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    requestAnimationFrame(() => d.scrollIntoView({ block: "nearest", behavior: reduce ? "auto" : "smooth" }));
+  }, true);
+  let restoring = false;
+  function settleRequests() { restoring = true; restoreTyped(); restoreSteps(); setTimeout(() => { restoring = false; }, 0); }
+
   // ------------------------------------------------------------ boot
   function settle(root) {
     retime(root);
+    settleRequests();
     setupComposer(root);
     setupEditor(root);
     paintLive();
@@ -687,3 +855,24 @@ document.addEventListener('click', async function(event) {
  try {await navigator.clipboard.writeText(input.value);button.textContent='Copied';}
  catch {input.focus();input.select();button.textContent='Select and copy invitation';}
 });
+
+// "Open its screen" on the can't-start panel opens the live terminal below.
+document.addEventListener("click", (e) => {
+  const link = e.target.closest && e.target.closest("[data-open-term]");
+  if (!link) return;
+  const panel = document.getElementById("term-panel");
+  if (panel) panel.open = true;
+});
+
+// A link into a closed <details> (for example /org#org-rule-2 under Advanced)
+// opens every enclosing section so the target is visible.
+function openToHash() {
+  const id = decodeURIComponent(location.hash.slice(1));
+  const el = id && document.getElementById(id);
+  if (!el) return;
+  let open = false;
+  for (let d = el.closest("details:not([open])"); d; d = d.parentElement.closest("details:not([open])")) { d.open = true; open = true; }
+  if (open) el.scrollIntoView({ block: "start" });
+}
+window.addEventListener("hashchange", openToHash);
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", openToHash); else openToHash();

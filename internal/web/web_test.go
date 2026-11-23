@@ -105,7 +105,7 @@ func TestPages(t *testing.T) {
 		{"/agents/lola", "Live terminal"},
 		{"/agents/quill", "restart in"},
 		{"/org", "Who can message whom"},
-		{"/new", "Create agent"},
+		{"/new", "A new assistant"},
 		{"/traffic", "Who said what to whom"},
 		{"/traffic?peer=quill", "Tighten pricing page copy"},
 		{"/fragments/conversations?active=lola", `id="conv-list"`},
@@ -151,9 +151,9 @@ func TestFirstRun(t *testing.T) {
 		want, not []string
 	}{
 		{"/", []string{"Welcome to lolad", `href="/new"`, `href="/new?mode=adopt"`}, []string{"caught up", "popovertarget=\"new-message\""}},
-		{"/agents", []string{"No agents yet", `href="/new?mode=adopt"`}, []string{"<table"}},
-		{"/org", []string{"A team starts with a head", "Create a team"}, []string{`class="matrix"`, "Test a message"}},
-		{"/traffic", []string{"No mail yet", `href="/new"`}, []string{`id="peer-filter"`}},
+		{"/agents", []string{"No assistants yet", `href="/new?mode=adopt"`}, []string{"<table"}},
+		{"/org", []string{"No teams yet", "New team"}, []string{`class="matrix"`, "Test a message"}},
+		{"/traffic", []string{"No messages yet", `href="/new"`}, []string{`id="peer-filter"`}},
 		{"/new?mode=adopt", []string{`id="mode-adopt" value="adopt" checked`}, nil},
 	} {
 		code, body := e.get(tc.path)
@@ -210,8 +210,8 @@ func userchat(t *testing.T, out core.Outgoing) map[string]any {
 
 func TestSendCallsUserSend(t *testing.T) {
 	e := setup(t)
-	last := lastFrom(t, e.svc, "lola", "")
-	resp, body := e.do("POST", "/inbox/lola", url.Values{"body": {"Hold the Founders tier, ship the rest."}, "reply_to": {last.ID}}, true)
+	last := lastFrom(t, e.svc, "forge", "")
+	resp, body := e.do("POST", "/inbox/forge", url.Values{"body": {"Hold the Founders tier, ship the rest."}, "reply_to": {last.ID}}, true)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status %d: %s", resp.StatusCode, body)
 	}
@@ -220,7 +220,7 @@ func TestSendCallsUserSend(t *testing.T) {
 		t.Fatalf("UserSend called %d times, want 1", len(sent))
 	}
 	out := sent[0]
-	if out.To != "lola" || out.Body != "Hold the Founders tier, ship the rest." || out.InReplyTo != last.ID {
+	if out.To != "forge" || out.Body != "Hold the Founders tier, ship the rest." || out.InReplyTo != last.ID {
 		t.Errorf("sent %+v", out)
 	}
 	if uc := userchat(t, out); uc["kind"] != "reply" {
@@ -261,9 +261,11 @@ func TestDecisionButtons(t *testing.T) {
 	e := setup(t)
 	code, page := e.get("/inbox/lola")
 	ask := lastFrom(t, e.svc, "lola", "ask")
-	if code != 200 || !strings.Contains(page, `value="Hold until Thursday"`) || !strings.Contains(page, `name="id" value="`+ask.ID+`"`) {
-		t.Fatalf("ask options not rendered as buttons")
+	if code != 200 || !strings.Contains(page, `value="Hold until Thursday"`) || !strings.Contains(page, `action="/inbox/lola/requests/`+ask.ID+`"`) {
+		t.Fatalf("ask options not rendered as buttons in the requests panel")
 	}
+
+	// /decide still answers one ask at once (older clients and the API).
 
 	resp, body := e.do("POST", "/inbox/lola/decide", url.Values{"id": {ask.ID}, "option": {"Hold until Thursday"}}, true)
 	if resp.StatusCode != http.StatusOK {
@@ -281,9 +283,12 @@ func TestDecisionButtons(t *testing.T) {
 	if out.InReplyTo != ask.ID || out.To != "lola" || out.Body != "Hold until Thursday" || out.Subject != "Re: Ship pricing today?" {
 		t.Errorf("sent %+v", out)
 	}
-	// The answered ask now shows the choice and retires its buttons.
-	if !strings.Contains(body, `option is-chosen`) || !strings.Contains(body, " disabled") {
+	// The answered ask now shows the choice and leaves the requests panel.
+	if !strings.Contains(body, `<p class="ask-state">`) || !strings.Contains(body, "<span>Hold until Thursday</span>") {
 		t.Errorf("answered ask not marked")
+	}
+	if strings.Contains(body, `action="/inbox/lola/requests/`+ask.ID+`"`) {
+		t.Errorf("answered ask still in the requests panel")
 	}
 
 	// Options not offered by the ask, and asks from someone else, are refused.
@@ -527,7 +532,7 @@ func TestOrgMatrixAndCheck(t *testing.T) {
 		t.Errorf("check: %d %s", resp.StatusCode, body)
 	}
 	_, body = e.do("POST", "/org/check", url.Values{"from": {"ultron"}, "to": {"juno"}}, true)
-	if !strings.Contains(body, "denied") || !strings.Contains(body, "independents") {
+	if !strings.Contains(body, "not allowed") || !strings.Contains(body, "independents") {
 		t.Errorf("check deny: %s", body)
 	}
 }

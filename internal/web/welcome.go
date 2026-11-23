@@ -31,10 +31,10 @@ type welcomeStep struct {
 
 var welcomeLabels = map[string]string{
 	setup.StepLogin:     "Start at login",
-	setup.StepHarnesses: "Agent tools",
-	setup.StepFolder:    "Agents folder",
+	setup.StepHarnesses: "Brain",
+	setup.StepFolder:    "Folder",
 	setup.StepName:      "Your name",
-	setup.StepAgent:     "First agent",
+	setup.StepAgent:     "First assistant",
 }
 
 type welcomeView struct {
@@ -406,7 +406,7 @@ func (s *server) welcomeAgent(w http.ResponseWriter, r *http.Request) {
 	fields := map[string]string{}
 	slug := newSlug(name)
 	if name == "" {
-		fields["name"] = "Give your agent a name."
+		fields["name"] = "Give your assistant a name."
 	} else if !newSlugValid.MatchString(slug) {
 		fields["name"] = "Use letters or numbers in the name."
 	}
@@ -414,7 +414,7 @@ func (s *server) welcomeAgent(w http.ResponseWriter, r *http.Request) {
 		fields["name"] = "Setup cannot use quotes, backslashes, newlines, | or & here."
 	}
 	if mission == "" {
-		fields["mission"] = "Describe the job you want this agent to own."
+		fields["mission"] = "Describe the job you want this assistant to own."
 	}
 	st, err := s.welcomeStatus(r.Context())
 	if err != nil {
@@ -432,7 +432,7 @@ func (s *server) welcomeAgent(w http.ResponseWriter, r *http.Request) {
 		}
 		for _, a := range agents {
 			if a.Name == slug {
-				fields["name"] = "An agent called " + slug + " already exists. Choose another name."
+				fields["name"] = "An assistant called " + slug + " already exists. Choose another name."
 			}
 		}
 	}

@@ -222,8 +222,27 @@ documented API and the `lolad` CLI.
    lolad, use it.
 3. If nothing answers: on first launch run onboarding (§7). Otherwise start
    the registered service, wait up to 10 s, and show "Starting lolad…".
-4. If the port is held by something that is not lolad: pick a free port,
-   write it to the config, and start the daemon there.
+4. If the port is held by something that is not lolad, the daemon handles it
+   when it starts (`lolad serve`), whoever started it (the app, launchd or a
+   terminal):
+   - If the program on the port is a lolad (its `/api/health` says so), the
+     new daemon exits and the running one is used: one lolad per port.
+   - If it is another program and `config.yaml` has no `listen:` line, the
+     daemon takes the first free loopback port from 4101 to 4199, saves it as
+     `listen: "127.0.0.1:<port>"` in `config.yaml` (other lines and comments
+     are kept; the file is replaced atomically), logs the move in
+     `daemon.log`, and serves there. The CLI and agents read the new address
+     from the config.
+   - If `listen:` is set in `config.yaml`, the user chose that port, so the
+     daemon does not move it: it exits with "port N is being used by another
+     program…", naming the file to edit and a free port to use.
+
+   The app only counts a real lolad (`/api/health` with `product: lolad`) as
+   running. While the daemon does not answer, the app re-reads `listen:`
+   about every 5 seconds and switches its window, tray links and live feed to
+   the new address when it changes. If another program answers on the
+   configured port, the tray status line reads "Another program is using port
+   N" instead of "lolad is not running".
 5. If the version differs from the app's bundled daemon (for example a
    developer build), show a non-blocking banner: "Connected to lolad
    <version> at <path>".

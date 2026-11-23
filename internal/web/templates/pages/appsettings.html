@@ -1,0 +1,23 @@
+{{define "content"}}{{with .Data}}<div class="page page-narrow appsettings">
+  <header class="page-head"><div><h1 class="page-title">Settings</h1></div></header>
+
+  <section class="set-group" aria-labelledby="as-you">
+    <h2 id="as-you" class="eyebrow">You</h2>
+    <div class="set-row"><div><strong>{{$.Me.Display}}</strong><p class="muted">What your assistants call you</p></div></div>
+  </section>
+
+  <section class="set-group" aria-labelledby="as-computer">
+    <h2 id="as-computer" class="eyebrow">This computer</h2>
+    <a class="set-row is-link" href="/devices"><span class="set-ico">{{template "icon" "phone"}}</span><div><strong>Your phone</strong><p class="muted">{{if .Remote}}Answer your assistants from anywhere{{else}}Available when lolad runs as the app{{end}}</p></div>{{template "icon" "next"}}</a>
+    {{if .Setup}}<a class="set-row is-link" href="/welcome?step=harnesses"><span class="set-ico">{{template "icon" "pulse"}}</span><div><strong>AI tools</strong><p class="muted">Install Claude Code, sign in again, or check it’s ready</p></div>{{template "icon" "next"}}</a>{{end}}
+    <a class="set-row is-link" href="/email"><span class="set-ico">{{template "icon" "mail"}}</span><div><strong>Email</strong><p class="muted">Give assistants their own email address</p></div>{{template "icon" "next"}}</a>
+    {{if .Version}}<div class="set-row"><span class="set-ico">{{template "icon" "info"}}</span><div><strong>lolad {{.Version}}</strong></div></div>{{end}}
+  </section>
+
+  <section class="set-group" aria-labelledby="as-adv">
+    <h2 id="as-adv" class="eyebrow">Advanced <span class="muted">· for troubleshooting</span></h2>
+    <a class="set-row is-link" href="/traffic"><span class="set-ico">{{template "icon" "pulse"}}</span><div><strong>Activity</strong><p class="muted">Every message, and anything that was stopped</p></div>{{template "icon" "next"}}</a>
+    <a class="set-row is-link" href="/org"><span class="set-ico">{{template "icon" "shield"}}</span><div><strong>Who can talk to whom</strong><p class="muted">Teams and every messaging rule, in order</p></div>{{template "icon" "next"}}</a>
+    <a class="set-row is-link" href="/agents"><span class="set-ico">{{template "icon" "terminal"}}</span><div><strong>Assistant screens</strong><p class="muted">Open an assistant, then Advanced, to see its live terminal</p></div>{{template "icon" "next"}}</a>
+  </section>
+</div>{{end}}{{end}}

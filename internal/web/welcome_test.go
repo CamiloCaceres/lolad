@@ -163,7 +163,7 @@ func TestWelcomeWalkThrough(t *testing.T) {
 
 	// 3. folder: the default is offered, protected places warn.
 	_, body, _ = w.get("/welcome")
-	if !strings.Contains(body, "Where should your agents live?") || !strings.Contains(body, "Lolad Agents") {
+	if !strings.Contains(body, "Where should your assistants live?") || !strings.Contains(body, "Lolad Agents") {
 		t.Fatalf("folder step:\n%s", body)
 	}
 	_, chk, _ := w.get("/welcome/folder/check?dir=" + url.QueryEscape("/Volumes/Backup/agents"))
@@ -180,7 +180,7 @@ func TestWelcomeWalkThrough(t *testing.T) {
 
 	// 4. name goes through the daemon's org.
 	_, body, _ = w.get("/welcome")
-	if !strings.Contains(body, "What should your agents call you?") || !strings.Contains(body, `value="Camilo Caceres"`) {
+	if !strings.Contains(body, "What should your assistants call you?") || !strings.Contains(body, `value="Camilo Caceres"`) {
 		t.Fatalf("name step:\n%s", body)
 	}
 	if code, body, _ = w.post("/welcome/name", url.Values{"name": {" "}}); code != http.StatusUnprocessableEntity || !strings.Contains(body, "what to call you") {
@@ -196,7 +196,7 @@ func TestWelcomeWalkThrough(t *testing.T) {
 
 	// 5. first agent: defaults are filled in; problems are explained.
 	_, body, _ = w.get("/welcome")
-	for _, want := range []string{"Bring on your first agent", `value="Maple"`, `name="harness" value="claude"`, "Create and start", "I’ll add an agent later"} {
+	for _, want := range []string{"Wake up your first assistant", `value="Maple"`, `name="harness" value="claude"`, "Wake it up", "I’ll do this later"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("agent step lacks %q", want)
 		}
@@ -218,7 +218,7 @@ func TestWelcomeWalkThrough(t *testing.T) {
 
 	// 6. done, and "/" no longer redirects.
 	_, body, _ = w.get(h.Get("Location"))
-	if !strings.Contains(body, "Maple is on it") || !strings.Contains(body, `href="/inbox/maple?created=1"`) || !strings.Contains(body, "data-notify") {
+	if !strings.Contains(body, "Maple is waking up.") || !strings.Contains(body, `href="/inbox/maple?created=1"`) || !strings.Contains(body, "data-notify") {
 		t.Fatalf("done:\n%s", body)
 	}
 	if code, _, _ = w.get("/"); code != http.StatusOK {
@@ -234,11 +234,11 @@ func TestWelcomeLaterAndBack(t *testing.T) {
 	w.post("/welcome/name", url.Values{"name": {"Ada"}})
 	// An earlier step can be revisited; a later one cannot be jumped to.
 	_, body, _ := w.get("/welcome?step=folder")
-	if !strings.Contains(body, "Where should your agents live?") {
+	if !strings.Contains(body, "Where should your assistants live?") {
 		t.Error("cannot go back")
 	}
 	_, body, _ = w.get("/welcome")
-	if !strings.Contains(body, "Bring on your first agent") {
+	if !strings.Contains(body, "Wake up your first assistant") {
 		t.Error("should be on the agent step")
 	}
 	if _, body, _ = w.get("/welcome?step=login"); !strings.Contains(body, "Keep lolad running") {
@@ -259,7 +259,8 @@ func TestWelcomeLaterAndBack(t *testing.T) {
 
 func TestWelcomeNoUsableHarnessForAgents(t *testing.T) {
 	w := newWelcome(t, true)
-	// Only Codex is ready: it can't run lolad agents yet, and the screen says so.
+	// Only Codex is ready: lolad can't run assistants on it yet, so it is not
+	// offered and does not get the user past the brain step.
 	w.demo.Set(func(s *onboard.Status) {
 		for i := range s.Harnesses {
 			if s.Harnesses[i].ID == "codex" {
@@ -268,11 +269,15 @@ func TestWelcomeNoUsableHarnessForAgents(t *testing.T) {
 		}
 	})
 	w.post("/welcome/service", url.Values{"op": {"skip"}})
-	w.post("/welcome/folder", url.Values{"dir": {"/Users/you/Lolad Agents"}})
-	w.post("/welcome/name", url.Values{"name": {"Ada"}})
 	_, body, _ := w.get("/welcome")
-	if !strings.Contains(body, "None of the tools that are ready can run lolad agents yet") {
-		t.Fatalf("agent step:\n%s", body)
+	if strings.Contains(body, `data-harness="codex"`) {
+		t.Errorf("codex offered:\n%s", body)
+	}
+	if strings.Contains(body, `data-harness="codewhale"`) {
+		t.Errorf("codewhale offered although not installed:\n%s", body)
+	}
+	if !strings.Contains(body, "Get at least one tool to Ready to continue") {
+		t.Fatalf("brain step should still be waiting:\n%s", body)
 	}
 }
 

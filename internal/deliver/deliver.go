@@ -107,6 +107,15 @@ func (n *Notifier) ready(a core.Agent, pane string) bool {
 		if time.Since(at) < startGrace {
 			return false
 		}
+	case core.StateBusy:
+		// A Stop hook sent while the daemon was down (a restart mid-turn) is
+		// lost, and the restored busy state would then block mail forever. A
+		// busy signal this old with the input box showing is a finished turn;
+		// the supervisor marks such a session idle by the same rule. A turn
+		// still running shows its spinner, which PromptReady rejects.
+		if time.Since(at) < staleBusy {
+			return false
+		}
 	default:
 		return false
 	}
@@ -116,6 +125,10 @@ func (n *Notifier) ready(a core.Agent, pane string) bool {
 // startGrace is how long a fresh session may sit at its prompt before mail is
 // typed in: long enough for an initial prompt passed at launch to be submitted.
 const startGrace = 30 * time.Second
+
+// staleBusy is how old a busy hook must be before an idle-looking pane is
+// trusted over it (see ready).
+const staleBusy = 15 * time.Minute
 
 func (n *Notifier) Notify(ctx context.Context, a core.Agent, m core.Mail) (result core.NotifyResult, err error) {
 	n.mu.Lock()

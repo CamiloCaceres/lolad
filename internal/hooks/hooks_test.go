@@ -56,6 +56,17 @@ func TestMappings(t *testing.T) {
 	}
 }
 
+func TestStopFailure(t *testing.T) {
+	e := Map("StopFailure", map[string]any{"error": "rate_limit", "last_assistant_message": "You've hit your limit · resets 3pm"}, "a")
+	if e.Event != "stop_failure" || e.Error != "rate_limit" || e.Detail != "You've hit your limit · resets 3pm" || e.State != "" {
+		t.Fatalf("%+v", e)
+	}
+	e = Map("session_error", map[string]any{"message": "402 Insufficient Balance"}, "a")
+	if e.Event != "stop_failure" || e.Detail != "402 Insufficient Balance" {
+		t.Fatalf("%+v", e)
+	}
+}
+
 // Claude Code fires SessionStart for /clear and compaction too. Only a real
 // start may report "starting": nothing marks an idle compaction idle again.
 func TestSessionStartSource(t *testing.T) {

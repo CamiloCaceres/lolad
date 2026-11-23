@@ -1,29 +1,27 @@
 {{define "content"}}{{$v := .Data}}<div class="page page-settings">
-  <nav class="crumbs" aria-label="Breadcrumb"><a href="/agents">Agents</a>{{template "icon" "next"}}<a href="/agents/{{$v.A.Name}}">{{$v.A.Display}}</a>{{template "icon" "next"}}<span aria-current="page">Settings</span></nav>
+  <a class="set-back" href="/agents/{{$v.A.Name}}">{{template "icon" "back"}}<span>{{$v.A.Display}}</span></a>
   <header class="set-head">
     <div class="agent-title">
-      {{template "avatar" (dict "Display" $v.A.Display "State" $v.A.State "Size" "md")}}
+      {{template "avatar" (dict "Display" $v.A.Display "State" $v.A.State "Size" "lg")}}
       <div class="agent-id">
-        <h1>{{$v.A.Display}} <span class="set-head-sub">settings</span></h1>
-        <p class="agent-role">{{template "state" $v.A}} <span class="set-dir mono" title="Everything here is stored in this directory">{{$v.A.Dir}}</span></p>
+        <h1>Settings</h1>
+        <p class="agent-role">{{template "state" $v.A}} <span class="set-head-sub">{{$v.A.Display}}{{with $v.A.Role}} · {{.}}{{end}}</span></p>
       </div>
     </div>
     <div class="set-head-actions">
-      <a class="btn btn-sm" href="/inbox/{{$v.A.Name}}">{{template "icon" "message"}}<span>Message</span></a>
-      <a class="btn btn-sm" href="/agents/{{$v.A.Name}}">Agent page</a>
+      <a class="btn" href="/inbox/{{$v.A.Name}}">{{template "icon" "message"}}<span>Talk to {{$v.A.Display}}</span></a>
     </div>
   </header>
   {{template "pending" (dict "A" $v.A "From" "settings")}}
-  <div class="set-layout">
-    <nav class="set-nav" aria-label="Settings sections">
-      {{range $v.Tabs}}<a href="/agents/{{$v.A.Name}}/settings/{{.Key}}"{{if eq .Key $v.Tab}} aria-current="page"{{end}}>{{template "icon" .Icon}}<span>{{.Label}}</span></a>{{end}}
-    </nav>
-    <div class="set-body">
-      {{if eq $v.Tab "runtime"}}{{template "settings-runtime" $v}}
-      {{else if eq $v.Tab "skills"}}{{template "settings-skills" $v}}
-      {{else if eq $v.Tab "secrets"}}{{template "settings-secrets" $v}}
-      {{else if eq $v.Tab "files"}}{{template "settings-files" $v}}
-      {{else if eq $v.Tab "email"}}{{template "settings-email" $v}}{{end}}
-    </div>
+  <nav class="set-nav" aria-label="Settings sections">
+    {{range $v.Tabs}}<a href="/agents/{{$v.A.Name}}/settings/{{.Key}}"{{if eq .Key $v.Tab}} aria-current="page"{{end}}>{{.Label}}</a>{{end}}
+  </nav>
+  <div class="set-body">
+    {{if eq $v.Tab "runtime"}}{{template "settings-runtime" $v}}
+    {{else if eq $v.Tab "skills"}}{{template "settings-skills" $v}}
+    {{else if eq $v.Tab "secrets"}}{{template "settings-secrets" $v}}
+    {{else if eq $v.Tab "files"}}{{template "settings-files" $v}}
+    {{else if eq $v.Tab "email"}}{{template "settings-email" $v}}{{end}}
   </div>
+  <p class="set-dir">Everything here is stored in <span class="mono">{{$v.A.Dir}}</span></p>
 </div>{{end}}

@@ -31,7 +31,10 @@ const help = `lolad msg [--as name] <command>
   thread <id|last8>
   who
   tell-user say|update|deliver "<text>" [--attach FILE]...
-  tell-user ask "<question>" --option "Yes" --option "No"
+  tell-user ask "<question>" [--option "Yes" --option "No"]
+  tell-user ask "<question>" --field "Label[?][:text|longtext|number|date|logs|file|choice:A|B]"... [--secret ENV_NAME[:Label]]...
+  tell-user say|update|deliver|ask --json '{"text":…,"blocks":[…]}' | --json -   (same arguments as the MCP tools)
+  mcp                          (MCP server on stdio: message_user, ask_user; lolad starts it for you)
 `
 
 type client struct {
@@ -305,9 +308,19 @@ func (c *client) receive(m amp.Message, force bool, dest string) ([]saved, error
 	return c.saveAttachments(m.ID, p.Attachments, dest, force), nil
 }
 func (c *client) send(to, subject, body, typ, priority, reply string, context map[string]any, attach []string) error {
-	_, domain, e := amp.ParseAddress(c.credentials.Address)
+	id, e := c.sendID(to, subject, body, typ, priority, reply, context, attach)
 	if e != nil {
 		return e
+	}
+	fmt.Fprintln(c.out, id)
+	return nil
+}
+
+// sendID signs and routes one message and returns its ID.
+func (c *client) sendID(to, subject, body, typ, priority, reply string, context map[string]any, attach []string) (string, error) {
+	_, domain, e := amp.ParseAddress(c.credentials.Address)
+	if e != nil {
+		return "", e
 	}
 	if !strings.Contains(to, "@") {
 		to = strings.ToLower(to) + "@" + domain
@@ -316,25 +329,47 @@ func (c *client) send(to, subject, body, typ, priority, reply string, context ma
 	}
 	files, e := c.uploadAll(attach)
 	if e != nil {
-		return e
+		return "", e
 	}
 	payload, e := amp.CanonicalJSON(amp.Payload{Type: typ, Message: body, Context: context, Attachments: files})
 	if e != nil {
-		return e
+		return "", e
 	}
 	env := amp.Envelope{From: c.credentials.Address, To: to, Subject: subject, Priority: priority, InReplyTo: reply}
 	sig, e := amp.Sign(c.key, env, json.RawMessage(payload))
 	if e != nil {
-		return e
+		return "", e
 	}
 	var res struct {
 		ID string `json:"id"`
 	}
 	if e = c.request("POST", "/v1/route", amp.RouteRequest{To: to, Subject: subject, Priority: priority, InReplyTo: reply, Signature: sig, Payload: payload}, &res); e != nil {
-		return e
+		return "", e
 	}
-	fmt.Fprintln(c.out, res.ID)
-	return nil
+	return res.ID, nil
+}
+
+// userAddress is the local human's address, where tell-user mail goes.
+func (c *client) userAddress() (string, error) {
+	entries, e := c.directory()
+	if e != nil {
+		return "", e
+	}
+	for _, v := range entries {
+		if v.Kind == "human" && !v.Remote {
+			return v.Address, nil
+		}
+	}
+	return "", fmt.Errorf("user identity not found")
+}
+
+// sendToUser sends a message_user / ask_user call and returns its ID.
+func (c *client) sendToUser(m userMessage) (string, error) {
+	to, e := c.userAddress()
+	if e != nil {
+		return "", e
+	}
+	return c.sendID(to, m.Subject, m.Body, m.Type, "normal", "", map[string]any{"userchat": m.Chat}, m.Attach)
 }
 
 type entry struct {
@@ -527,13 +562,22 @@ func (c *client) run(args []string) error {
 			}
 		}
 		return nil
+	case "mcp":
+		if len(args) > 1 {
+			return fmt.Errorf(mcpUsage)
+		}
+		c.out = io.Discard // stdout is the protocol
+		return c.serveMCP(os.Stdin, os.Stdout)
 	case "tell-user":
-		pos, opts, e := parseOptions(args[1:], map[string]bool{"option": true, "subject": true, "attach": true})
+		pos, opts, e := parseOptions(args[1:], map[string]bool{"option": true, "field": true, "secret": true, "subject": true, "attach": true, "json": true})
 		if e != nil {
 			return e
 		}
+		if js := opts["json"]; len(js) > 0 {
+			return c.tellUserJSON(pos, opts, js[len(js)-1])
+		}
 		if len(pos) != 2 {
-			return fmt.Errorf("usage: tell-user say|update|deliver|ask <text> [--option text]")
+			return fmt.Errorf("usage: tell-user say|update|deliver|ask <text> [--option text] [--field spec] [--secret ENV_NAME]")
 		}
 		kind := pos[0]
 		switch kind {
@@ -541,22 +585,19 @@ func (c *client) run(args []string) error {
 		default:
 			return fmt.Errorf("invalid tell-user kind %s", kind)
 		}
-		if kind != "ask" && len(opts["option"]) > 0 {
-			return fmt.Errorf("--option is only valid for ask")
+		if kind != "ask" && len(opts["option"])+len(opts["field"])+len(opts["secret"]) > 0 {
+			return fmt.Errorf("--option, --field and --secret are only valid for ask")
 		}
-		entries, e := c.directory()
+		fields, e := askFields(opts["field"], opts["secret"])
 		if e != nil {
 			return e
 		}
-		to := ""
-		for _, v := range entries {
-			if v.Kind == "human" && !v.Remote {
-				to = v.Address
-				break
-			}
+		if len(fields) > 0 && len(opts["option"]) > 0 {
+			return fmt.Errorf("use either --option buttons or --field/--secret inputs; for a pick inside a form use --field \"Label:choice:A|B\"")
 		}
-		if to == "" {
-			return fmt.Errorf("user identity not found")
+		to, e := c.userAddress()
+		if e != nil {
+			return e
 		}
 		typ := "notification"
 		if kind == "ask" {
@@ -565,7 +606,7 @@ func (c *client) run(args []string) error {
 		if kind == "update" {
 			typ = "update"
 		}
-		return c.send(to, option(opts, "subject", subjectFromText(pos[1])), pos[1], typ, "normal", "", map[string]any{"userchat": core.UserChat{Kind: kind, Options: opts["option"]}}, opts["attach"])
+		return c.send(to, option(opts, "subject", subjectFromText(pos[1])), pos[1], typ, "normal", "", map[string]any{"userchat": core.UserChat{Kind: kind, Options: opts["option"], Fields: fields}}, opts["attach"])
 	default:
 		return fmt.Errorf("unknown msg command %q; use lolad msg help", args[0])
 	}
@@ -579,4 +620,43 @@ func subjectFromText(text string) string {
 		runes = runes[:80]
 	}
 	return string(runes)
+}
+
+// tellUserJSON is tell-user <kind> --json '<arguments>': the same arguments
+// as the message_user (say, update, deliver) and ask_user (ask) tools. "-"
+// reads them from stdin. --attach adds files.
+func (c *client) tellUserJSON(pos []string, opts map[string][]string, js string) error {
+	if len(pos) != 1 || len(opts["option"])+len(opts["field"])+len(opts["secret"])+len(opts["subject"]) > 0 {
+		return fmt.Errorf("usage: tell-user say|update|deliver|ask --json '{...}' [--attach FILE]...; put text, title, options and fields in the JSON")
+	}
+	raw := []byte(js)
+	if js == "-" {
+		b, e := io.ReadAll(io.LimitReader(os.Stdin, 4<<20))
+		if e != nil {
+			return e
+		}
+		raw = b
+	}
+	in, e := decodeToolInput(raw)
+	if e != nil {
+		return e
+	}
+	ask := pos[0] == "ask"
+	if !ask {
+		if in.Kind != "" && in.Kind != pos[0] {
+			return fmt.Errorf("the JSON says kind %q but the command says %s", in.Kind, pos[0])
+		}
+		in.Kind = pos[0]
+	}
+	in.Attach = append(in.Attach, opts["attach"]...)
+	m, e := buildUserMessage(ask, in)
+	if e != nil {
+		return e
+	}
+	id, e := c.sendToUser(m)
+	if e != nil {
+		return e
+	}
+	fmt.Fprintln(c.out, id)
+	return nil
 }

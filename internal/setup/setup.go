@@ -45,6 +45,10 @@ type Harness struct {
 	Problem      string `json:"problem,omitempty"` // human sentence when installed but not usable
 	CanInstall   bool   `json:"can_install"`       // an install-<id> terminal action exists
 	CanLogin     bool   `json:"can_login"`         // a login-<id> terminal action exists
+	// Supported: lolad can run assistants on it today. Detection also covers
+	// harnesses that are not supported yet (Codex), but they are not offered
+	// and never count as ready for setup.
+	Supported bool `json:"supported"`
 }
 
 // ServiceStatus is the start-at-login registration.
@@ -89,7 +93,7 @@ type Status struct {
 // codewhale order. ok is false when none is.
 func (s Status) FirstReady() (Harness, bool) {
 	for _, h := range s.Harnesses {
-		if h.Ready {
+		if h.Ready && h.Supported {
 			return h, true
 		}
 	}

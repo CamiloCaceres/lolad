@@ -105,11 +105,26 @@ func (s *Supervisor) checkStartup(r *record, now time.Time) error {
 		s.setState(r, core.StateUnknown, "no hook signal or ready prompt after startup window: "+first)
 		return nil
 	}
-	detail := "startup blocked: " + first
+	loginMarkers := []string{"login", "log in", "sign in", "api key", "authenticate"}
+	line := screenLine(pane, append(loginMarkers, "choose", "select", "enter to", "press enter", "confirm", "permission", "trust", "yes/no", "[y/n]"))
+	detail := "startup blocked: " + line
 	if r.Status.State == core.StateWaiting && r.Status.Detail == detail {
 		return nil
 	}
 	s.setState(r, core.StateWaiting, detail)
 	s.event(r.Status.Name, "dialog", detail)
+	p := core.AgentProblem{Kind: "dialog", NeedsYou: true, Screen: true, Since: now, Detail: line,
+		Title: "Is asking something on its screen",
+		Hint:  "Open its screen (Advanced, Live terminal, on its page) and answer it. lolad answers the usual first-run questions by itself; this one is new to it."}
+	lower = strings.ToLower(line)
+	for _, m := range loginMarkers {
+		if strings.Contains(lower, m) {
+			p.Kind = "login"
+			p.Title = "Needs you to sign in"
+			p.Hint = "Open Settings, then AI tools, and press Sign in. Then choose Restart in its Actions menu. You can also open its screen and follow the steps there."
+			break
+		}
+	}
+	s.setProblem(r, p)
 	return nil
 }

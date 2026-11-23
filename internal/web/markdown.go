@@ -12,13 +12,23 @@ import (
 // and the inline forms below. Every piece of source text is escaped; the only
 // markup in the output is what this function writes, and links are kept only
 // for http(s) and mailto. Raw HTML in the source shows as text.
-func markdown(src string) template.HTML {
+func markdown(src string) template.HTML { return renderMarkdown(src, false) }
+
+// chatMarkdown renders a message: like markdown, but a line break in a
+// paragraph stays a line break, the way people (and agents) write chat.
+func chatMarkdown(src string) template.HTML { return renderMarkdown(src, true) }
+
+func renderMarkdown(src string, hard bool) template.HTML {
+	joint := " "
+	if hard {
+		joint = "\n"
+	}
 	var b strings.Builder
 	lines := strings.Split(strings.ReplaceAll(src, "\r\n", "\n"), "\n")
 	var para []string
 	flush := func() {
 		if len(para) > 0 {
-			b.WriteString("<p>" + mdInline(strings.Join(para, " ")) + "</p>\n")
+			b.WriteString("<p>" + mdInline(strings.Join(para, joint)) + "</p>\n")
 			para = nil
 		}
 	}
@@ -51,7 +61,7 @@ func markdown(src string) template.HTML {
 				q = append(q, strings.TrimPrefix(strings.TrimPrefix(strings.TrimSpace(lines[i]), ">"), " "))
 			}
 			i--
-			b.WriteString("<blockquote>" + string(markdown(strings.Join(q, "\n"))) + "</blockquote>\n")
+			b.WriteString("<blockquote>" + string(renderMarkdown(strings.Join(q, "\n"), hard)) + "</blockquote>\n")
 		case mdItem.MatchString(line):
 			flush()
 			ordered := mdOrdered.MatchString(line)

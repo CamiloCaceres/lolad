@@ -2,9 +2,19 @@
 
 Inbox is a messaging workspace for the operator. Home presents unanswered agent
 questions first, then unread conversations, then read conversations by recency.
-Questions stay open when an agent follows them with progress updates; opening a
-thread marks mail read without answering a question. One tap on an option sends
-the existing userchat decision through core.Service and opens that conversation.
+Questions are requests (see requests.go and SPEC "Requests"). They stay in the
+conversation where they were asked, quiet until the user opens the small
+"Answer" under one; nothing takes over the thread. A one-line bar above the
+composer counts what is waiting and, once answers are staged, sends them all
+together. Home shows one row per assistant linking to the question. Chatting
+doesn't answer a request. Typed answers, chosen files and open "Answer" sections survive live
+refreshes (app.js). Amber is only the small "your turn" dot.
+
+Agents lay messages out with blocks (SPEC "User tools and blocks";
+partials/blocks.html): commands and snippets with Copy, values that copy one
+click at a time, a link button showing its host, and a checklist. A task
+request ("Mark it done") leads with its done button. File and logs fields
+answer "send me a screenshot" and "paste the error".
 
 Home has one reading column on desktop and phone. A conversation rail appears
 only inside a thread on desktop. Phone threads replace home, with a visible back

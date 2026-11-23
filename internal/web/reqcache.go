@@ -44,11 +44,18 @@ func cacheOf(ctx context.Context) *reqCache {
 func (s *server) list(ctx context.Context) ([]core.AgentStatus, error) {
 	c := cacheOf(ctx)
 	if c == nil {
-		return s.svc.List(ctx)
+		list, err := s.svc.List(ctx)
+		if err == nil {
+			setRoster(list)
+		}
+		return list, err
 	}
 	if !c.hasAgents {
 		c.agents, c.agentsErr = s.svc.List(ctx)
 		c.hasAgents = true
+		if c.agentsErr == nil {
+			setRoster(c.agents)
+		}
 	}
 	return slices.Clone(c.agents), c.agentsErr
 }

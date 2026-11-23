@@ -39,7 +39,7 @@ type agentGroup struct {
 }
 
 func agentNeedsAttention(a core.AgentStatus) bool {
-	return attention(a.State) || a.State == core.StateUnknown || a.PendingRestart
+	return attention(a.State) || a.State == core.StateUnknown || a.State == core.StatePaused || a.Problem != nil || a.PendingRestart
 }
 
 // nextAgentTrigger is a schedule preview, not a promise of delivery. Mail polls
@@ -104,7 +104,7 @@ type stateCount struct {
 }
 
 // stateOrder is how states are listed in summaries: what needs the operator first.
-var stateOrder = []core.State{core.StateFailed, core.StateCrashed, core.StateWaiting, core.StateBusy, core.StateStarting, core.StateIdle, core.StateUnknown, core.StateStopped}
+var stateOrder = []core.State{core.StateFailed, core.StateCrashed, core.StateWaiting, core.StatePaused, core.StateBusy, core.StateStarting, core.StateIdle, core.StateUnknown, core.StateStopped}
 
 func (s *server) fleetData(ctx context.Context) (fleetView, error) {
 	var v fleetView
@@ -262,7 +262,7 @@ func (s *server) agentData(ctx context.Context, name string) (agentView, error) 
 		if e.Kind == "mail" && mailDetails[e.Detail] {
 			continue
 		}
-		title := map[string]string{"state": "Activity changed", "started": "Agent started", "crashed": "Agent crashed", "exited": "Process exited", "rotated": "Fresh conversation", "trigger": "Trigger fired", "notified": "Mail surfaced", "restarted": "Agent restarted", "error": "Error", "policy": "Messaging policy"}[e.Kind]
+		title := map[string]string{"state": "Activity changed", "started": "Woke up", "crashed": "Stopped unexpectedly", "exited": "Stopped", "rotated": "Fresh conversation", "trigger": "Automation ran", "notified": "Told about new mail", "restarted": "Restarted", "error": "Error", "policy": "Team rules"}[e.Kind]
 		if title == "" {
 			title = e.Kind
 		}

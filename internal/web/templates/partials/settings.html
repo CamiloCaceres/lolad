@@ -2,8 +2,8 @@
 
 {{define "pending"}}{{$a := .A}}{{$set := eq .From "settings"}}<div class="pending-slot" id="pending-{{.From}}"{{if .OOB}} hx-swap-oob="true"{{end}}{{if $set}} hx-get="/agents/{{$a.Name}}/part/pending" hx-trigger="lolad:a-{{$a.Name}} from:body delay:400ms" hx-swap="outerHTML"{{end}}>{{if $a.PendingRestart}}<div class="pending" role="status">
   <span class="pending-icon">{{template "icon" "restart"}}</span>
-  <p class="pending-text"><strong>Pending restart</strong> <span>{{sentence $a.PendingReason}}. {{if running $a.State}}It applies at the next launch; a restart resumes the conversation.{{else}}It applies when {{$a.Display}} next starts.{{end}}</span></p>
-  {{if running $a.State}}<button class="btn btn-sm" type="button" hx-post="/agents/{{$a.Name}}/restart" hx-vals='{"from":"{{.From}}"}' hx-target="{{if $set}}#pending-settings{{else}}#agent-head{{end}}" hx-swap="outerHTML" hx-disabled-elt="this">{{template "icon" "restart"}}<span>Restart to apply</span></button>{{end}}
+  <p class="pending-text"><strong>Needs a quick restart</strong> <span>{{sentence $a.PendingReason}}. {{if running $a.State}}It takes effect after a restart. {{$a.Display}} keeps its conversation.{{else}}It takes effect when {{$a.Display}} next wakes up.{{end}}</span></p>
+  {{if running $a.State}}<button class="btn btn-sm" type="button" hx-post="/agents/{{$a.Name}}/restart" hx-vals='{"from":"{{.From}}"}' hx-target="{{if $set}}#pending-settings{{else}}#agent-head{{end}}" hx-swap="outerHTML" hx-disabled-elt="this">{{template "icon" "restart"}}<span>Restart {{$a.Display}}</span></button>{{end}}
 </div>{{end}}</div>{{end}}
 
 {{define "set-oob"}}{{if .OOB}}{{template "pending" (dict "A" .A "From" "settings" "OOB" true)}}{{end}}{{end}}
@@ -15,16 +15,16 @@
 {{define "settings-runtime"}}{{$v := .}}{{$rt := .A.Runtime}}<section class="set-panel" id="settings-panel" aria-labelledby="set-h">
   {{template "set-oob" .}}
   <header class="set-panel-head">
-    <h2 id="set-h">Model &amp; runtime</h2>
-    <p>Choose how {{.A.Display}} works. Save your changes, then restart to apply them.</p>
+    <h2 id="set-h">Basics</h2>
+    <p>How {{.A.Display}} thinks, when it wakes up and whether it asks first. Save, then restart to apply.</p>
   </header>
   {{template "set-error" .}}
   <form class="set-form" method="post" action="/agents/{{.A.Name}}/settings/runtime" hx-post="/agents/{{.A.Name}}/settings/runtime" hx-target="#settings-panel" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]">
     <div class="set-row">
-      <div class="set-label"><h3 id="lbl-model">Model</h3><p>{{if eq $rt.Harness "codewhale"}}Codewhale{{else}}Claude Code{{end}} model. Pick one, or type any id the harness accepts.</p></div>
+      <div class="set-label"><h3 id="lbl-model">How smart</h3><p>Runs on {{if eq $rt.Harness "codewhale"}}Codewhale{{else}}Claude Code{{end}}. Smarter is slower and uses more of your plan.</p></div>
       <div class="set-control">
         <div class="models" role="radiogroup" aria-labelledby="lbl-model">
-          <label class="model"><input type="radio" name="model" value=""{{if eq $rt.Model ""}} checked{{end}}><span class="model-name">Harness default</span><span class="model-note">whatever {{$rt.Harness}} picks</span></label>
+          <label class="model"><input type="radio" name="model" value=""{{if eq $rt.Model ""}} checked{{end}}><span class="model-name">Default</span><span class="model-note">whatever {{if eq $rt.Harness "codewhale"}}Codewhale{{else}}Claude Code{{end}} picks</span></label>
           {{range .Models}}<label class="model"><input type="radio" name="model" value="{{.ID}}"{{if and (not $v.Custom) (eq .ID $rt.Model)}} checked{{end}}><span class="model-name">{{.Label}}</span><span class="model-id mono">{{.ID}}</span>{{with .Note}}<span class="model-note">{{.}}</span>{{end}}</label>
           {{end}}<label class="model is-custom"><input type="radio" name="model" value="custom"{{if .Custom}} checked{{end}} data-custom-radio><span class="model-name">Other</span><input name="model_custom" class="mono" value="{{if .Custom}}{{$rt.Model}}{{end}}" placeholder="model id, e.g. claude-opus-5-5[1m]" autocomplete="off" spellcheck="false" autocapitalize="off" aria-label="Other model id" data-custom-model></label>
         </div>
@@ -32,48 +32,48 @@
     </div>
 
     <div class="set-row">
-      <div class="set-label"><h3 id="lbl-perm">Permissions</h3><p>An approval prompt nobody answers stalls an unattended agent.</p></div>
+      <div class="set-label"><h3 id="lbl-perm">Before acting</h3><p>Ask first means {{.A.Display}} checks with you before anything risky. Work can pause until you answer.</p></div>
       <div class="set-control">
         <div class="choice" role="radiogroup" aria-labelledby="lbl-perm">
-          <label class="choice-card"><input type="radio" name="permissions" value="bypass"{{if ne $rt.Permissions "default"}} checked{{end}}><span class="choice-body"><span class="choice-title">Bypass</span><span class="choice-note">acts without asking; for unattended work</span></span></label>
-          <label class="choice-card"><input type="radio" name="permissions" value="default"{{if eq $rt.Permissions "default"}} checked{{end}}><span class="choice-body"><span class="choice-title">Ask first</span><span class="choice-note">waits for approval in its terminal</span></span></label>
+          <label class="choice-card"><input type="radio" name="permissions" value="bypass"{{if ne $rt.Permissions "default"}} checked{{end}}><span class="choice-body"><span class="choice-title">Work on its own</span><span class="choice-note">Doesn’t stop to ask. Best when nobody is watching.</span></span></label>
+          <label class="choice-card"><input type="radio" name="permissions" value="default"{{if eq $rt.Permissions "default"}} checked{{end}}><span class="choice-body"><span class="choice-title">Ask me first</span><span class="choice-note">Waits for your OK before risky steps.</span></span></label>
         </div>
       </div>
     </div>
 
-    <h3 class="set-section-title">Wake &amp; continuity</h3>
+    <h3 class="set-section-title">Waking up</h3>
     <div class="set-row">
-      <div class="set-label"><h3><label for="on-wake">On wake</label></h3><p>The first prompt of every fresh conversation.</p></div>
+      <div class="set-label"><h3><label for="on-wake">When {{.A.Display}} wakes up, it should…</label></h3><p>The first thing it reads in every fresh conversation.</p></div>
       <div class="set-control">
-        <textarea id="on-wake" name="on_wake" rows="3" placeholder="Default: read brain/ and memory/, then work through your inbox.">{{$rt.OnWake}}</textarea>
+        <textarea id="on-wake" name="on_wake" rows="3" placeholder="Default: read its instructions and memory, then work through its messages.">{{$rt.OnWake}}</textarea>
       </div>
     </div>
 
     <div class="set-row">
-      <div class="set-label"><h3>Daily fresh start</h3><p>A new conversation once a day. brain/ and memory/ carry over.</p></div>
+      <div class="set-label"><h3>Fresh start every day</h3><p>Clears the conversation once a day. Memory is kept.</p></div>
       <div class="set-control">
         <div class="rotate">
-          <label class="check"><input type="checkbox" name="rotate_on"{{if $rt.Rotate}} checked{{end}} data-rotate-on><span>Every day at (daemon time)</span></label>
+          <label class="check"><input type="checkbox" name="rotate_on"{{if $rt.Rotate}} checked{{end}} data-rotate-on><span>Every day at</span></label>
           <input type="time" name="rotate" value="{{$rt.Rotate}}" aria-label="Time of the daily fresh start" data-rotate-time>
         </div>
       </div>
     </div>
 
     <div class="set-row">
-      <div class="set-label"><h3>Lifecycle</h3><p>When lolad starts {{.A.Display}} on its own.</p></div>
+      <div class="set-label"><h3>When it runs</h3><p>When lolad wakes {{.A.Display}} on its own.</p></div>
       <div class="set-control set-checks">
-        <label class="check"><input type="checkbox" name="autostart"{{if $rt.AutostartEnabled}} checked{{end}}><span><span class="check-title">Start with lolad</span><span class="help">Launch when the daemon starts.</span></span></label>
-        <label class="check"><input type="checkbox" name="wake_on_message"{{if $rt.WakeOnMessageEnabled}} checked{{end}}><span><span class="check-title">Wake on mail</span><span class="help">Mail to {{.A.Display}} while it's stopped starts it.</span></span></label>
+        <label class="check"><input type="checkbox" name="autostart"{{if $rt.AutostartEnabled}} checked{{end}}><span><span class="check-title">Start when lolad starts</span><span class="help">For example after your computer restarts.</span></span></label>
+        <label class="check"><input type="checkbox" name="wake_on_message"{{if $rt.WakeOnMessageEnabled}} checked{{end}}><span><span class="check-title">Wake when a message arrives</span><span class="help">{{.A.Display}} can sleep when idle and wake up for new messages.</span></span></label>
       </div>
     </div>
 
     <div class="set-row">
       <div class="set-label"><h3>Skills</h3></div>
-      <div class="set-control"><p class="set-fact">{{if eq $rt.SkillsMode "barebones"}}<strong>Barebones</strong>: only its own skills{{else}}<strong>Inherit</strong>: your skills and plugins, plus its own{{end}} · <a href="/agents/{{.A.Name}}/settings/skills">change in Skills</a></p></div>
+      <div class="set-control"><p class="set-fact">{{if eq $rt.SkillsMode "barebones"}}<strong>Only what you pick</strong>{{else}}<strong>The same as you</strong>, plus its own{{end}} · <a href="/agents/{{.A.Name}}/settings/skills">Change</a></p></div>
     </div>
 
     <div class="set-actions">
-      <p class="help">Saved to lolabot.yaml · restart keeps the conversation.</p>
+      <p class="help">A restart keeps the conversation.</p>
       <button class="btn btn-primary" type="submit">Save changes</button>
     </div>
   </form>
@@ -85,22 +85,22 @@
   {{template "set-oob" .}}
   <header class="set-panel-head">
     <h2 id="set-h">Skills</h2>
-    <p>Choose what {{.A.Display}} can use. Add a library skill to give this agent its own editable copy.</p>
+    <p>Skills are things {{.A.Display}} knows how to do, like searching the web or writing documents. Changes apply after a restart.</p>
   </header>
   {{template "set-error" .}}
 
   <div class="set-row">
-    <div class="set-label"><h3 id="lbl-mode">Skills mode</h3><p>Saved when selected. Restart to apply.</p></div>
+    <div class="set-label"><h3 id="lbl-mode">Which skills can {{.A.Display}} use?</h3><p>Saved as soon as you choose.</p></div>
     <div class="set-control">
       <form class="choice" role="radiogroup" aria-labelledby="lbl-mode" method="post" action="/agents/{{.A.Name}}/settings/skills/mode" hx-post="/agents/{{.A.Name}}/settings/skills/mode" hx-target="#settings-panel" hx-swap="outerHTML" data-autosubmit>
-        <label class="choice-card"><input type="radio" name="mode" value="inherit"{{if .Inherit}} checked{{end}}><span class="choice-body"><span class="choice-title">Inherit my skills</span><span class="choice-note">Your own skills and enabled plugins, plus its own.</span></span></label>
-        <label class="choice-card"><input type="radio" name="mode" value="barebones"{{if not .Inherit}} checked{{end}}><span class="choice-body"><span class="choice-title">Barebones</span><span class="choice-note">Only its own skills. You add each one it needs.</span></span></label>
+        <label class="choice-card"><input type="radio" name="mode" value="inherit"{{if .Inherit}} checked{{end}}><span class="choice-body"><span class="choice-title">The same as you</span><span class="choice-note">Inherit my skills: everything installed for you on this computer, now and later.</span></span></label>
+        <label class="choice-card"><input type="radio" name="mode" value="barebones"{{if not .Inherit}} checked{{end}}><span class="choice-body"><span class="choice-title">Only what I pick</span><span class="choice-note">Barebones: a smaller, focused set. You add each one it needs.</span></span></label>
       </form>
     </div>
   </div>
 
   <div class="set-row">
-    <div class="set-label"><h3>Installed on {{.A.Display}} <span class="set-count">{{len .Own}}</span></h3><p>In <span class="mono">{{if eq .A.Runtime.Harness "codewhale"}}.codewhale-home/skills{{else}}.claude/skills{{end}}</span>. Always visible.</p></div>
+    <div class="set-label"><h3>{{.A.Display}}’s own skills <span class="set-count">{{len .Own}}</span></h3><p>Always available to it. Kept in <span class="mono">{{if eq .A.Runtime.Harness "codewhale"}}.codewhale-home/skills{{else}}.claude/skills{{end}}</span>.</p></div>
     <div class="set-control">
       {{if .Own}}<ul class="skills" role="list">
         {{range .Own}}<li class="skill">
@@ -113,16 +113,16 @@
             </form>
           </div>
         </li>{{end}}
-      </ul>{{else}}<p class="empty-inline">No skills installed yet.{{if not .Inherit}} Under Barebones that means none at all: add what it needs from your library below.{{else}} Add one from your library below to keep it even under Barebones.{{end}}</p>{{end}}
+      </ul>{{else}}<p class="empty-inline">None yet.{{if not .Inherit}} With “Only what I pick” that means none at all: add what it needs below.{{else}} Add one below to keep it even if you switch to “Only what I pick”.{{end}}</p>{{end}}
     </div>
   </div>
 
   <div class="set-row">
-    <div class="set-label"><h3>Add from your library</h3><p>{{if .Inherit}}{{.A.Display}} already sees these. Adding one makes its own copy, which stays if you switch to Barebones.{{else}}Not visible under Barebones. Add the ones {{.A.Display}} needs.{{end}}</p></div>
+    <div class="set-label"><h3>Add a skill</h3><p>{{if .Inherit}}{{.A.Display}} already has these through you. Adding one gives it its own copy.{{else}}{{.A.Display}} can’t use these until you add them.{{end}}</p></div>
     <div class="set-control">
       {{if .Library}}
-      <label class="label" for="skill-search">Find in your library</label>
-      <input id="skill-search" type="search" class="skill-filter" placeholder="Filter skills" aria-label="Filter your library" data-filter="#library .skill" autocomplete="off">
+      <label class="sr-only" for="skill-search">Search skills</label>
+      <input id="skill-search" type="search" class="skill-filter" placeholder="Search skills" aria-label="Filter your library" data-filter="#library .skill" autocomplete="off">
       <div id="library" class="library">
         {{range .Library}}<div class="lib-group">
           <h4 class="lib-source">{{.Label}}</h4>
@@ -131,10 +131,10 @@
               <div class="skill-main"><span class="skill-name mono">{{.Name}}</span>{{with .Description}}<span class="skill-desc">{{.}}</span>{{end}}</div>
               <div class="skill-ops">
                 {{if .Added}}<span class="tag" title="{{$a.Display}} has its own copy">{{template "icon" "check"}}Added</span>
-                {{else}}{{if .Active}}<span class="tag is-quiet" title="{{$a.Display}} sees it through Inherit">inherited</span>{{end}}
+                {{else}}{{if .Active}}<span class="tag is-quiet" title="{{$a.Display}} has it through you">through you</span>{{end}}
                 <form method="post" action="/agents/{{$a.Name}}/settings/skills/add" hx-post="/agents/{{$a.Name}}/settings/skills/add" hx-target="#settings-panel" hx-swap="outerHTML">
                   <input type="hidden" name="from" value="{{.ID}}">
-                  <button class="btn btn-sm" type="submit" aria-label="Add {{.Name}} to {{$a.Display}}">{{template "icon" "plus"}}<span>Add to agent</span></button>
+                  <button class="btn btn-sm" type="submit" aria-label="Add {{.Name}} to {{$a.Display}}">{{template "icon" "plus"}}<span>Add</span></button>
                 </form>{{end}}
               </div>
             </li>{{end}}
@@ -142,7 +142,7 @@
         </div>{{end}}
         <p class="empty-inline" data-filter-empty hidden>No skill matches.</p>
       </div>
-      {{else}}<p class="empty-inline">No user or plugin skills found in <span class="mono">~/.claude</span>.</p>{{end}}
+      {{else}}<p class="empty-inline">No skills found on this computer (<span class="mono">~/.claude</span>).</p>{{end}}
     </div>
   </div>
 </section>{{end}}
@@ -152,8 +152,8 @@
 {{define "settings-secrets"}}{{$v := .}}{{$a := .A}}<section class="set-panel" id="settings-panel" aria-labelledby="set-h">
   {{template "set-oob" .}}
   <header class="set-panel-head">
-    <h2 id="set-h">Secrets</h2>
-    <p>Variables in <span class="mono">{{.EnvFile}}</span>. {{.A.Display}} can read them; that's how tokens reach it. The dashboard never shows a value back.</p>
+    <h2 id="set-h">Keys &amp; passwords</h2>
+    <p>{{.A.Display}} can use these keys, but lolad never shows them again, not even to you. You can replace or remove one at any time.</p>
   </header>
   {{template "set-error" .}}
 
@@ -161,15 +161,15 @@
     {{range .Env}}<li class="secret">
       <div class="secret-main">
         <span class="secret-key mono">{{.Key}}</span>
-        {{if .Set}}<span class="secret-state is-set">{{template "icon" "lock"}}set · {{plural .Length "char" "chars"}}</span>{{else}}<span class="secret-state">empty</span>{{end}}
+        {{if .Set}}<span class="secret-state is-set">{{template "icon" "lock"}}Saved · {{plural .Length "character" "characters"}}</span>{{else}}<span class="secret-state">Not set</span>{{end}}
         {{with .Comment}}<span class="secret-comment">{{.}}</span>{{end}}
-        {{with .UsedBy}}<span class="secret-used">used by {{range $i, $u := .}}{{if $i}}, {{end}}<span class="mono">{{$u}}</span>{{end}}</span>{{end}}
+        {{with .UsedBy}}<span class="secret-used">Used by {{range $i, $u := .}}{{if $i}}, {{end}}<span class="mono">{{$u}}</span>{{end}}</span>{{end}}
       </div>
       <div class="secret-ops">
         <button class="btn btn-sm btn-ghost" type="button" aria-expanded="false" aria-controls="rep-{{.Key}}" data-reveal>{{template "icon" "edit"}}<span>{{if .Set}}Replace{{else}}Set{{end}}</span></button>
-        <form method="post" action="/agents/{{$a.Name}}/settings/secrets/delete" hx-post="/agents/{{$a.Name}}/settings/secrets/delete" hx-target="#settings-panel" hx-swap="outerHTML" hx-confirm="Delete {{.Key}} from {{$v.EnvFile}}? {{$a.Display}} loses it at the next launch.">
+        <form method="post" action="/agents/{{$a.Name}}/settings/secrets/delete" hx-post="/agents/{{$a.Name}}/settings/secrets/delete" hx-target="#settings-panel" hx-swap="outerHTML" hx-confirm="Remove {{.Key}}? {{$a.Display}} loses it after its next restart.">
           <input type="hidden" name="key" value="{{.Key}}">
-          <button class="btn btn-sm btn-ghost btn-icon is-stop" type="submit" aria-label="Delete {{.Key}}" title="Delete">{{template "icon" "trash"}}</button>
+          <button class="btn btn-sm btn-ghost btn-icon is-stop" type="submit" aria-label="Remove {{.Key}}" title="Remove">{{template "icon" "trash"}}</button>
         </form>
       </div>
       <form class="secret-form" id="rep-{{.Key}}" hidden method="post" action="/agents/{{$a.Name}}/settings/secrets" hx-post="/agents/{{$a.Name}}/settings/secrets" hx-target="#settings-panel" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]" autocomplete="off">
@@ -179,16 +179,16 @@
         <button class="btn btn-sm btn-ghost" type="button" data-reveal-close>Cancel</button>
       </form>
     </li>{{end}}
-  </ul>{{else}}<p class="empty-inline">No variables in {{.EnvFile}} yet. Add an API token or password below; {{.A.Display}} gets it as an environment variable at its next launch.</p>{{end}}
+  </ul>{{else}}<p class="empty-inline">No keys yet. Add one below; {{.A.Display}} gets it after its next restart.</p>{{end}}
 
   <form class="secret-add" method="post" action="/agents/{{.A.Name}}/settings/secrets" hx-post="/agents/{{.A.Name}}/settings/secrets" hx-target="#settings-panel" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]" autocomplete="off">
-    <h3>Add a secret</h3>
+    <h3>Add a key or password</h3>
     <div class="secret-add-row">
-      <label class="field"><span class="label">Name</span><input name="key" value="{{.NewKey}}" required pattern="[A-Za-z_][A-Za-z0-9_]*" title="Letters, digits and _, not starting with a digit" placeholder="GITHUB_TOKEN" class="mono" autocomplete="off" spellcheck="false" autocapitalize="characters" data-env-key></label>
-      <label class="field field-grow"><span class="label">Value</span><input type="password" name="value" required autocomplete="off" spellcheck="false" autocapitalize="off" data-1p-ignore data-lpignore="true" placeholder="pasted once, never shown again"></label>
-      <button class="btn btn-primary" type="submit">{{template "icon" "plus"}}<span>Add</span></button>
+      <label class="field"><span class="label">What is it for?</span><input name="key" value="{{.NewKey}}" required pattern="[A-Za-z_][A-Za-z0-9_]*" title="Letters, digits and _, not starting with a digit" placeholder="GITHUB_TOKEN" class="mono" autocomplete="off" spellcheck="false" autocapitalize="characters" data-env-key></label>
+      <label class="field field-grow"><span class="label">The key or password</span><input type="password" name="value" required autocomplete="off" spellcheck="false" autocapitalize="off" data-1p-ignore data-lpignore="true" placeholder="Pasted once, never shown again"></label>
+      <button class="btn btn-primary" type="submit"><span>Save</span></button>
     </div>
-    <p class="help">Saving an existing name replaces its value. Written with mode 0600 and kept out of git.</p>
+    <p class="help">{{.A.Display}} gets it after its next restart. Saving a name that exists replaces it. Stored in <span class="mono">{{.EnvFile}}</span>, readable only by you.</p>
   </form>
 </section>{{end}}
 
@@ -197,8 +197,8 @@
 {{define "settings-files"}}{{$v := .}}{{$a := .A}}<section class="set-panel is-files{{if or .File .FileErr}} has-file{{end}}" id="settings-panel" aria-labelledby="set-h">
   {{template "set-oob" .}}
   <header class="set-panel-head">
-    <h2 id="set-h">Files</h2>
-    <p>Instructions and configuration first. Changes save directly to {{.A.Display}}’s directory.</p>
+    <h2 id="set-h">Instructions &amp; memory</h2>
+    <p>{{.A.Display}} reads its instructions every time it starts. Its memory is the notes it keeps between days. Changes save straight to its folder.</p>
   </header>
   <div class="files">
     <nav class="file-list" aria-label="Files">
@@ -218,7 +218,7 @@
     <div class="file-pane">
       {{if .File}}{{template "file-editor" .}}
       {{else if .FileErr}}<a class="btn btn-sm btn-ghost file-back" href="/agents/{{$a.Name}}/settings/files">{{template "icon" "back"}}<span>All files</span></a><p class="flash is-error" role="alert">{{template "icon" "x"}}<span>{{.FileErr}}</span></p>
-      {{else}}<div class="file-none">{{template "icon" "file"}}<p class="empty-title">Pick a file</p><p>Instructions, config, brain and memory are listed on the left. Markdown has a preview.</p></div>{{end}}
+      {{else}}<div class="file-none">{{template "icon" "file"}}<p class="empty-title">Pick a file</p><p>How {{$a.Display}} works, what it remembers and its settings are listed on the left.</p></div>{{end}}
     </div>
   </div>
 </section>{{end}}
@@ -258,7 +258,7 @@
   {{template "set-oob" .}}
   <header class="set-panel-head">
     <h2 id="set-h">Email</h2>
-    <p>Manage where {{.A.Display}} receives mail, check the connection, and choose who watches for new messages.</p>
+    <p>Where {{.A.Display}} gets and sends email, who it trusts, and how it hears about new mail.</p>
   </header>
   {{if not $e.Supported}}
   <div class="set-unsupported">
@@ -274,7 +274,7 @@
   {{template "set-error" .}}
 
   <div class="set-row">
-    <div class="set-label"><h3>Accounts</h3><p>Passwords are write-only. Test connection logs in to both servers; it never sends mail.</p></div>
+    <div class="set-label"><h3>Addresses</h3><p>Passwords are never shown again. “Test connection” only logs in; it never sends mail.</p></div>
     <div class="set-control">
       {{if $e.Accounts}}<ul class="accounts" role="list">
         {{range $i, $acc := $e.Accounts}}<li class="acct">
@@ -307,7 +307,7 @@
 
   <form class="set-form" method="post" action="/agents/{{.A.Name}}/settings/email" hx-post="/agents/{{.A.Name}}/settings/email" hx-target="#settings-panel" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]">
     <div class="set-row">
-      <div class="set-label"><h3><label for="operators">Trusted senders</label></h3><p>Authenticated mail from these addresses is treated as coming from you. One per line.</p></div>
+      <div class="set-label"><h3><label for="operators">Your addresses</label></h3><p>Verified mail from these addresses counts as coming from you. One per line.</p></div>
       <div class="set-control"><textarea id="operators" name="operators" rows="2" class="mono" spellcheck="false" autocapitalize="off" placeholder="you@example.com">{{range $i, $o := $e.OperatorEmails}}{{if $i}}
 {{end}}{{$o}}{{end}}</textarea></div>
     </div>

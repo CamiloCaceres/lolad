@@ -71,6 +71,9 @@ func (m *launchdManager) Install(exe string) error {
 	if exe == "" {
 		return fmt.Errorf("no executable path")
 	}
+	if temporaryLocation(exe) {
+		return fmt.Errorf("Lolad is running from a temporary place (the download or the disk image). Move Lolad to your Applications folder, open it from there, then turn this on again")
+	}
 	logFile := filepath.Join(m.env.StateDir, "logs", "daemon.log")
 	if err := os.MkdirAll(filepath.Dir(logFile), 0o700); err != nil {
 		return err
@@ -88,6 +91,27 @@ func (m *launchdManager) Install(exe string) error {
 		return fmt.Errorf("launchctl bootstrap: %v: %s", err, strings.TrimSpace(string(out)))
 	}
 	return nil
+}
+
+// temporaryLocation reports an executable macOS will not keep at that path: a
+// translocated app (opened without moving it out of Downloads or the disk
+// image) or a read-only disk image under /Volumes. A login item pointing there
+// stops working after a reboot.
+func temporaryLocation(exe string) bool {
+	if strings.Contains(exe, "/AppTranslocation/") {
+		return true
+	}
+	if !strings.HasPrefix(exe, "/Volumes/") {
+		return false
+	}
+	f, err := os.CreateTemp(filepath.Dir(exe), ".lolad-write-check-*")
+	if err != nil {
+		return true
+	}
+	name := f.Name()
+	f.Close()
+	os.Remove(name)
+	return false
 }
 
 func (m *launchdManager) Uninstall() error {

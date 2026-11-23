@@ -1,0 +1,20 @@
+{{/* blocks: a message an agent laid out with UI (core/blocks.go). Every
+value, command and snippet copies with one click (app.js, data-copy); steps
+remember their ticks on this device. */}}
+{{define "blocks"}}{{$id := short .ID}}<div class="blocks">{{range $i, $b := .Chat.Blocks}}
+{{if eq .Type "text"}}<div class="rich">{{chatmd .Text}}</div>
+{{else if or (eq .Type "command") (eq .Type "code")}}<div class="blk blk-code{{if eq .Type "command"}} is-cmd{{end}}" data-copy-scope>
+  <div class="blk-head">{{if eq .Type "command"}}{{template "icon" "terminal"}}<span class="blk-title">{{or .Title "Run this"}}{{with .Where}}<span class="blk-where"> · {{.}}</span>{{end}}</span>{{else}}{{template "icon" "doc"}}<span class="blk-title">{{or .Title "Copy and paste"}}</span>{{end}}<button class="blk-copy" type="button" data-copy>{{template "icon" "copy"}}<span>Copy</span></button></div>
+  <pre><code data-copy-src>{{.Code}}</code></pre>
+  {{if adminCmd .}}<p class="blk-admin">{{template "icon" "lock"}}<span>Asks for an administrator password. Nothing shows while you type it; that’s normal.</span></p>{{end}}
+</div>
+{{else if eq .Type "values"}}<div class="blk blk-values" data-copy-scope>
+  <div class="blk-head">{{template "icon" "list"}}<span class="blk-title">{{or .Title "Values"}}</span>{{if gt (len .Rows) 1}}<button class="blk-copy" type="button" data-copy="{{valuesText .Rows}}">{{template "icon" "copy"}}<span>Copy all</span></button>{{end}}</div>
+  <dl>{{range .Rows}}<div class="blk-row"><dt>{{.Label}}</dt><dd><button class="blk-val" type="button" data-copy="{{.Value}}" title="Copy"><span class="blk-val-text">{{.Value}}</span>{{template "icon" "copy"}}<span class="sr-only"> Copy {{.Label}}</span></button></dd></div>{{end}}</dl>
+</div>
+{{else if eq .Type "link"}}{{if safeLink .URL}}<a class="blk-link" href="{{.URL}}" target="_blank" rel="noopener noreferrer">{{template "icon" "external"}}<span class="blk-link-label">{{or .Label (linkHost .URL)}}</span><span class="blk-host">{{linkHost .URL}}</span></a>{{end}}
+{{else if eq .Type "steps"}}<div class="blk blk-steps">
+  {{with .Title}}<div class="blk-head"><span class="blk-title">{{.}}</span></div>{{end}}
+  <ol>{{range $j, $s := .Items}}<li><input type="checkbox" id="st-{{$id}}-{{$i}}-{{$j}}" data-step="{{$id}}-{{$i}}-{{$j}}" aria-label="Step {{add $j 1}} done"><div class="blk-step rich">{{chatmd $s}}</div></li>{{end}}</ol>
+</div>
+{{end}}{{end}}</div>{{end}}

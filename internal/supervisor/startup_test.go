@@ -239,3 +239,27 @@ func TestAdoptionEmitsSystemSummary(t *testing.T) {
 		t.Fatal(events)
 	}
 }
+
+// A restart force-kills the old process; its SessionEnd hook can arrive after
+// the replacement launched. It must not mark the new run stopped, or the new
+// run's startup dialog is never answered.
+func TestStaleSessionEndDuringStartup(t *testing.T) {
+	f := setup(t, func(o *Options) { o.Launchers[core.HarnessClaude] = &dialogLauncher{} })
+	f.tick(t)
+	f.s.HandleHook(ctx, core.HookEvent{Agent: "agent", Event: "session_end", State: core.StateStopped, SessionID: "same", Seq: 1})
+	if f.state(t).State != core.StateStarting {
+		t.Fatalf("stale session_end changed a starting run: %v", f.state(t))
+	}
+	f.sessions.pane = "trust"
+	f.c.advance(2 * time.Second)
+	f.tick(t)
+	if strings.Join(f.sessions.keys, ",") != "Down,Enter" {
+		t.Fatalf("startup dialog not answered: %v", f.sessions.keys)
+	}
+	// Once the new process has reported in, its own session_end counts.
+	f.s.HandleHook(ctx, core.HookEvent{Agent: "agent", Event: "session_start", State: core.StateStarting, SessionID: "same", Seq: 2})
+	f.s.HandleHook(ctx, core.HookEvent{Agent: "agent", Event: "session_end", State: core.StateStopped, SessionID: "same", Seq: 3})
+	if f.state(t).State != core.StateStopped {
+		t.Fatalf("real session_end ignored: %v", f.state(t))
+	}
+}

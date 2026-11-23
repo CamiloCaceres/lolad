@@ -42,7 +42,7 @@ func NewDemo() *Demo {
 func demoHarnesses(goos string) []Harness {
 	var hs []Harness
 	for _, s := range harnessSpecs {
-		hs = append(hs, Harness{ID: s.id, Name: s.name, InstallHint: installHint(goos, s.id), CanInstall: canInstall(s.id), CanLogin: canLogin(s.id)})
+		hs = append(hs, Harness{ID: s.id, Name: s.name, InstallHint: installHint(goos, s.id), CanInstall: canInstall(s.id), CanLogin: canLogin(s.id), Supported: s.runs})
 	}
 	return hs
 }

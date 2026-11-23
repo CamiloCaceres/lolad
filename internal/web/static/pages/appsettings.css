@@ -1,0 +1,17 @@
+/* Settings hub (/settings). */
+.eyebrow { font: 600 var(--t-xs)/1.4 var(--font); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.eyebrow .muted { letter-spacing: 0; text-transform: none; font-weight: 500; }
+.appsettings { display: flex; flex-direction: column; gap: 34px; }
+.appsettings .page-head { margin-bottom: 0; }
+.set-group { display: flex; flex-direction: column; }
+.set-group > .eyebrow { padding: 0 0 6px; }
+.set-group .set-row { display: flex; align-items: center; gap: 16px; padding: 16px 4px; border-top: 1px solid var(--line); color: var(--ink); text-decoration: none; }
+.set-group .set-row:first-of-type { border-top: 0; }
+.set-group .set-row > div { flex: 1; min-width: 0; }
+.set-group .set-row strong { font-weight: 600; }
+.set-group .set-row p { font-size: var(--t-sm); margin-top: 2px; }
+.set-group .set-row > .i { color: var(--muted); }
+.set-group .set-row.is-link { border-radius: 14px; transition: background-color 120ms var(--ease); }
+.set-group .set-row.is-link:hover { background: rgba(255, 255, 255, 0.04); }
+.set-ico { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: rgba(255, 255, 255, 0.05); color: var(--ink-2); flex: none; }
+.set-ico .i { width: 20px; height: 20px; }

@@ -129,6 +129,15 @@ func TestReadinessGuards(t *testing.T) {
 	if n.ready(core.Agent{Name: "a"}, pane+"\nEnter to confirm") {
 		t.Fatal("startup dialog accepted")
 	}
+	// A Stop hook lost to a daemon restart must not hold mail forever: an old
+	// busy signal at an idle-looking prompt is a finished turn.
+	n = New(nil, l, func(string) (core.State, time.Time) { return core.StateBusy, time.Now().Add(-16 * time.Minute) })
+	if !n.ready(core.Agent{Name: "a"}, pane) {
+		t.Fatal("stale busy at the prompt never receives mail")
+	}
+	if n.ready(core.Agent{Name: "a"}, "✻ Working… (esc to interrupt)\n"+pane) {
+		t.Fatal("long-running turn accepted")
+	}
 }
 
 func TestTrackerSequence(t *testing.T) {

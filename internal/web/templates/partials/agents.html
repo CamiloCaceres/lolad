@@ -7,41 +7,77 @@ keep a growing staff legible. Recovery actions always name their consequence. */
  {{end}}
  <details class="agent-action-menu"><summary class="btn btn-sm">Actions {{template "icon" "down"}}</summary><div class="agent-action-options">
  {{if running $a.State}}
- <form method="post" action="/agents/{{$a.Name}}/restart" hx-post="/agents/{{$a.Name}}/restart"><input type="hidden" name="from" value="{{.From}}"><button><strong>Restart · resume</strong><span>Restart the process and continue this conversation. Applies pending settings.</span></button></form>
- <form method="post" action="/agents/{{$a.Name}}/interrupt" hx-post="/agents/{{$a.Name}}/interrupt"><input type="hidden" name="from" value="{{.From}}"><button{{if not (or (eq $a.State "busy") (eq $a.State "waiting"))}} disabled{{end}}><strong>Interrupt turn</strong><span>Send Escape. Keep the process running.</span></button></form>
- <form method="post" action="/agents/{{$a.Name}}/stop" hx-post="/agents/{{$a.Name}}/stop" hx-confirm="Stop {{$a.Display}}? Current work will be interrupted.{{if $a.Runtime.WakeOnMessageEnabled}} New mail can start it again because wake on mail is enabled.{{else}} It stays stopped until you start it.{{end}}"><input type="hidden" name="from" value="{{.From}}"><button><strong>Stop agent</strong><span>End current work. {{if $a.Runtime.WakeOnMessageEnabled}}New mail can wake it again.{{else}}Stays stopped until started.{{end}}</span></button></form>
+ <form method="post" action="/agents/{{$a.Name}}/restart" hx-post="/agents/{{$a.Name}}/restart"><input type="hidden" name="from" value="{{.From}}"><button><strong>Restart</strong><span>A quick restart. It keeps its conversation and picks up changed settings.</span></button></form>
+ <form method="post" action="/agents/{{$a.Name}}/interrupt" hx-post="/agents/{{$a.Name}}/interrupt"><input type="hidden" name="from" value="{{.From}}"><button{{if not (or (eq $a.State "busy") (eq $a.State "waiting"))}} disabled{{end}}><strong>Stop what it’s doing</strong><span>Interrupts the current step. It stays awake.</span></button></form>
+ <form method="post" action="/agents/{{$a.Name}}/stop" hx-post="/agents/{{$a.Name}}/stop" hx-confirm="Put {{$a.Display}} to sleep? Current work is interrupted.{{if $a.Runtime.WakeOnMessageEnabled}} A new message wakes it up again.{{else}} It stays asleep until you press Start.{{end}}"><input type="hidden" name="from" value="{{.From}}"><button><strong>Put to sleep</strong><span>End current work. {{if $a.Runtime.WakeOnMessageEnabled}}New mail can wake it again.{{else}}Stays asleep until you press Start.{{end}}</span></button></form>
  {{end}}
- <form method="post" action="/agents/{{$a.Name}}/fresh" hx-post="/agents/{{$a.Name}}/fresh" hx-confirm="Wake {{$a.Display}} with a fresh conversation? Current work ends and on_wake runs again. brain/ and memory/ carry over."><input type="hidden" name="from" value="{{.From}}"><button><strong>Wake · fresh conversation</strong><span>Start over with on_wake. Keep brain/ and memory/.</span></button></form>
+ <form method="post" action="/agents/{{$a.Name}}/fresh" hx-post="/agents/{{$a.Name}}/fresh" hx-confirm="Start {{$a.Display}} fresh? Current work ends and it begins a new conversation. Its memory and instructions are kept."><input type="hidden" name="from" value="{{.From}}"><button><strong>Start fresh</strong><span>A new conversation. It keeps its memory and instructions.</span></button></form>
  <a href="/inbox/{{$a.Name}}">Open conversation {{template "icon" "message"}}</a>
- <a href="/agents/{{$a.Name}}/settings">Change settings {{template "icon" "next"}}</a>
+ <a href="/agents/{{$a.Name}}/settings">Settings {{template "icon" "next"}}</a>
  </div></details>
 </div>{{end}}
 
-{{define "state-detail"}}{{if eq .State "crashed"}}{{if future .NextRestart}}Automatic retry in {{until .NextRestart}}{{else}}Automatic retry due{{end}}{{with .LastError}} · {{.}}{{end}}{{else if eq .State "failed"}}{{.LastError}}{{else if eq .State "stopped"}}Stopped. {{if .Runtime.WakeOnMessageEnabled}}New mail can wake this agent.{{else}}Start when needed.{{end}}{{else if .Detail}}{{.Detail}}{{else if eq .State "idle"}}Ready for the next message{{else if eq .State "unknown"}}No recent status signal; check the terminal{{else if eq .State "starting"}}Starting the harness…{{else}}Working on a turn{{end}}{{end}}
+{{define "state-detail"}}{{if .Problem}}{{.Problem.Title}}{{else if eq .State "crashed"}}{{if future .NextRestart}}Automatic retry in {{until .NextRestart}}{{else}}Automatic retry due{{end}}{{with .LastError}} · {{.}}{{end}}{{else if eq .State "failed"}}{{.LastError}}{{else if eq .State "stopped"}}{{if .Runtime.WakeOnMessageEnabled}}Asleep. A new message wakes it up.{{else}}Asleep. Press Start when you need it.{{end}}{{else if .Detail}}{{.Detail}}{{else if eq .State "idle"}}Ready when you are.{{else if eq .State "unknown"}}lolad can't tell what it's doing right now.{{else if eq .State "starting"}}Waking up…{{else}}Working on something.{{end}}{{end}}
 
 {{define "fleet"}}<div id="fleet" class="agents-roster" hx-get="/fragments/fleet" hx-include="#fleet-filters" hx-trigger="lolad:agent from:body delay:500ms, lolad:mail from:body delay:900ms" hx-swap="outerHTML">
- {{if not .Agents}}{{template "first-run" (dict "Title" "No agents yet")}}{{else}}
- <div class="roster-summary"><strong>{{.Total}} agents</strong><span>{{if .NeedsAttention}}{{.NeedsAttention}} need attention{{else}}No agents need attention{{end}}</span><span class="roster-state-counts">{{range .Counts}}<span class="st-{{.State}}">{{.N}} {{.State}}</span>{{end}}</span></div>
+ {{if not .Agents}}{{template "first-run" (dict "Title" "No assistants yet")}}{{else}}
  {{range .Groups}}
- <section class="roster-team" aria-label="{{.Name}}"><h2>{{.Name}} <span>{{len .Agents}}</span></h2><ul role="list">
- {{range .Agents}}<li class="roster-row{{if or (attention .State) .PendingRestart}} needs-attention{{end}}">
- <div class="roster-identity"><a class="agent-link" href="/agents/{{.Name}}">{{template "avatar" (dict "Display" .Display "State" .State "Size" "sm")}}<span><strong>{{.Display}}</strong>{{if .IsHead}} <span class="tag">head</span>{{end}}<span class="roster-role">{{.Role}}</span></span></a></div>
- <div class="roster-work"><div class="roster-state">{{template "state" .AgentStatus}}<span>Last signal {{if .LastActivity.IsZero}}not received{{else}}<time datetime="{{stamp .LastActivity}}" title="{{long .LastActivity}}" data-ago>{{ago .LastActivity}}</time>{{end}}</span></div><p>{{template "state-detail" .AgentStatus}}</p>{{if .PendingRestart}}<a class="roster-pending" href="/agents/{{.Name}}">Pending restart{{with .PendingReason}} · {{.}}{{end}}</a>{{end}}</div>
- <div class="roster-runtime"><span>{{if .Runtime.Model}}{{.Runtime.Model}}{{else}}Default model{{end}}</span><small>{{.Runtime.Harness}}{{if and (running .State) (not .StartedAt.IsZero)}} · up {{since .StartedAt}}{{end}}</small><small>{{.Restarts}} crash restarts / 24h</small></div>
- <div class="roster-next">{{if .Unread}}<a href="/agents/{{.Name}}#h-activity" class="roster-unread">{{.Unread}} unread mail</a>{{else}}<span>No unread mail</span>{{end}}{{if not .NextTrigger.IsZero}}<small>Next trigger <time datetime="{{stamp .NextTrigger}}" title="{{long .NextTrigger}}">{{when .NextTrigger}}</time></small>{{else if .Runtime.Triggers}}<small>Mail / webhook triggers</small>{{else}}<small>No scheduled triggers</small>{{end}}</div>
- <div class="roster-actions"><a class="btn btn-sm" href="/inbox/{{.Name}}" aria-label="Message {{.Display}}">{{template "icon" "message"}}<span>Message</span></a>{{template "controls" (dict "A" .AgentStatus "From" "fleet")}}</div>
+ <section class="roster-team" aria-label="{{.Name}}">{{if gt (len $.Groups) 1}}<h2 class="eyebrow">{{.Name}} <span>· {{len .Agents}}</span></h2>{{end}}<ul class="as-grid" role="list">
+ {{range .Agents}}<li class="as-card{{if eq .State "waiting"}} is-you{{else if or (eq .State "failed") (eq .State "crashed")}} is-fault{{end}}">
+  <a class="as-id" href="/agents/{{.Name}}">{{template "avatar" (dict "Display" .Display "State" .State "Size" "lg")}}<span class="as-who"><strong class="as-name">{{.Display}}{{if .IsHead}} <span class="tag">lead</span>{{end}}</strong><span class="as-role">{{.Role}}</span></span></a>
+  <div class="as-status">{{template "state" .AgentStatus}}{{if and (eq .State "busy") (not .LastActivity.IsZero)}}<span class="muted">· <time datetime="{{stamp .LastActivity}}" title="{{long .LastActivity}}" data-ago>{{ago .LastActivity}}</time></span>{{end}}</div>
+  <p class="as-now">{{template "state-detail" .AgentStatus}}</p>
+  <p class="as-meta">{{if .Unread}}<a href="/agents/{{.Name}}#h-activity">{{plural .Unread "message" "messages"}} not read yet</a>{{end}}{{if not .NextTrigger.IsZero}}<span>Next check-in <time datetime="{{stamp .NextTrigger}}" title="{{long .NextTrigger}}">{{when .NextTrigger}}</time></span>{{end}}{{if .Restarts}}<span>Crashed {{.Restarts}}× in 24h</span>{{end}}{{if .PendingRestart}}<a class="roster-pending" href="/agents/{{.Name}}">Restart to apply changes{{with .PendingReason}} · {{.}}{{end}}</a>{{end}}</p>
+  <div class="as-actions">{{if eq .State "waiting"}}<a class="btn btn-sm btn-you" href="/inbox/{{.Name}}">Answer {{.Display}}</a>{{else if eq .State "failed"}}<a class="btn btn-sm" href="/agents/{{.Name}}">Fix it</a>{{else}}<a class="btn btn-sm" href="/inbox/{{.Name}}" aria-label="Write to {{.Display}}">{{template "icon" "message"}}<span>Write</span></a>{{end}}{{template "controls" (dict "A" .AgentStatus "From" "fleet")}}</div>
  </li>{{end}}</ul></section>
- {{else}}<div class="roster-empty"><h2>No matching agents</h2><p>Try another name, model or team, or choose All agents.</p></div>{{end}}
+ {{else}}<div class="roster-empty"><h2>No matching assistants</h2><p>Try another name or team, or show everyone.</p></div>{{end}}
  {{end}}
 </div>{{end}}
 {{define "fleet-body"}}{{template "fleet" .}}{{end}}
 
 {{define "agent-head"}}<header class="agent-head" id="agent-head" hx-get="/agents/{{.A.Name}}/part/head" hx-trigger="lolad:a-{{.A.Name}} from:body delay:300ms, lolad:mail from:body delay:500ms" hx-swap="outerHTML">
- <div class="agent-title">{{template "avatar" (dict "Display" .A.Display "State" .A.State "Size" "lg")}}<div class="agent-id"><h1>{{.A.Display}}</h1><p class="agent-role">{{.A.Role}}{{with .TeamName}} · {{.}}{{else}} · Independent{{end}}</p></div></div>
- <div class="agent-actions"><a class="btn btn-primary" href="/inbox/{{.A.Name}}">{{template "icon" "message"}}<span>Open conversation</span></a><a class="btn" href="/agents/{{.A.Name}}/settings">{{template "icon" "settings"}}<span>Settings</span></a>{{template "controls" (dict "A" .A "From" "detail")}}</div>
- <div class="agent-situation"><div class="agent-current">{{template "state" .A}}<p>{{template "state-detail" .A}}</p></div><dl class="agent-vitals"><div><dt>Last signal</dt><dd>{{if .A.LastActivity.IsZero}}Not received{{else}}<time datetime="{{stamp .A.LastActivity}}" title="{{long .A.LastActivity}}" data-ago>{{ago .A.LastActivity}}</time>{{end}}</dd></div><div><dt>Uptime</dt><dd>{{if and (running .A.State) (not .A.StartedAt.IsZero)}}{{since .A.StartedAt}}{{else}}Not running{{end}}</dd></div><div><dt>Crash restarts / 24h</dt><dd>{{.A.Restarts}}</dd></div><div><dt>Unread agent mail</dt><dd>{{.A.Unread}}</dd></div><div><dt>Next scheduled trigger</dt><dd>{{if not .NextTrigger.IsZero}}<time datetime="{{stamp .NextTrigger}}" title="{{long .NextTrigger}}">{{when .NextTrigger}}</time>{{else}}None{{end}}</dd></div></dl></div>
+ <div class="agent-title">{{template "avatar" (dict "Display" .A.Display "State" .A.State "Size" "xl")}}<div class="agent-id"><h1>{{.A.Display}}</h1><p class="agent-role">{{.A.Role}}{{with .TeamName}} · {{.}}{{end}}</p><div class="agent-current">{{template "state" .A}}<p>{{template "state-detail" .A}}</p></div></div></div>
+ <div class="agent-actions"><a class="btn btn-primary" href="/inbox/{{.A.Name}}">{{template "icon" "message"}}<span>Talk to {{.A.Display}}</span></a><a class="btn" href="/agents/{{.A.Name}}/settings">{{template "icon" "settings"}}<span>Settings</span></a>{{template "controls" (dict "A" .A "From" "detail")}}</div>
+ {{if eq .A.State "failed"}}{{template "agent-fix" .A}}{{else if .A.Problem}}{{template "agent-problem" .A}}{{end}}
+ <dl class="agent-vitals"><div><dt>Last heard from</dt><dd>{{if .A.LastActivity.IsZero}}Not received{{else}}<time datetime="{{stamp .A.LastActivity}}" title="{{long .A.LastActivity}}" data-ago>{{ago .A.LastActivity}}</time>{{end}}</dd></div><div><dt>Awake for</dt><dd>{{if and (running .A.State) (not .A.StartedAt.IsZero)}}{{since .A.StartedAt}}{{else}}Asleep{{end}}</dd></div><div><dt>Crashes today</dt><dd>{{.A.Restarts}}</dd></div><div><dt>Messages it hasn't read</dt><dd>{{.A.Unread}}</dd></div><div><dt>Next check-in</dt><dd>{{if not .NextTrigger.IsZero}}<time datetime="{{stamp .NextTrigger}}" title="{{long .NextTrigger}}">{{when .NextTrigger}}</time>{{else}}None{{end}}</dd></div></dl>
  {{template "pending" (dict "A" .A "From" "detail")}}
 </header>{{end}}
+
+{{/* Why a running assistant isn't working, in plain words, and what to do. */}}
+{{define "agent-problem"}}{{$a := .}}{{$p := .Problem}}<section class="agent-problem{{if $p.NeedsYou}} needs-you{{end}}" aria-labelledby="problem-h">
+ <h2 id="problem-h">{{$p.Title}}</h2>
+ {{with $p.Hint}}<p>{{.}}</p>{{end}}
+ {{if and (not $p.Until.IsZero) (future $p.Until)}}<p class="agent-problem-when">Tries again by itself in <time datetime="{{stamp $p.Until}}" title="{{long $p.Until}}">{{until $p.Until}}</time>.</p>{{end}}
+ {{with $p.Detail}}<details class="agent-problem-why"><summary>What it said</summary><code>{{.}}</code></details>{{end}}
+ <div class="agent-problem-actions">
+  {{if and (eq $p.Kind "login") (ne $a.Runtime.Harness "codewhale")}}<a class="btn btn-primary" href="/welcome?step=harnesses">{{template "icon" "settings"}}<span>Open AI tools</span></a>{{end}}
+  {{if ne $p.Kind "stuck"}}<form method="post" action="/agents/{{$a.Name}}/restart" hx-post="/agents/{{$a.Name}}/restart" hx-target="#agent-head" hx-swap="outerHTML" hx-disabled-elt="find button"><input type="hidden" name="from" value="detail"><button class="btn{{if not (eq $p.Kind "login")}} btn-primary{{end}}">{{template "icon" "start"}}<span>{{if $p.NeedsYou}}Restart it{{else}}Try now{{end}}</span></button></form>{{end}}
+  <a class="btn" href="#term-panel" data-open-term>{{template "icon" "terminal"}}<span>Open its screen</span></a>
+ </div>
+</section>{{end}}
+
+{{/* Guided recovery for an assistant the supervisor gave up on. */}}
+{{define "agent-fix"}}<section class="agent-fix" aria-labelledby="fix-h">
+ <h2 id="fix-h">{{.Display}} can't start</h2>
+ <p>lolad tried {{if .Restarts}}{{.Restarts}} times {{end}}and stopped, so it doesn't keep failing in a loop. Nothing is lost: its memory and files are safe.</p>
+ {{with .LastError}}<p class="agent-fix-why"><span class="eyebrow">What it said</span><code>{{.}}</code></p>{{end}}
+ <ol class="agent-fix-steps" role="list">
+  <li><span class="num">1</span><div><strong>Try again</strong><p>Often enough after a hiccup, like no internet or Claude being busy.</p></div><form method="post" action="/agents/{{.Name}}/start" hx-post="/agents/{{.Name}}/start" hx-target="#agent-head" hx-swap="outerHTML" hx-disabled-elt="find button"><input type="hidden" name="from" value="detail"><button class="btn btn-primary">{{template "icon" "start"}}<span>Try again</span></button></form></li>
+  <li><span class="num">2</span><div><strong>Look at its screen</strong><p>See exactly where it stops, under Advanced.</p></div><a class="btn" href="#term-panel" data-open-term>{{template "icon" "terminal"}}<span>Open its screen</span></a></li>
+  <li><span class="num">3</span><div><strong>Start fresh</strong><p>A new conversation. Memory and files carry over.</p></div><form method="post" action="/agents/{{.Name}}/fresh" hx-post="/agents/{{.Name}}/fresh" hx-target="#agent-head" hx-swap="outerHTML" hx-disabled-elt="find button"><input type="hidden" name="from" value="detail"><button class="btn">{{template "icon" "fresh"}}<span>Start fresh</span></button></form></li>
+ </ol>
+</section>{{end}}
+
+{{/* Plain facts: how this assistant wakes and how to reach it. */}}
+{{define "agent-about"}}{{$rt := .A.Runtime}}<section class="panel agent-about" aria-labelledby="h-about">
+ <header class="panel-head"><h2 id="h-about">How it works</h2><a class="panel-link" href="/agents/{{.A.Name}}/settings">{{template "icon" "edit"}}<span>Change</span></a></header>
+ <ul class="about-list" role="list">
+  <li>{{template "icon" "mail"}}<span>{{if $rt.WakeOnMessageEnabled}}Wakes up when a message arrives.{{else}}Sleeps until you press Start.{{end}}</span></li>
+  <li>{{template "icon" "pulse"}}<span>{{if not .NextTrigger.IsZero}}Next check-in <time datetime="{{stamp .NextTrigger}}" title="{{long .NextTrigger}}">{{when .NextTrigger}}</time>.{{else if $rt.Triggers}}Checks in when mail or a webhook arrives.{{else}}No scheduled check-ins.{{end}}</span></li>
+  <li>{{template "icon" "shield"}}<span>{{if eq $rt.Permissions "default"}}Asks you before risky steps.{{else}}Works on its own, without asking first.{{end}}</span></li>
+  <li>{{template "icon" "mail"}}<span>{{if .EmailUnavailable}}Couldn't load its email.{{else}}{{range $i, $e := .Emails}}{{if $i}}, {{end}}<span class="agent-email">{{$e}}</span>{{else}}No email address. <a href="/agents/{{.A.Name}}/settings/email">Give it one</a>{{end}}{{end}}</span></li>
+ </ul>
+</section>{{end}}
 
 {{define "agent-events"}}<div id="agent-events" hx-get="/agents/{{.A.Name}}/part/events" hx-trigger="lolad:a-{{.A.Name}} from:body delay:500ms, lolad:mail from:body delay:700ms" hx-swap="outerHTML">
  {{if .Timeline}}<ol class="activity-stream" role="list">{{range .Timeline}}<li class="activity-entry kind-{{.Kind}}"><time datetime="{{stamp .At}}" title="{{long .At}}">{{evtime .At}}</time><div><strong>{{.Title}}</strong><p>{{.Detail}}</p></div></li>{{end}}</ol>{{else}}<p class="empty-inline">No activity yet. Starts, turns, triggers and mail will appear here.</p>{{end}}

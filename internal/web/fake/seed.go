@@ -91,6 +91,14 @@ func (s *Service) seed() {
 		case core.StateFailed:
 			a.LastActivity = now.Add(-5*time.Hour - 50*time.Minute)
 		}
+		if sd.name == "iris" {
+			// A usage limit: paused, retrying by itself at the reset.
+			a.State = core.StatePaused
+			a.Problem = &core.AgentProblem{Kind: "usage_limit", Title: "Reached its Claude usage limit",
+				Hint:   "It continues by itself when the limit resets. Messages wait until then. For more usage, check your plan.",
+				Detail: "You've hit your limit · resets 3pm", Since: now.Add(-40 * time.Minute), Until: now.Add(2*time.Hour + 5*time.Minute)}
+			a.Detail = a.Problem.Title
+		}
 		s.agents = append(s.agents, a)
 	}
 	s.seedSettings()
@@ -196,6 +204,41 @@ func (s *Service) seed() {
 	put(ago(6*m), "lola", "milo", "request", "Ship pricing today?",
 		"Legal hasn't reviewed the terms for the new Founders tier. Ship today without Founders, or hold everything until legal signs off (likely Thursday)?",
 		chat("ask", "Ship without Founders", "Hold until Thursday", "Ship everything now"), U)
+	put(ago(4*m), "quill", "milo", "request", "Unsplash key",
+		"I'd like to add photos to the pricing page. Can you give me an Unsplash access key? It's free: unsplash.com/developers → New application.",
+		map[string]any{"userchat": map[string]any{"kind": "ask", "fields": []map[string]any{{"name": "UNSPLASH_ACCESS_KEY", "label": "Unsplash access key", "type": "secret"}}}}, U)
+	put(ago(3*m), "quill", "milo", "request", "Launch post",
+		"Before I draft the launch post: a few details.",
+		map[string]any{"userchat": map[string]any{"kind": "ask", "fields": []map[string]any{
+			{"name": "date", "label": "Launch date", "type": "date"},
+			{"name": "tone", "label": "Tone", "type": "choice", "options": []string{"Friendly", "Formal", "Playful"}},
+			{"name": "notes", "label": "Anything to mention", "type": "longtext", "optional": true},
+		}}}, U)
+	// Blocks: what agents send through the message_user / ask_user tools.
+	put(ago(9*m), "ledger", "milo", "notification", "Caddy is ready on the server",
+		"Caddy is ready on the server. Config and reload command below.",
+		map[string]any{"userchat": map[string]any{"kind": "say", "blocks": []map[string]any{
+			{"type": "text", "text": "Caddy is installed on the server. This is the config I'm using; it only proxies the app:"},
+			{"type": "code", "title": "/etc/caddy/Caddyfile", "code": "app.example.com {\n\tencode gzip\n\treverse_proxy 127.0.0.1:3000\n}"},
+			{"type": "text", "text": "Once DNS is in, I'll reload it with:"},
+			{"type": "command", "where": "on the server, over SSH", "code": "sudo systemctl reload caddy"},
+		}}}, U)
+	put(ago(8*m), "ledger", "milo", "request", "Add one DNS record in Hostinger",
+		"Add one DNS record in Hostinger (DNS zone of example.com). Leave the existing records alone.",
+		map[string]any{"userchat": map[string]any{"kind": "ask", "task": true, "options": []string{"Added", "I couldn't do it"}, "blocks": []map[string]any{
+			{"type": "text", "text": "Add this one record in the DNS zone of **example.com**. Leave the existing records alone."},
+			{"type": "link", "label": "Open Hostinger DNS", "url": "https://hpanel.hostinger.com/domain/example.com/dns"},
+			{"type": "values", "title": "DNS record", "rows": []map[string]any{{"label": "Type", "value": "A"}, {"label": "Name", "value": "app"}, {"label": "Points to", "value": "203.0.113.7"}, {"label": "TTL", "value": "300"}}},
+		}}}, U)
+	put(ago(7*m), "ledger", "milo", "request", "Show me the error",
+		"The export still fails on your machine. Can you send me what you see?",
+		map[string]any{"userchat": map[string]any{"kind": "ask", "blocks": []map[string]any{
+			{"type": "text", "text": "The export still fails on your machine. Can you send me what you see?"},
+			{"type": "steps", "items": []string{"Open **Reports → Export**", "Pick *Last month* and press Export", "Screenshot the error, and copy what the terminal printed"}},
+		}, "fields": []map[string]any{
+			{"name": "screenshot", "label": "Screenshot", "type": "file"},
+			{"name": "output", "label": "Terminal output", "type": "logs", "optional": true},
+		}}}, U)
 
 	ev := func(at time.Time, agent, kind, detail string) {
 		s.seq++
