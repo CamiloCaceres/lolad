@@ -2,6 +2,7 @@ package amp
 
 import (
 	"context"
+	"crypto/ed25519"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -105,4 +106,43 @@ func RenameIdentityFiles(stateDir, from, to string) error {
 		}
 	}
 	return nil
+}
+
+// WithFormerNames gives the names (tenants) this lolad had before its
+// renames. See formerSignature.
+func WithFormerNames(names []string) Option {
+	return func(p *Provider) { p.former = append([]string(nil), names...) }
+}
+
+// formerSignature covers clients that outlive a rename. A process started
+// before it (a long-running `lolad msg mcp` in every agent session) still
+// signs From with its old address, while the provider checks the signature
+// against the current one. When the signature verifies under one of the
+// former names with the sender's own key, the caller (already authenticated
+// as this identity) holds the key and meant exactly this mail: the provider
+// re-signs the envelope under the current address, so the stored and
+// forwarded wire verifies like any other. It returns the new signature, or
+// false.
+func (p *Provider) formerSignature(from string, env Envelope, pub ed25519.PublicKey, payload json.RawMessage) (string, bool) {
+	name, _, e := ParseAddress(env.From)
+	if e != nil || len(p.former) == 0 {
+		return "", false
+	}
+	for _, t := range p.former {
+		if t == p.tenant || !tenantRE.MatchString(t) {
+			continue
+		}
+		old := env
+		old.From = name + "@" + ProviderName(t)
+		if !Verify(pub, old, payload) {
+			continue
+		}
+		_, key, e := ReadCredentials(p.stateDir, from)
+		if e != nil || !key.Public().(ed25519.PublicKey).Equal(pub) {
+			return "", false
+		}
+		sig, e := Sign(key, env, payload)
+		return sig, e == nil
+	}
+	return "", false
 }

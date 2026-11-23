@@ -1005,6 +1005,15 @@ before v0.2 and so cannot connect with another `home`.
 - **What stays:** the `wire` column (the signed record), bare names
   (`from_name`, `to_name`, policy, teams, `LOLAD_AGENT`), keys and API keys,
   the federation key, devices, and the hub account and handle.
+- **Running agents keep working (beta.4):** agent sessions outlive the
+  restart, and their `lolad msg mcp` servers loaded the old address. The MCP
+  server re-reads `identity.json` before each call. For servers that cannot
+  (started from an older binary), the provider accepts a local identity's
+  signature made under a former name (`rename-former.json`, plus
+  `rename-last.json` for renames made by beta.3) with that identity's own key,
+  and re-signs the envelope under the current address, so the stored and
+  forwarded wire verifies normally. The caller is already authenticated as
+  that identity, so this window has no time limit.
 - **Connections are redone** (v1): every peer gets a best-effort signed
   `unpair` at request time (their card shows "removed by them"), and the
   rename empties `connections.yaml`. Open invite links and codes are

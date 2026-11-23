@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -36,6 +37,7 @@ import (
 const (
 	renamePlanFile = "rename.json"
 	renameLastFile = "rename-last.json"
+	renameFormer   = "rename-former.json" // names this lolad had, newest first
 	renameBackups  = "rename-backup-"
 	backupComplete = "complete"
 	backupKeep     = 7 * 24 * time.Hour
@@ -57,11 +59,12 @@ type renamePlan struct {
 
 type renamePaths struct{ state, config string }
 
-func (p renamePaths) plan() string  { return filepath.Join(p.state, renamePlanFile) }
-func (p renamePaths) last() string  { return filepath.Join(p.state, renameLastFile) }
-func (p renamePaths) db() string    { return filepath.Join(p.state, "lolad.db") }
-func (p renamePaths) org() string   { return filepath.Join(p.config, "org.yaml") }
-func (p renamePaths) conns() string { return filepath.Join(p.config, "connections.yaml") }
+func (p renamePaths) plan() string   { return filepath.Join(p.state, renamePlanFile) }
+func (p renamePaths) last() string   { return filepath.Join(p.state, renameLastFile) }
+func (p renamePaths) former() string { return filepath.Join(p.state, renameFormer) }
+func (p renamePaths) db() string     { return filepath.Join(p.state, "lolad.db") }
+func (p renamePaths) org() string    { return filepath.Join(p.config, "org.yaml") }
+func (p renamePaths) conns() string  { return filepath.Join(p.config, "connections.yaml") }
 
 // errCrash stands in for the process dying in tests: the step stops with no
 // rollback, as a real crash would.
@@ -133,6 +136,16 @@ func finishRename(p renamePaths, step *core.RenameStep, hook func(string) error)
 
 // endRename records the outcome and removes the plan.
 func endRename(p renamePaths, step *core.RenameStep) error {
+	if step.Error == "" {
+		names := formerNames(p, step.To)
+		if !slices.Contains(names, step.From) {
+			names = append([]string{step.From}, names...)
+		}
+		b, _ := json.Marshal(names)
+		if e := writeFileAtomic(p.former(), b); e != nil {
+			return e
+		}
+	}
 	b, _ := json.MarshalIndent(step, "", "  ")
 	if e := writeFileAtomic(p.last(), b); e != nil {
 		return e
@@ -341,6 +354,27 @@ func writeFileAtomic(path string, b []byte) error {
 		return e
 	}
 	return os.Rename(f.Name(), path)
+}
+
+// formerNames lists the names this lolad had before its renames, newest
+// first, without current. Clients started before a rename still sign with
+// them (amp.WithFormerNames). rename-last.json counts too: beta.3 renamed
+// before rename-former.json existed.
+func formerNames(p renamePaths, current string) []string {
+	var names []string
+	if b, e := os.ReadFile(p.former()); e == nil {
+		_ = json.Unmarshal(b, &names)
+	}
+	if s := readRenameStep(p.last()); s != nil && s.Error == "" && s.From != "" {
+		names = append([]string{s.From}, names...)
+	}
+	out := names[:0]
+	for _, n := range names {
+		if n != "" && n != current && !slices.Contains(out, n) {
+			out = append(out, n)
+		}
+	}
+	return out
 }
 
 func readRenameStep(path string) *core.RenameStep {

@@ -1,10 +1,12 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -512,6 +514,26 @@ func TestRenameLoladRequestAndRestart(t *testing.T) {
 			t.Fatal("old address in", m.ID, m.From, m.To)
 		}
 	}
+	// An agent's MCP server started before the rename signs as its old
+	// address; the restarted daemon still takes its mail (amp.WithFormerNames).
+	if got := formerNames(p, "milo-pc"); len(got) != 1 || got[0] != "home" {
+		t.Fatal("former names:", got)
+	}
+	creds, key, e := amp.ReadCredentials(p.state, maple)
+	if e != nil {
+		t.Fatal(e)
+	}
+	payload, _ := amp.CanonicalJSON(amp.Payload{Type: "notification", Message: "from an old session"})
+	env := amp.Envelope{From: maple + "@home.lolad.local", To: "ana@milo-pc.lolad.local", Subject: "old session", Priority: "normal"}
+	sig, _ := amp.Sign(key, env, json.RawMessage(payload))
+	body, _ := json.Marshal(amp.RouteRequest{To: env.To, Subject: env.Subject, Priority: env.Priority, Signature: sig, Payload: payload})
+	req := httptest.NewRequest("POST", "/v1/route", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+creds.APIKey)
+	rec := httptest.NewRecorder()
+	b.Provider.ServeHTTP(rec, req)
+	if rec.Code != 200 {
+		t.Fatalf("old-address signature after rename: %d %s", rec.Code, rec.Body)
+	}
 	// The agent's instructions carry the new address.
 	ag := b.Registry.List()[0]
 	if md, e := os.ReadFile(filepath.Join(ag.Dir, "CLAUDE.md")); e == nil && (!strings.Contains(string(md), "@milo-pc.lolad.local") || strings.Contains(string(md), "@home.lolad.local")) {
@@ -531,8 +553,7 @@ func TestRenameFixture(t *testing.T) {
 	var n int
 	db, _ := sql.Open("sqlite", p.db())
 	defer db.Close()
-	db.QueryRow(`SELECT count(*) FROM amp_messages`).Scan(&n)
-	if n != 3 {
-		t.Fatal(n)
+	if e := db.QueryRow(`SELECT count(*) FROM amp_messages`).Scan(&n); e != nil || n != 3 {
+		t.Fatal(n, e)
 	}
 }

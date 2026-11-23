@@ -93,7 +93,7 @@ func New(ctx context.Context, configPath string) (_ *App, err error) {
 	if err != nil {
 		return nil, err
 	}
-	a.Provider, err = amp.New(a.DB, a.Config.StateDir, a.Policy.Org().Tenant, a.Policy, amp.WithAgents(r.List), amp.WithOrg(a.Policy.Org), amp.WithEventSink(func(e core.Event) {
+	a.Provider, err = amp.New(a.DB, a.Config.StateDir, a.Policy.Org().Tenant, a.Policy, amp.WithFormerNames(formerNames(a.renamePaths(), a.Policy.Org().Tenant)), amp.WithAgents(r.List), amp.WithOrg(a.Policy.Org), amp.WithEventSink(func(e core.Event) {
 		if a.Supervisor != nil {
 			a.RecordEvent(e)
 		}

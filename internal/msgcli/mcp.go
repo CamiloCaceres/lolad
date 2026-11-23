@@ -126,6 +126,7 @@ func (c *client) callTool(params json.RawMessage) map[string]any {
 	if err != nil {
 		return toolResult(err.Error()+". Fix the arguments and call again.", true)
 	}
+	c.refresh() // this server outlives renames
 	id, err := c.sendToUser(m)
 	if err != nil {
 		return toolResult("not sent: "+err.Error(), true)

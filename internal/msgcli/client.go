@@ -44,7 +44,22 @@ type client struct {
 	key         ed25519.PrivateKey
 	http        *http.Client
 	out         io.Writer
+	// state and name re-read credentials in a long-running client (mcp):
+	// a rename changes the address under it.
+	state, name string
 }
+
+// refresh re-reads this identity's credentials. A rename while the MCP
+// server runs changes the address it signs as; keys stay the same.
+func (c *client) refresh() {
+	if c.state == "" || c.name == "" {
+		return
+	}
+	if creds, key, e := amp.ReadCredentials(c.state, c.name); e == nil {
+		c.credentials, c.key = creds, key
+	}
+}
+
 type serverError struct {
 	status int
 	reason string
@@ -150,7 +165,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	if base == "" {
 		base = "http://127.0.0.1:4100"
 	}
-	c := &client{ctx: ctx, base: base, credentials: creds, key: key, http: &http.Client{Timeout: 15 * time.Second}, out: stdout}
+	c := &client{ctx: ctx, base: base, credentials: creds, key: key, http: &http.Client{Timeout: 15 * time.Second}, out: stdout, state: state, name: name}
 	if e = c.run(args); e != nil {
 		return fail(e)
 	}

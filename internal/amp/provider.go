@@ -35,6 +35,7 @@ type Provider struct {
 	remoteMu         sync.RWMutex
 	remote           Remote
 	started          time.Time
+	former           []string // names before renames (rename.go)
 	// attachments (attachments.go)
 	localAttachmentLimit int64
 	attachMu             sync.Mutex
@@ -154,7 +155,11 @@ func (p *Provider) acceptWith(ctx context.Context, from string, env Envelope, pa
 		env.Priority = "normal"
 	}
 	if !Verify(pub, env, payload) {
-		return zero, errSignature
+		sig, ok := p.formerSignature(from, env, pub, payload)
+		if !ok {
+			return zero, errSignature
+		}
+		env.Signature = sig
 	}
 	if !remote {
 		if e = p.authorize(ctx, from, to, env.InReplyTo, false); e != nil {
