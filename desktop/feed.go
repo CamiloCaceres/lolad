@@ -32,6 +32,9 @@ type Data struct {
 	Convs  []Conversation
 	Conns  []Connection
 	Snap   Snapshot
+	// PortConflict is the port number when the daemon is down and another
+	// program answers on its port, else "".
+	PortConflict string
 }
 
 // feed keeps Data fresh: it subscribes to the loopback /api/stream, and on any
@@ -39,16 +42,21 @@ type Data struct {
 // /api/mail/conversations and /api/connections. The stream has no replay, so a
 // reconnect always triggers a refresh.
 type feed struct {
-	base     string // "http://127.0.0.1:4100"
 	poll     time.Duration
 	debounce time.Duration
 	onData   func(Data)
+	// locate, when set, returns the daemon's current base URL (from the
+	// config). It is asked whenever the daemon does not answer, so the feed
+	// follows lolad to a new port. onMove hears about each switch.
+	locate func() string
+	onMove func(base string)
 
 	kick chan struct{}
 	api  *http.Client
 
 	mu        sync.Mutex
-	connected bool // SSE currently attached (for tests and status)
+	base      string // "http://127.0.0.1:4100"
+	connected bool   // SSE currently attached (for tests and status)
 }
 
 func newFeed(base string, onData func(Data)) *feed {
@@ -64,6 +72,37 @@ func (f *feed) wake() {
 	case f.kick <- struct{}{}:
 	default:
 	}
+}
+
+// Base is the daemon URL the feed reads now (no trailing slash).
+func (f *feed) Base() string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.base
+}
+
+// relocate re-reads the daemon's address and switches to it when it changed.
+// It returns the base to use.
+func (f *feed) relocate() string {
+	if f.locate == nil {
+		return f.Base()
+	}
+	next := strings.TrimSuffix(f.locate(), "/")
+	f.mu.Lock()
+	cur := f.base
+	moved := next != "" && next != cur
+	if moved {
+		f.base = next
+	}
+	f.mu.Unlock()
+	if !moved {
+		return cur
+	}
+	if f.onMove != nil {
+		f.onMove(next)
+	}
+	f.wake() // read the new address right away
+	return next
 }
 
 func (f *feed) Connected() bool {
@@ -101,7 +140,7 @@ func (f *feed) Run(ctx context.Context) {
 }
 
 func (f *feed) get(ctx context.Context, path string) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, f.base+path, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, f.Base()+path, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +167,15 @@ func (f *feed) refresh(ctx context.Context) {
 	var d Data
 	b, err := f.get(ctx, "/api/agents")
 	if err != nil {
-		f.onData(d) // zero Snapshot: Up=false
+		// Down (zero Snapshot: Up=false). lolad may have moved to another
+		// port, or another program may be sitting on this one.
+		if ctx.Err() != nil {
+			return
+		}
+		if base := f.relocate(); foreignOnPort(base) {
+			d.PortConflict = portOf(base)
+		}
+		f.onData(d)
 		return
 	}
 	d.Agents, _ = decodeList[Agent](b)
@@ -165,7 +212,7 @@ func (f *feed) stream(ctx context.Context) {
 }
 
 func (f *feed) streamOnce(ctx context.Context) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, f.base+"/api/stream", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, f.Base()+"/api/stream", nil)
 	if err != nil {
 		return
 	}

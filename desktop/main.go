@@ -47,7 +47,9 @@ func main() {
 		},
 		Windows: application.WindowsOptions{DisableQuitOnLastWindowClosed: true},
 		RawMessageHandler: func(w application.Window, msg string, o *application.OriginInfo) {
-			handleBridge(app, originOf(url))(w, msg, o)
+			// The daemon's address can change (it moves off a busy port),
+			// so the trusted origin is read per message.
+			handleBridge(app, originOf(sh.baseURL()))(w, msg, o)
 		},
 		SingleInstance: &application.SingleInstanceOptions{
 			UniqueID: "dev.caceres.lolad.desktop" + os.Getenv("LOLAD_DESKTOP_INSTANCE"), // suffix lets tests run beside an installed copy
@@ -77,6 +79,14 @@ func main() {
 		},
 	})
 	sh = newShell(app, win, url, notif, background)
+	moveFrom := ""
+	if runtime.GOOS == "darwin" {
+		home, _ := os.UserHomeDir()
+		if b := currentBundle(); needsMove(b, home, readOnlyFS) {
+			moveFrom = b
+			sh.movePending = true
+		}
+	}
 	// ⌘W and the close button hide the window; the tray keeps running.
 	win.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
 		sh.hideMain()
@@ -85,6 +95,9 @@ func main() {
 	sh.watchFrame()
 	app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
 		sh.restoreFrame()
+		if moveFrom != "" {
+			sh.offerMove(moveFrom)
+		}
 		// A login item launch has no --background argument on macOS
 		// (SMAppService cannot pass one), so also ask the launch event.
 		if !sh.background && !launchedAtLogin() {
@@ -97,6 +110,10 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	f := newFeed(url, sh.onData)
+	// While the daemon is down, re-read listen: from the config so the app
+	// follows lolad when it moves to another port.
+	f.locate = func() string { return dashboardURL(listenAddr()) }
+	f.onMove = sh.setBase
 	go f.Run(ctx)
 	go sh.metaLoop(ctx)
 

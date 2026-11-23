@@ -216,7 +216,7 @@ jobs:
             echo "- **Mac:** download \`Lolad.dmg\`, drag Lolad to Applications."
             echo "- **Terminal only:** the \`lolad-*\` files are the command-line program."
             echo
-            if [ "$MAC_SIGNED" != true ]; then echo "> The Mac app in this release is not notarized: the first open needs right-click, Open (see the install guide)."; fi
+            if [ "$MAC_SIGNED" != true ]; then echo "> The Mac app in this release is not notarized: the first open needs System Settings > Privacy & Security > Open Anyway (see the install guide)."; fi
           } > notes.md
       - name: Publish the GitHub release
         if: needs.meta.outputs.publish == 'true'

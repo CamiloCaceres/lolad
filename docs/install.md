@@ -25,21 +25,21 @@ Open the file you downloaded. A small window appears. Drag **Lolad** onto the
 Lolad is not sold through the App Store, so your Mac asks you to confirm that
 you trust it. You only do this once.
 
-**If your Mac says "Lolad can't be opened" or "Apple could not verify..."**
-(this is normal for builds that are not notarized yet):
+Open the **Applications** folder and double-click **Lolad**. If your Mac says
+**"Lolad Not Opened"**, **"Apple could not verify..."** or **"Lolad can't be
+opened"** (this is normal while Lolad is not notarized by Apple):
 
-1. Open the **Applications** folder.
-2. **Right-click** (or hold Control and click) **Lolad**, then choose **Open**.
-3. A new box appears with an **Open** button. Click it.
-
-If there is no Open button, do this instead:
-
-1. Try to open Lolad once, and close the warning.
+1. Click **Done** (or **OK**) to close the warning. Do not move Lolad to the Trash.
 2. Open **System Settings**, then **Privacy & Security**.
-3. Scroll down. You will see "Lolad was blocked". Click **Open Anyway**.
-4. Type your Mac password if asked, then click **Open**.
+3. Scroll down to **Security**. You will see "Lolad was blocked". Click
+   **Open Anyway**.
+4. Type your Mac password (or use Touch ID), then click **Open Anyway** again.
 
 You will not be asked again.
+
+If Lolad says it is running from a temporary place, click **Move to
+Applications**. It copies itself there and reopens. It has to live in
+Applications to keep your assistants running after a restart.
 
 ### 4. Allow it to run in the background
 
@@ -56,9 +56,11 @@ Lolad walks you through a short setup:
 
 1. **Start at login.** It asks to start by itself when you sign in to your
    computer, so your agents are always there. You can turn this off later.
-2. **Connect an AI tool.** Lolad works with tools such as Claude Code and
-   Codex. It shows which ones are already on your computer and helps you
-   install or sign in to one. You need at least one.
+2. **Connect an AI tool.** Lolad's assistants think with **Claude Code**, so
+   you need a Claude account (a paid Claude plan, or an Anthropic API key).
+   Lolad checks whether Claude Code is already on your computer, and if not,
+   the **Install** button gets it for you. Then press **Sign in**. A browser
+   window opens to log in to your Claude account.
 3. **Pick a folder for your agents.** The suggested folder, **Lolad Agents**
    in your home folder, is a good choice.
 4. **Your name.** So agents know who they are talking to.
@@ -74,8 +76,10 @@ agents.** They keep working in the background.
 - **Open Lolad:** click its icon (the menu bar at the top of the screen), or open it like any other app.
 - **Quit the app:** use the icon's menu and choose **Quit Lolad (agents keep
   running)**. The agents do not stop. To stop agents, use the Lolad window.
-- **Updates:** Lolad checks for updates by itself and tells you when one is
-  ready. You can also choose **Check for updates** from the icon's menu.
+- **Updates:** for now, get a new version by downloading the newest
+  **Lolad.dmg** from the release page and dragging it to Applications again
+  (choose **Replace**). Your assistants, messages and settings are kept.
+  Automatic updates will come with the first release signed by Apple.
 
 ---
 
@@ -86,7 +90,8 @@ agents.** They keep working in the background.
    file there.
 2. If the window says Lolad is not running, press **Start**.
 3. If that does not work: quit Lolad from the icon's menu and open it again.
-4. As a last step, restart your computer. Lolad starts again by itself.
+4. To reconnect or reinstall Claude Code, open **Settings**, then **AI tools**.
+5. As a last step, restart your computer. Lolad starts again by itself.
 
 Your agents and messages are stored on your computer and are not lost when you
 restart.

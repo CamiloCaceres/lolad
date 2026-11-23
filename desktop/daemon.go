@@ -3,10 +3,13 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
+	neturl "net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -82,21 +85,40 @@ var probeClient = &http.Client{
 	CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 }
 
-// alive reports whether something answers the dashboard root. There is no
-// /api/health yet (docs/desktop.md §8); once it exists this should use it.
-func alive(url string) bool {
+// alive reports whether a lolad answers at base: GET /api/health says
+// product "lolad". Another program on the port does not count.
+func alive(base string) bool { return fetchHealth(base) != nil }
+
+// foreignOnPort reports whether a program that is not lolad holds base's
+// port: it answers HTTP but not as lolad, or answers something that is not
+// HTTP. A refused connection or silence does not count: a lolad that is still
+// starting accepts connections before it answers them.
+func foreignOnPort(base string) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimSuffix(base, "/")+"/api/health", nil)
 	if err != nil {
 		return false
 	}
 	resp, err := probeClient.Do(req)
 	if err != nil {
+		return strings.Contains(err.Error(), "malformed HTTP")
+	}
+	defer resp.Body.Close()
+	var h Health
+	if resp.StatusCode == http.StatusOK && json.NewDecoder(io.LimitReader(resp.Body, 1<<16)).Decode(&h) == nil && h.Product == "lolad" {
 		return false
 	}
-	resp.Body.Close()
-	return resp.StatusCode < 500
+	return true
+}
+
+// portOf returns the port of a base URL ("http://127.0.0.1:4100" -> "4100").
+func portOf(base string) string {
+	u, err := neturl.Parse(base)
+	if err != nil {
+		return ""
+	}
+	return u.Port()
 }
 
 func findLolad() (string, error) {

@@ -32,7 +32,7 @@ func TestComputeAndIcon(t *testing.T) {
 	if s.Icon() != iconAttention {
 		t.Fatal("want attention")
 	}
-	if s.InboxLabel() != "1 question waiting" || s.AgentsLabel() != "Agents: 3 running, 1 waiting" {
+	if s.InboxLabel() != "1 question for you" || s.AgentsLabel() != "Assistants: 3 awake, 1 need you" {
 		t.Fatalf("%q %q", s.InboxLabel(), s.AgentsLabel())
 	}
 
@@ -40,7 +40,7 @@ func TestComputeAndIcon(t *testing.T) {
 	if failed.Icon() != iconProblem || failed.Failed != 2 || failed.Pending != 2 {
 		t.Fatalf("%+v", failed)
 	}
-	if got := failed.AgentsLabel(); got != "Agents: 1 running, 2 failed" {
+	if got := failed.AgentsLabel(); got != "Assistants: 1 awake, 2 can't start" {
 		t.Fatal(got)
 	}
 	if (Snapshot{}).Icon() != iconProblem || !strings.Contains((Snapshot{}).Tooltip(), "not running") {

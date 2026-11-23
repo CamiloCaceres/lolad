@@ -356,8 +356,8 @@ if [ -z "${APPLE_SIGN_IDENTITY:-}" ]; then
   cat <<'MSG'
 
 This build is ad-hoc signed, not notarized. On another Mac, Gatekeeper will
-refuse the first open. Either right-click Lolad.app > Open > Open, or run:
+refuse the first open. Use System Settings > Privacy & Security > "Open Anyway"
+(macOS 15+ no longer accepts right-click > Open), or run:
     xattr -dr com.apple.quarantine /Applications/Lolad.app
-(System Settings > Privacy & Security > "Open Anyway" also works.)
 MSG
 fi

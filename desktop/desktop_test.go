@@ -1,6 +1,7 @@
 package main
 
 import (
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -40,13 +41,45 @@ func TestListenAddr(t *testing.T) {
 }
 
 func TestAlive(t *testing.T) {
-	ok := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	if !alive(ok.URL) {
-		t.Fatal("running server reported down")
+	ok := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/health" {
+			w.Write([]byte(`{"product":"lolad","version":"1"}`))
+		}
+	}))
+	if !alive(ok.URL) || foreignOnPort(ok.URL) {
+		t.Fatal("running lolad reported down")
 	}
 	ok.Close()
-	if alive(ok.URL) {
-		t.Fatal("closed server reported up")
+	if alive(ok.URL) || foreignOnPort(ok.URL) {
+		t.Fatal("closed server reported up or foreign")
+	}
+	// Any web server answering 200 is not lolad.
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("<html>")) }))
+	defer other.Close()
+	if alive(other.URL) || !foreignOnPort(other.URL) {
+		t.Fatal("another program counted as lolad")
+	}
+	// Something that does not speak HTTP at all.
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	go func() {
+		for {
+			c, err := l.Accept()
+			if err != nil {
+				return
+			}
+			c.Write([]byte("SSH-2.0-OpenSSH_9\r\n\r\n"))
+			c.Close()
+		}
+	}()
+	if !foreignOnPort("http://" + l.Addr().String()) {
+		t.Fatal("non-HTTP program not detected")
+	}
+	if portOf("http://127.0.0.1:4100") != "4100" {
+		t.Fatal("portOf")
 	}
 }
 

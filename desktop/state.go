@@ -75,6 +75,11 @@ func Compute(agents []Agent, convs []Conversation, conns []Connection) Snapshot 
 		case "waiting":
 			s.Waiting++
 			s.Running++ // a waiting agent is alive; it is also asking for you
+		case "paused":
+			// Alive but held back (a usage limit, the service down). Worth a
+			// look, not an alarm: lolad retries by itself.
+			s.Waiting++
+			s.Running++
 		case "failed", "crashed":
 			s.Failed++
 		}
@@ -109,25 +114,25 @@ func plural(n int, one, many string) string {
 	return fmt.Sprintf("%d %s", n, many)
 }
 
-// InboxLabel is the menu line that opens the inbox.
+// InboxLabel is the menu line that opens Home.
 func (s Snapshot) InboxLabel() string {
 	switch {
 	case s.Questions > 0:
-		return plural(s.Questions, "question waiting", "questions waiting")
+		return plural(s.Questions, "question for you", "questions for you")
 	case s.Unread > 0:
 		return plural(s.Unread, "unread message", "unread messages")
 	}
-	return "Inbox: nothing waiting"
+	return "Home: nothing needs you"
 }
 
-// AgentsLabel is the menu line that opens the agent list.
+// AgentsLabel is the menu line that opens Assistants, in the dashboard's words.
 func (s Snapshot) AgentsLabel() string {
-	out := fmt.Sprintf("Agents: %d running", s.Running)
+	out := fmt.Sprintf("Assistants: %d awake", s.Running)
 	if s.Waiting > 0 {
-		out += fmt.Sprintf(", %d waiting", s.Waiting)
+		out += fmt.Sprintf(", %d need you", s.Waiting)
 	}
 	if s.Failed > 0 {
-		out += fmt.Sprintf(", %d failed", s.Failed)
+		out += fmt.Sprintf(", %d can't start", s.Failed)
 	}
 	return out
 }

@@ -19,8 +19,12 @@ import (
 	"path/filepath"
 )
 
-// The mark is the word "lolad" reduced to "l o l": two bars and a ring, on a
-// 100-unit square. Baseline y=78, ascender top y=22.
+// The mark is an assistant orb with a silk band of light across it, and the
+// amber "your turn" moon at its top right, on a 100-unit square. It is the
+// same drawing as internal/web/static/logo.svg.
+const orbX, orbY, orbR = 44.0, 56.0, 34.0
+const moonX, moonY, moonR = 81.0, 21.0, 9.0
+
 func sdRRect(x, y, x0, y0, x1, y1, r float64) float64 {
 	cx, cy := (x0+x1)/2, (y0+y1)/2
 	hx, hy := (x1-x0)/2-r, (y1-y0)/2-r
@@ -30,12 +34,48 @@ func sdRRect(x, y, x0, y0, x1, y1, r float64) float64 {
 	return out + in - r
 }
 
-func inMark(x, y float64) bool {
-	if sdRRect(x, y, 14, 22, 24.5, 78, 5.2) < 0 || sdRRect(x, y, 75.5, 22, 86, 78, 5.2) < 0 {
-		return true
+// curve samples a cubic Bézier into a polyline.
+func curve(x0, y0, x1, y1, x2, y2, x3, y3 float64) [][2]float64 {
+	var pts [][2]float64
+	for i := 0; i <= 48; i++ {
+		t := float64(i) / 48
+		u := 1 - t
+		pts = append(pts, [2]float64{
+			u*u*u*x0 + 3*u*u*t*x1 + 3*u*t*t*x2 + t*t*t*x3,
+			u*u*u*y0 + 3*u*u*t*y1 + 3*u*t*t*y2 + t*t*t*y3,
+		})
 	}
-	d := math.Hypot(x-50, y-61)
-	return d < 17.5 && d > 8.5
+	return pts
+}
+
+var (
+	band1 = curve(6, 78, 26, 58, 52, 54, 84, 62)
+	band2 = curve(10, 92, 32, 74, 58, 72, 86, 80)
+)
+
+// distLine is the distance from (x, y) to a polyline, and how far along it
+// (0..1) the nearest point lies.
+func distLine(pts [][2]float64, x, y float64) (float64, float64) {
+	best, at := math.Inf(1), 0.0
+	for i := 1; i < len(pts); i++ {
+		ax, ay, bx, by := pts[i-1][0], pts[i-1][1], pts[i][0], pts[i][1]
+		dx, dy := bx-ax, by-ay
+		t := math.Max(0, math.Min(1, ((x-ax)*dx+(y-ay)*dy)/(dx*dx+dy*dy)))
+		if d := math.Hypot(x-ax-t*dx, y-ay-t*dy); d < best {
+			best, at = d, (float64(i-1)+t)/float64(len(pts)-1)
+		}
+	}
+	return best, at
+}
+
+// inMark is the one-colour silhouette for tray icons: the orb with the band
+// cut out of it, so the band still reads at 22 points.
+func inMark(x, y float64) bool {
+	if math.Hypot(x-orbX, y-orbY) >= orbR {
+		return false
+	}
+	d, _ := distLine(band1, x, y)
+	return d > 4.2
 }
 
 func inCircle(x, y, cx, cy, r float64) bool { return math.Hypot(x-cx, y-cy) < r }
@@ -75,27 +115,100 @@ func render(n int, fn func(x, y float64) rgba) *image.NRGBA {
 }
 
 var (
-	none   = rgba{}
-	black  = rgba{0, 0, 0, 1}
-	white  = rgba{1, 1, 1, 1}
-	amber  = rgba{0.96, 0.62, 0.04, 1}
-	red    = rgba{0.94, 0.27, 0.27, 1}
-	slate  = rgba{0.09, 0.10, 0.13, 1}
-	indigo = rgba{0.33, 0.30, 0.90, 1}
-	violet = rgba{0.55, 0.30, 0.92, 1}
+	none  = rgba{}
+	black = rgba{0, 0, 0, 1}
+	white = rgba{1, 1, 1, 1}
+	amber = rgba{1, 0.71, 0.28, 1} // --you #FFB547
+	red   = rgba{1, 0.36, 0.48, 1} // --st-failed #FF5C7A
+	slate = rgba{0.09, 0.10, 0.13, 1}
 )
 
-// tray draws the mark in ink, with the state badge top right. A clear ring
+func hex(v uint32) rgba {
+	return rgba{float64(v>>16&255) / 255, float64(v>>8&255) / 255, float64(v&255) / 255, 1}
+}
+
+func mix(a, b rgba, t float64) rgba {
+	return rgba{a.r + (b.r-a.r)*t, a.g + (b.g-a.g)*t, a.b + (b.b-a.b)*t, a.a + (b.a-a.a)*t}
+}
+
+// over composites c (with its own alpha) onto an opaque base.
+func over(base, c rgba) rgba {
+	return rgba{base.r + (c.r-base.r)*c.a, base.g + (c.g-base.g)*c.a, base.b + (c.b-base.b)*c.a, base.a + (1-base.a)*c.a}
+}
+
+type stop struct {
+	at float64
+	c  rgba
+}
+
+func ramp(stops []stop, t float64) rgba {
+	if t <= stops[0].at {
+		return stops[0].c
+	}
+	for i := 1; i < len(stops); i++ {
+		if t <= stops[i].at {
+			return mix(stops[i-1].c, stops[i].c, (t-stops[i-1].at)/(stops[i].at-stops[i-1].at))
+		}
+	}
+	return stops[len(stops)-1].c
+}
+
+var (
+	orbStops  = []stop{{0, hex(0xEEF3FF)}, {.2, hex(0x9FB8FF)}, {.5, hex(0x6C7DFF)}, {.78, hex(0x7B4FE0)}, {1, hex(0x241A5E)}}
+	moonStops = []stop{{0, hex(0xFFE7BD)}, {.5, hex(0xFFB547)}, {1, hex(0xE5841A)}}
+	aqua      = hex(0x3DE8D0)
+	frost     = hex(0xDCE6FF)
+)
+
+// smooth is a soft step for antialiased edges in mark units.
+func smooth(d, w float64) float64 { return math.Max(0, math.Min(1, 0.5-d/w)) }
+
+// mark paints the full-colour mark over base at (x, y).
+func mark(base rgba, x, y float64) rgba {
+	c := base
+	// moon glow, then the orb, then the moon itself
+	if g := math.Hypot(x-moonX, y-moonY); g < 14 {
+		c = over(c, rgba{1, 0.71, 0.28, 0.16 * smooth(g-14, 1.2)})
+	}
+	if d := math.Hypot(x-orbX, y-orbY); d < orbR+1 {
+		// radial light from the upper left, like the SVG's radialGradient
+		t := math.Hypot(x-(orbX-orbR*0.32), y-(orbY-orbR*0.4)) / (1.6 * orbR)
+		o := ramp(orbStops, t)
+		for _, b := range []struct {
+			pts         [][2]float64
+			half, alpha float64
+		}{{band1, 4.5, 0.85}, {band2, 2, 0.47}} {
+			bd, along := distLine(b.pts, x, y)
+			// fade in from the left end, out towards the right end
+			a := b.alpha * smooth(bd-b.half, 1.6) * math.Min(along/0.45, (1-along)/0.55)
+			col := mix(aqua, frost, math.Max(0, along-0.45)/0.55)
+			o = over(o, rgba{col.r, col.g, col.b, math.Max(0, a)})
+		}
+		o = over(o, rgba{frost.r, frost.g, frost.b, 0.18 * smooth(math.Abs(d-(orbR-0.8))-0.8, 0.8)})
+		o.a = smooth(d-orbR, 1.0)
+		c = over(c, o)
+	}
+	if d := math.Hypot(x-moonX, y-moonY); d < moonR+1 {
+		m := ramp(moonStops, math.Hypot(x-(moonX-moonR*0.24), y-(moonY-moonR*0.28))/(1.24*moonR))
+		m.a = smooth(d-moonR, 1.0)
+		c = over(c, m)
+	}
+	return c
+}
+
+// tray draws the orb in ink. Needing you adds the moon; a problem adds a "!"
+// badge in the same place. A clear ring
 // around the badge keeps it readable; on a template icon the badge is just
 // more ink (alpha is all macOS uses).
 func tray(state string, ink, badge, bang rgba) func(x, y float64) rgba {
 	return func(x, y float64) rgba {
 		switch state {
 		case "attention":
-			if inCircle(x, y, 79, 21, 15) {
+			// the amber moon: your turn
+			if inCircle(x, y, moonX, moonY, 14) {
 				return badge
 			}
-			if inCircle(x, y, 79, 21, 21) {
+			if inCircle(x, y, moonX, moonY, 19) {
 				return none
 			}
 		case "problem":
@@ -118,17 +231,20 @@ func tray(state string, ink, badge, bang rgba) func(x, y float64) rgba {
 
 func app(x, y float64) rgba {
 	// macOS grid: 824pt tile on a 1024pt canvas.
-	if sdRRect(x, y, 100/1024.0*100, 100/1024.0*100, 924/1024.0*100, 924/1024.0*100, 185/1024.0*100) >= 0 {
+	edge := sdRRect(x, y, 100/1024.0*100, 100/1024.0*100, 924/1024.0*100, 924/1024.0*100, 185/1024.0*100)
+	if edge >= 0.15 {
 		return none
 	}
-	t := (x + y) / 200
-	g := rgba{indigo.r + (violet.r-indigo.r)*t, indigo.g + (violet.g-indigo.g)*t, indigo.b + (violet.b-indigo.b)*t, 1}
-	// Scale the mark to sit in the tile with generous padding.
-	mx, my := (x-50)*1.18+50, (y-50)*1.18+50
-	if inMark(mx, my) {
-		return white
+	// Midnight tile: the dashboard's background, with a soft glow behind the orb.
+	bg := mix(hex(0x161A33), hex(0x07080F), (y-10)/80)
+	if g := math.Hypot(x-46, y-54); g < 40 {
+		bg = over(bg, rgba{0.42, 0.5, 1, 0.22 * (1 - g/40) * (1 - g/40)})
 	}
-	return g
+	bg = over(bg, rgba{1, 1, 1, 0.08 * smooth(math.Abs(edge+0.4)-0.25, 0.4)})
+	// The mark sits in the tile with generous padding.
+	c := mark(bg, (x-50)/0.66+50, (y-50)/0.66+50)
+	c.a = smooth(edge, 0.3)
+	return c
 }
 
 func write(path string, img image.Image) {

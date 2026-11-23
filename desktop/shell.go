@@ -25,7 +25,6 @@ import (
 type shell struct {
 	app        *application.App
 	win        *application.WebviewWindow
-	base       string // "http://127.0.0.1:4100" (no trailing slash)
 	prefs      *prefStore
 	notif      *notifications.NotificationService
 	background bool
@@ -42,6 +41,7 @@ type shell struct {
 	batch *batcher
 
 	mu        sync.Mutex
+	base      string // "http://127.0.0.1:4100" (no trailing slash); see baseURL
 	last      Data
 	up        bool
 	seenUp    bool
@@ -56,6 +56,9 @@ type shell struct {
 	linkByID  map[string]string
 	targeted  bool // first-run navigation already done this launch
 	offered   bool // migration offer already shown this launch
+	// movePending: the "Move to Applications" question is open; don't start a
+	// daemon from the temporary location meanwhile.
+	movePending bool
 }
 
 func newShell(app *application.App, win *application.WebviewWindow, base string, notif *notifications.NotificationService, background bool) *shell {
@@ -63,6 +66,28 @@ func newShell(app *application.App, win *application.WebviewWindow, base string,
 		prefs: loadPrefs(filepath.Join(prefsDir(), "desktop.json")), det: newDetector(), linkByID: map[string]string{}}
 	s.batch = newBatcher(2*time.Second, 12, s.deliver)
 	return s
+}
+
+// baseURL is the daemon's dashboard URL (no trailing slash). It changes when
+// lolad moves to another port (setBase), so read it each time.
+func (s *shell) baseURL() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.base
+}
+
+// setBase follows lolad to a new address. The feed calls it while the daemon
+// is down; the window loads the new address when the daemon comes up there
+// (onDaemonUp).
+func (s *shell) setBase(base string) {
+	base = strings.TrimSuffix(base, "/")
+	s.mu.Lock()
+	old := s.base
+	s.base = base
+	s.mu.Unlock()
+	if old != base {
+		log.Printf("lolad address changed: %s -> %s", old, base)
+	}
 }
 
 // ---------------------------------------------------------------- window
@@ -87,7 +112,7 @@ func (s *shell) openLink(path string) {
 	up := s.up
 	s.mu.Unlock()
 	if up {
-		target := s.base + path
+		target := s.baseURL() + path
 		application.InvokeAsync(func() { s.win.SetURL(target) })
 	}
 	s.showMain()
@@ -142,9 +167,9 @@ func (s *shell) buildTray() {
 	s.menu = m
 	m.Add("Open Lolad").OnClick(func(*application.Context) { s.openLink("/") })
 	m.AddSeparator()
-	s.it.inbox = m.Add("Inbox: nothing waiting").OnClick(func(*application.Context) { s.openLink("/") })
-	s.it.agents = m.Add("Agents").OnClick(func(*application.Context) { s.openLink("/agents") })
-	s.it.fed = m.Add("Senders awaiting approval").OnClick(func(*application.Context) { s.openLink("/connections") }).SetHidden(true)
+	s.it.inbox = m.Add("Home: nothing needs you").OnClick(func(*application.Context) { s.openLink("/") })
+	s.it.agents = m.Add("Assistants").OnClick(func(*application.Context) { s.openLink("/agents") })
+	s.it.fed = m.Add("People waiting for your OK").OnClick(func(*application.Context) { s.openLink("/connections") }).SetHidden(true)
 	m.AddSeparator()
 	s.it.status = m.Add("Checking…").SetEnabled(false)
 	s.it.switchTo = m.Add("Switch to the app's lolad…").OnClick(func(*application.Context) { go s.offerMigration(true) }).SetHidden(true)
@@ -171,7 +196,7 @@ func (s *shell) buildTray() {
 		})
 	}
 	m.AddSeparator()
-	m.Add("Open in Browser").OnClick(func(*application.Context) { _ = s.app.Browser.OpenURL(s.base + "/") })
+	m.Add("Open in Browser").OnClick(func(*application.Context) { _ = s.app.Browser.OpenURL(s.baseURL() + "/") })
 	m.Add("View logs").OnClick(func(*application.Context) { go s.viewLogs() })
 	m.Add("Reload").OnClick(func(*application.Context) { application.InvokeAsync(func() { s.win.Reload() }) })
 	InitUpdates(s.app, m, s.win, func(title, body string) {
@@ -181,7 +206,7 @@ func (s *shell) buildTray() {
 		m.Add("Uninstall…").OnClick(func(*application.Context) { go s.uninstall() })
 	}
 	m.AddSeparator()
-	m.Add("Quit Lolad (agents keep running)").OnClick(func(*application.Context) { s.app.Quit() })
+	m.Add("Quit Lolad (assistants keep working)").OnClick(func(*application.Context) { s.app.Quit() })
 	s.tray.SetMenu(m)
 	// Left-click opens the window; the menu stays on right-click.
 	s.tray.OnClick(func() { s.openLink("/") })
@@ -255,11 +280,11 @@ func (s *shell) refreshMenu(d Data, health *Health) {
 			s.it.inbox.SetHidden(true)
 			s.it.agents.SetHidden(true)
 			s.it.fed.SetHidden(true)
-			s.it.status.SetLabel("lolad is not running")
+			s.it.status.SetLabel(downLabel(d))
 		} else {
 			s.it.inbox.SetHidden(false).SetLabel(d.Snap.InboxLabel())
 			s.it.agents.SetHidden(false).SetLabel(d.Snap.AgentsLabel())
-			s.it.fed.SetHidden(d.Snap.Pending == 0).SetLabel(plural(d.Snap.Pending, "sender awaiting approval", "senders awaiting approval"))
+			s.it.fed.SetHidden(d.Snap.Pending == 0).SetLabel(plural(d.Snap.Pending, "person waiting for your OK", "people waiting for your OK"))
 			s.it.status.SetLabel(connectedBanner(health))
 		}
 		s.it.switchTo.SetHidden(!(d.Snap.Up && health != nil && health.Install == "cli"))
@@ -276,11 +301,20 @@ func (s *shell) refreshMenu(d Data, health *Health) {
 	})
 }
 
+// downLabel is the tray status line while the daemon does not answer.
+func downLabel(d Data) string {
+	if d.PortConflict != "" {
+		return "Another program is using port " + d.PortConflict
+	}
+	return "lolad is not running"
+}
+
 // onDaemonUp runs each time the daemon comes up: load the window, read its
 // identity, handle first run and migration.
 func (s *shell) onDaemonUp() {
 	s.refreshMeta()
-	application.InvokeAsync(func() { s.win.SetURL(s.base + "/") })
+	base := s.baseURL()
+	application.InvokeAsync(func() { s.win.SetURL(base + "/") })
 
 	s.mu.Lock()
 	agents := len(s.last.Agents)
@@ -289,9 +323,9 @@ func (s *shell) onDaemonUp() {
 	s.targeted = true
 	s.mu.Unlock()
 	if !done {
-		target := firstRunTarget(setup, agents, pageExists(s.base, "/welcome"))
+		target := firstRunTarget(setup, agents, pageExists(base, "/welcome"))
 		if target != "" && target != "/" {
-			application.InvokeAsync(func() { s.win.SetURL(s.base + target) })
+			application.InvokeAsync(func() { s.win.SetURL(base + target) })
 			if !s.background {
 				s.showMain()
 			}
@@ -311,8 +345,9 @@ func (s *shell) onDaemonUp() {
 // refreshMeta re-reads what changes rarely: daemon identity, setup state and
 // both login toggles.
 func (s *shell) refreshMeta() {
-	h := fetchHealth(s.base)
-	su := fetchSetup(s.base)
+	base := s.baseURL()
+	h := fetchHealth(base)
+	su := fetchSetup(base)
 	on, msg := appLoginStatus()
 	svc, err := serviceStatus()
 	s.mu.Lock()
@@ -434,9 +469,9 @@ func (s *shell) info(title, msg string) {
 func (s *shell) firstLaunchStart() {
 	time.Sleep(4 * time.Second)
 	s.mu.Lock()
-	up := s.up
+	up, moving := s.up, s.movePending
 	s.mu.Unlock()
-	if !up {
+	if !up && !moving {
 		s.startLolad()
 	}
 }
@@ -560,12 +595,12 @@ func (s *shell) offerMigration(manual bool) {
 func (s *shell) finishMigration(old *Health) {
 	deadline := time.Now().Add(20 * time.Second)
 	for time.Now().Before(deadline) {
-		if !alive(s.base + "/") {
+		if !alive(s.baseURL()) {
 			break
 		}
 		time.Sleep(time.Second)
 	}
-	if alive(s.base + "/") {
+	if alive(s.baseURL()) {
 		s.info("lolad is still running", "The old lolad still answers. Run the command that matches how you started it, then choose \"Switch to the app's lolad…\" from the menu again.")
 		return
 	}
@@ -621,8 +656,9 @@ func (s *shell) askStopAgents(bundle string) {
 
 func (s *shell) doUninstall(bundle string, stopAgents []string) {
 	var report []string
+	base := s.baseURL()
 	for _, name := range stopAgents {
-		req, _ := http.NewRequest(http.MethodPost, s.base+"/api/agents/"+neturl.PathEscape(name)+"/stop", nil)
+		req, _ := http.NewRequest(http.MethodPost, base+"/api/agents/"+neturl.PathEscape(name)+"/stop", nil)
 		if resp, err := plainClient.Do(req); err != nil {
 			report = append(report, "Could not stop "+name+": "+err.Error())
 		} else {
