@@ -86,6 +86,18 @@ Spec: https://github.com/agentmessaging/protocol v0.1.2-draft (see
 
 - Address: `<name>@<tenant>.lolad.local`; bare names expand. Provider name
   `<tenant>.lolad.local`. Case-insensitive, stored lowercase.
+- Default tenant (`policy.DefaultTenant`): the OS login as a slug (a-z, 0-9,
+  `-`; common accented Latin letters folded, e.g. `José` → `jose`; at most 27
+  characters). A login that is generic (`user`, `admin`, `root`, `home`,
+  `lolad`, …), shorter than 2 characters or empty after slugging gets a random
+  4-character suffix: `user-k3p7`, `lolad-9xqa`. It is chosen **once**: on
+  the first start with no `org.yaml` and no agents, `policy.Open` writes
+  `org.yaml` (0600, never replacing an existing file) with that tenant;
+  onboarding creates the same file the same way if it runs first. An existing
+  `org.yaml` is never modified, and one without `tenant` means `home`. An
+  install with agents but no `org.yaml` predates this rule and keeps running
+  as `home` (nothing is written). Before v0.2.0-beta.1 every install defaulted
+  to `home`.
 - Identities: kinds `agent`, `human` (the user, from `org.user.name`), `system`
   (`lolad`, used by triggers; may always send). lolad generates Ed25519 keys
   for agents and the user (`EnsureIdentity`). Each identity has an API key
@@ -556,7 +568,11 @@ an instruction to lolad: it is mail, delivered to a mailbox, marked external.
 
 ### Names and storage
 - Provider name stays `<tenant>.lolad.local`. Pairing refuses a peer with our
-  own provider name ("rename the tenant on one side").
+  own provider name, on accept and on `pair`, with a message safe to show
+  as is: "Both lolads are called "home", and two connected lolads need
+  different names. One of you renames theirs (the tenant in org.yaml, then
+  restart lolad), then makes a new invite." The accept error is
+  `core.ErrInvalid` and also has `UserMessage() string` carrying that text.
 - A remote participant's name inside lolad is its full address
   (`ana@jugui.lolad.local`); `core.IsRemoteName`. It is what `Mail.FromName` /
   `ToName`, `Conversation.Peer`, `Outgoing.To` and policy checks carry. Mail

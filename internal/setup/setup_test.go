@@ -82,7 +82,7 @@ func TestOrgDisplay(t *testing.T) {
 		t.Fatal(err)
 	}
 	b, _ := os.ReadFile(p)
-	if !strings.Contains(string(b), "display: Camilo") || !strings.Contains(string(b), "tenant: home") {
+	if !strings.Contains(string(b), "display: Camilo") || strings.Contains(string(b), "tenant: home") || !strings.Contains(string(b), "tenant: ") {
 		t.Fatalf("fresh org:\n%s", b)
 	}
 	os.WriteFile(p, []byte("# mine\ntenant: acme\nuser:\n  name: boss\n  display: Old\n"), 0o600)
@@ -559,5 +559,18 @@ func TestServiceStep(t *testing.T) {
 	st, err := e.m.InstallService(context.Background())
 	if err != nil || !st.Service.Installed || st.Step != StepHarnesses {
 		t.Fatalf("%+v %v", st, err)
+	}
+}
+
+func TestStatusShowsLoladName(t *testing.T) {
+	e := newEnv(t, nil)
+	org := filepath.Join(filepath.Dir(e.cfg), "org.yaml")
+	if st, err := e.m.Status(context.Background()); err != nil || st.LoladName != "" {
+		t.Fatalf("no org.yaml yet: %q %v", st.LoladName, err)
+	}
+	os.MkdirAll(filepath.Dir(org), 0o700)
+	os.WriteFile(org, []byte("tenant: milo\nuser: {name: milo, display: Milo}\n"), 0o600)
+	if st, _ := e.m.Status(context.Background()); st.LoladName != "milo" {
+		t.Fatalf("got %q", st.LoladName)
 	}
 }

@@ -108,11 +108,15 @@ Use absolute paths. Without a config file, lolad uses `~/agents` and
 `~/lolabot`. With one, only the `agents_dirs` you list are scanned.
 
 `~/.config/lolad/org.yaml` describes the people, teams and messaging rules.
-Without it, you are the only human (named after your OS account), and every
-agent can talk to you but not to other agents:
+lolad creates it on first start: you are the only human (named after your OS
+account), every agent can talk to you but not to other agents, and `tenant`
+(your lolad's name, the `alice` in `ultron@alice.lolad.local`) is your OS
+login, with a random suffix when the login is generic, like `user-k3p7`.
+Lolads you connect with must have different tenants, so keep it distinctive.
+Changing it later changes every address, so pick it before connecting.
 
 ```yaml
-tenant: home
+tenant: alice
 user: {name: alice, display: Alice}
 teams:
   - id: company

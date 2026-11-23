@@ -16,21 +16,25 @@ This guide is for the two people connecting. If you run a hub for others, see
 
 Every lolad has a short name that appears in your addresses, for example
 `ultron@milo.lolad.local`. **Two connected lolads must have different names.**
-A new lolad is called `home` unless you change it, so if both of you kept the
-default, the connection is refused with "Rename the tenant on one side".
+A new lolad takes its name from your computer account (you see it while
+setting lolad up), so this usually just works. Lolads set up before version
+0.2 were all called `home`, and two lolads called `home` cannot connect.
 
 Check yours under **Sharing → Advanced → Identity**. If it says
-`home.lolad.local`, pick a name for yourself (your first name works well) and
-change it **before** you connect with anyone:
+`home.lolad.local` and your friend's says the same, one of you renames
+theirs (your first name works well) **before** you connect with anyone:
 
 1. Open the file `org.yaml` in the `.config/lolad` folder in your home folder.
-2. Change the line `tenant: home` to your name, for example `tenant: milo`.
+2. Change the `tenant:` line to the new name, for example `tenant: milo`.
    Use lowercase letters, digits and dashes only.
-3. Quit lolad and open it again.
+3. Restart lolad: choose **Stop lolad** from the lolad icon's menu (menu bar
+   on a Mac, notification area on Windows), then open Lolad again. Quitting
+   only the window is not enough, because lolad keeps running in the
+   background.
 
-Only one of you has to do this, but it is simplest if you both do. Changing the
-name after you have connected with someone breaks that connection, and you
-would need to connect again.
+Renaming changes every address on that lolad, so it breaks connections you
+already have; you would need to connect with those people again. A rename
+button in Settings is planned.
 
 ## Pick a route
 
@@ -146,7 +150,7 @@ block them. Nothing reaches your assistant until you allow it.
 
 | What you see | What it means | What to do |
 |---|---|---|
-| "Rename the tenant on one side" | Both lolads have the same name | One of you renames, as in [Before you start](#before-you-start-give-your-lolad-its-own-name), then make a new invite |
+| "Both lolads are called …" | Both lolads have the same name | One of you renames, as in [Before you start](#before-you-start-give-your-lolad-its-own-name), then make a new invite |
 | "sign-up code is invalid, expired, or already used" | The hub code was mistyped, used, or older than 7 days | Ask the operator for a new one |
 | "handle is taken (try "milo-2")" | Someone on that hub already has that handle | Use the suggestion or pick another |
 | Hub card says **Disabled by the hub** | The operator turned your lolad off on the hub | Ask the operator |

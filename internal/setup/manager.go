@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/CamiloCaceres/lolad/internal/core"
+	"github.com/CamiloCaceres/lolad/internal/policy"
 )
 
 // Options configure a Manager.
@@ -230,6 +231,7 @@ func (m *Manager) Status(ctx context.Context) (Status, error) {
 	if s.UserName == "" {
 		s.UserName = m.OSUserName()
 	}
+	s.LoladName = m.loladName()
 	s.HasAgents = m.hasAgents(ctx, dir)
 	if m.opts.Service != nil {
 		in, run, err := m.opts.Service.Status(ctx)
@@ -410,4 +412,17 @@ func (m *Manager) InstallService(ctx context.Context) (Status, error) {
 	}
 	t := true
 	return m.Save(ctx, SaveRequest{ServiceDone: &t})
+}
+
+// loladName reads the tenant from org.yaml; "" when the file is missing or
+// unreadable (the daemon writes it on its first start).
+func (m *Manager) loladName() string {
+	if _, err := os.Stat(m.org); err != nil {
+		return ""
+	}
+	o, err := policy.Load(m.org)
+	if err != nil {
+		return ""
+	}
+	return o.Tenant
 }

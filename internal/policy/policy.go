@@ -10,9 +10,12 @@ import (
 	"github.com/CamiloCaceres/lolad/internal/core"
 )
 
+// DefaultOrg is the org of a lolad whose org.yaml leaves fields out. Its
+// tenant is LegacyTenant, so an existing org.yaml without one keeps its
+// addresses; a new install gets DefaultTenant() written by Open instead.
 func DefaultOrg() core.Org {
 	name, display := localUser()
-	return core.Org{Tenant: "home", User: core.User{Name: name, Display: display}, Defaults: core.Defaults{UserToAgents: "all", AgentsToUser: "all", Vertical: true, Independents: "user-only"}}
+	return core.Org{Tenant: LegacyTenant, User: core.User{Name: name, Display: display}, Defaults: core.Defaults{UserToAgents: "all", AgentsToUser: "all", Vertical: true, Independents: "user-only"}}
 }
 
 // localUser names the default human participant after the OS account; org.yaml overrides it.

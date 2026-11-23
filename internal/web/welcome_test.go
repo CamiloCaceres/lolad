@@ -180,7 +180,7 @@ func TestWelcomeWalkThrough(t *testing.T) {
 
 	// 4. name goes through the daemon's org.
 	_, body, _ = w.get("/welcome")
-	if !strings.Contains(body, "What should your assistants call you?") || !strings.Contains(body, `value="Camilo Caceres"`) {
+	if !strings.Contains(body, "What should your assistants call you?") || !strings.Contains(body, `value="Camilo Caceres"`) || !strings.Contains(body, "you@camilo.lolad.local") {
 		t.Fatalf("name step:\n%s", body)
 	}
 	if code, body, _ = w.post("/welcome/name", url.Values{"name": {" "}}); code != http.StatusUnprocessableEntity || !strings.Contains(body, "what to call you") {

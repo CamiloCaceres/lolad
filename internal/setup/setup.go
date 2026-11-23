@@ -68,14 +68,17 @@ type TerminalInfo struct {
 
 // Status is GET /api/setup.
 type Status struct {
-	Done             bool          `json:"done"`
-	Step             string        `json:"step"`
-	Harnesses        []Harness     `json:"harnesses"`
-	AgentsDir        string        `json:"agents_dir"`
-	AgentsDirWarning string        `json:"agents_dir_warning,omitempty"`
-	UserName         string        `json:"user_name"`
-	HasAgents        bool          `json:"has_agents"`
-	Service          ServiceStatus `json:"service"`
+	Done             bool      `json:"done"`
+	Step             string    `json:"step"`
+	Harnesses        []Harness `json:"harnesses"`
+	AgentsDir        string    `json:"agents_dir"`
+	AgentsDirWarning string    `json:"agents_dir_warning,omitempty"`
+	UserName         string    `json:"user_name"`
+	// LoladName is this lolad's tenant (the "milo" in you@milo.lolad.local),
+	// from org.yaml; empty while there is none. Read-only in onboarding.
+	LoladName string        `json:"lolad_name,omitempty"`
+	HasAgents bool          `json:"has_agents"`
+	Service   ServiceStatus `json:"service"`
 
 	// Extras.
 	CapturePath  bool           `json:"capture_path"` // keep the login shell's PATH in config.yaml

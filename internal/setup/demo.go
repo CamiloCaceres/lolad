@@ -31,6 +31,7 @@ func NewDemo() *Demo {
 		Harnesses:   demoHarnesses("linux"),
 		AgentsDir:   "/home/you/Lolad Agents",
 		UserName:    "Camilo Caceres",
+		LoladName:   "camilo",
 		CapturePath: true,
 		Platform:    "darwin",
 		Service:     ServiceStatus{Available: true},

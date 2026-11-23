@@ -1,11 +1,13 @@
 package setup
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"regexp"
 	"strings"
 
+	"github.com/CamiloCaceres/lolad/internal/policy"
 	"gopkg.in/yaml.v3"
 )
 
@@ -179,12 +181,16 @@ func writeConfigKeys(path string, set map[string]yamlValue, order []string) (boo
 
 // orgDisplay sets user.display (and user.name when the file has none) in an
 // org.yaml through the yaml node tree, which keeps comments. A missing file
-// is created with the same defaults the policy store would use.
+// is created the way the daemon creates it on a first run, with a fresh
+// tenant from policy.DefaultTenant.
 func orgDisplay(path, name, display string) error {
 	b, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
-		doc := fmt.Sprintf("tenant: home\nuser:\n  name: %s\n  display: %s\ndefaults:\n  user_to_agents: all\n  agents_to_user: all\n  vertical: true\n  independents: user-only\n", quote(name), quote(display))
-		return writeAtomic(path, []byte(doc), 0o600)
+		err = policy.CreateOrg(path, policy.OrgYAML(policy.DefaultTenant(), name, display))
+		if !errors.Is(err, os.ErrExist) {
+			return err
+		}
+		b, err = os.ReadFile(path) // created meanwhile: edit that one
 	}
 	if err != nil {
 		return err

@@ -105,6 +105,7 @@
     <input name="name" value="{{.Name}}" required maxlength="100" autocomplete="name" autofocus aria-describedby="name-error"{{if .Fields.name}} aria-invalid="true"{{end}}>
   </label>
   <span class="new-field-error" id="name-error">{{.Fields.name}}</span>
+  {{with .S.LoladName}}<p class="welcome-note">Your lolad’s name is <strong class="mono">{{.}}</strong>, so addresses here look like <span class="mono">you@{{.}}.lolad.local</span>. If you connect with a friend’s lolad, theirs needs a different name.</p>{{end}}
   <div class="welcome-actions"><button class="btn btn-primary" type="submit">Continue{{template "icon" "next"}}</button><a class="btn btn-ghost" href="/welcome?step=folder">Back</a></div>
 </form>
 {{end}}

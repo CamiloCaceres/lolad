@@ -79,7 +79,7 @@ func (f *Engine) AcceptInvite(ctx context.Context, code string) (core.Connection
 		return core.Connection{}, fmt.Errorf("%w: invalid invite", core.ErrInvalid)
 	}
 	if c.Provider == f.o.Provider.Name() {
-		return core.Connection{}, fmt.Errorf("%w: rename the tenant on one side", core.ErrInvalid)
+		return core.Connection{}, sameNameError{c.Provider}
 	}
 	if !validProvider(c.Provider) {
 		return core.Connection{}, core.ErrInvalid
@@ -337,7 +337,7 @@ func (f *Engine) pair(w http.ResponseWriter, r *http.Request, raw []byte) {
 		reject(w, 403, "invalid_invite", "Invite is invalid, expired, or already used")
 	}
 	if b.Provider == f.o.Provider.Name() {
-		reject(w, 400, "invalid_request", "Rename the tenant on one side")
+		reject(w, 400, "invalid_request", sameNameError{b.Provider}.UserMessage())
 		return
 	}
 	if b.Version != 1 || !validProvider(b.Provider) || (b.URL != "" && !validURL(b.URL)) || r.Header.Get("X-AMP-Provider") != b.Provider || !f.verify(r, raw, b.PublicKey) {
@@ -443,4 +443,18 @@ func (f *Engine) pair(w http.ResponseWriter, r *http.Request, raw []byte) {
 	}
 	go f.event("Paired " + p.Provider)
 	jsonResponse(w, 200, pairBody{Version: 1, Provider: f.o.Provider.Name(), Display: f.o.Display, URL: f.selfURL(), PublicKey: f.pub})
+}
+
+// sameNameError refuses pairing two lolads with the same provider name, the
+// usual cause being two installs that both kept the old default "home". Its
+// UserMessage is safe to show as is: it holds no part of the invite.
+type sameNameError struct{ provider string }
+
+func (e sameNameError) Error() string { return core.ErrInvalid.Error() + ": " + e.UserMessage() }
+func (e sameNameError) Unwrap() error { return core.ErrInvalid }
+
+// UserMessage says what happened and what to do, in plain words.
+func (e sameNameError) UserMessage() string {
+	name := strings.TrimSuffix(e.provider, ".lolad.local")
+	return fmt.Sprintf("Both lolads are called %q, and two connected lolads need different names. One of you renames theirs (the tenant in org.yaml, then restart lolad), then makes a new invite.", name)
 }

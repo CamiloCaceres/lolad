@@ -101,7 +101,13 @@ type Store struct {
 	subs  map[chan core.Org]struct{}
 }
 
+// Open loads org.yaml. On a first run (no org.yaml, no agents yet) it first
+// writes one with a fresh tenant from DefaultTenant; an existing org.yaml is
+// never modified here.
 func Open(path string, known ...string) (*Store, error) {
+	if e := firstRun(path, known); e != nil {
+		return nil, fmt.Errorf("create %s: %w", path, e)
+	}
 	o, e := Load(path)
 	if e != nil {
 		return nil, e
