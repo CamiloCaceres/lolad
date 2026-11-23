@@ -24,7 +24,10 @@ func (f *Engine) Run(ctx context.Context) {
 	}
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
+	pending := time.NewTicker(pendingRetry)
+	defer pending.Stop()
 	f.recoverApprovals(ctx)
+	go f.retryPending(ctx, "")
 	for {
 		f.drain(ctx)
 		select {
@@ -32,6 +35,8 @@ func (f *Engine) Run(ctx context.Context) {
 			return
 		case <-f.wake:
 		case <-ticker.C:
+		case <-pending.C:
+			go f.retryPending(ctx, "")
 		}
 	}
 }

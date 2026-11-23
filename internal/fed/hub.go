@@ -38,8 +38,11 @@ func (f *Engine) ProviderSign(msg []byte) []byte { return ed25519.Sign(f.key, ms
 // ProviderPublicKey is the provider public key as PEM.
 func (f *Engine) ProviderPublicKey() string { return f.pub }
 
-// PeerURLs lists the URLs of connected (not removed) peers.
+// PeerURLs lists the URLs of connected (not removed) peers, and of
+// inviters whose friend link is waiting for them to come online, so the hub
+// tells us when they do.
 func (f *Engine) PeerURLs() []string {
+	pending := f.pendingURLs()
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	var out []string
@@ -48,13 +51,14 @@ func (f *Engine) PeerURLs() []string {
 			out = append(out, p.URL)
 		}
 	}
-	return out
+	return append(out, pending...)
 }
 
 // RetryURL makes queued outbox entries for peers at url due now. Used when the
 // hub reports that such a peer reconnected, so mail does not wait for backoff.
 func (f *Engine) RetryURL(ctx context.Context, url string) error {
 	url = strings.TrimRight(url, "/")
+	go f.retryPending(context.WithoutCancel(ctx), url)
 	f.mu.Lock()
 	var providers []any
 	for _, p := range f.doc.Peers {

@@ -30,7 +30,19 @@ type FederationConfig struct {
 	Enabled bool   `yaml:"enabled"`
 	Display string `yaml:"display"`
 	URL     string `yaml:"url"`
+	// HubURL is the hub friend links join on their own
+	// (docs/friend-connect-design.md §4). Empty turns auto-join off.
+	// $LOLAD_HUB_URL overrides it.
+	HubURL string `yaml:"hub_url"`
+	// JoinURL is the base of friend invite links (the site's /join page).
+	JoinURL string `yaml:"join_url"`
 }
+
+// Friend-connect defaults (federation.hub_url and federation.join_url).
+const (
+	DefaultHubURL  = "https://lolad-hub.caceresdev.com"
+	DefaultJoinURL = "https://lolad.caceresdev.com/join"
+)
 
 type Config struct {
 	Federation      FederationConfig `yaml:"federation"`
@@ -60,7 +72,7 @@ func DefaultConfig() Config {
 	if state == "" {
 		state = filepath.Join(home, ".local/share/lolad")
 	}
-	return Config{Federation: FederationConfig{Enabled: true}, TmuxSocket: "lolad", Listen: "127.0.0.1:4100", AgentsDirs: []string{filepath.Join(home, "agents")}, LolabotTemplate: filepath.Join(home, "lolabot"), NewAgentsDir: filepath.Join(home, "agents"), StateDir: state}
+	return Config{Federation: FederationConfig{Enabled: true, HubURL: DefaultHubURL, JoinURL: DefaultJoinURL}, TmuxSocket: "lolad", Listen: "127.0.0.1:4100", AgentsDirs: []string{filepath.Join(home, "agents")}, LolabotTemplate: filepath.Join(home, "lolabot"), NewAgentsDir: filepath.Join(home, "agents"), StateDir: state}
 }
 
 // CLIPath is the console CLI path: cli_bin when set, otherwise exe (normally
@@ -85,7 +97,7 @@ func LoadConfig(path string) (Config, error) {
 	}
 	b, e := os.ReadFile(path)
 	if os.IsNotExist(e) {
-		return c, nil
+		return hubEnv(c), nil
 	}
 	if e != nil {
 		return c, e
@@ -111,7 +123,15 @@ func LoadConfig(path string) (Config, error) {
 	if c.Federation.URL == "" {
 		c.Federation.URL = c.Remote.PublicURL
 	}
-	return c, ValidateFederationURL(c.Federation.URL)
+	return hubEnv(c), ValidateFederationURL(c.Federation.URL)
+}
+
+// hubEnv applies $LOLAD_HUB_URL, set to "" to turn auto-join off.
+func hubEnv(c Config) Config {
+	if v, ok := os.LookupEnv("LOLAD_HUB_URL"); ok {
+		c.Federation.HubURL = v
+	}
+	return c
 }
 
 var invalidSlug = regexp.MustCompile(`[^a-z0-9]+`)

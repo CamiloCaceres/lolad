@@ -29,6 +29,10 @@ type pairBody struct {
 	URL       string `json:"url"`
 	PublicKey string `json:"public_key"`
 	Secret    string `json:"secret,omitempty"`
+	// Friend links: the sender's human (local name) and the agents it
+	// offers, so the inviter can pre-approve them. Older lolads ignore both.
+	User  string   `json:"user,omitempty"`
+	Offer []string `json:"offer,omitempty"`
 }
 type inviteCode struct {
 	V         int    `json:"v"`
@@ -92,25 +96,35 @@ func (f *Engine) AcceptInvite(ctx context.Context, code string) (core.Connection
 	}
 	f.mu.Unlock()
 	target := peer{Connection: core.Connection{Provider: c.Provider, Display: c.Display, URL: c.URL}, PublicKey: c.PublicKey}
-	status, b, e := f.request(ctx, target, "POST", "pair", pairBody{Version: 1, Provider: f.o.Provider.Name(), Display: f.o.Display, URL: f.selfURL(), PublicKey: f.pub, Secret: c.Secret})
+	conn, _, e := f.pairWith(ctx, target, c.Secret, "", nil)
+	return conn, e
+}
+
+// pairWith asks target to pair using its invite secret and stores the
+// result. status is the peer's HTTP status (0 when it could not be reached),
+// so callers can tell "offline" from "refused". user and offer are sent for
+// friend links.
+func (f *Engine) pairWith(ctx context.Context, target peer, secret, user string, offer []string) (core.Connection, int, error) {
+	status, b, e := f.request(ctx, target, "POST", "pair", pairBody{Version: 1, Provider: f.o.Provider.Name(), Display: f.o.Display, URL: f.selfURL(), PublicKey: f.pub, Secret: secret, User: user, Offer: offer})
 	if e != nil {
-		return core.Connection{}, fmt.Errorf("pairing peer unreachable")
+		return core.Connection{}, 0, fmt.Errorf("pairing peer unreachable")
 	}
 	if status != 200 {
-		return core.Connection{}, fmt.Errorf("pairing rejected (HTTP %d)", status)
+		return core.Connection{}, status, fmt.Errorf("pairing rejected (HTTP %d)", status)
 	}
 	var result pairBody
-	if json.Unmarshal(b, &result) != nil || result.Provider != c.Provider || result.PublicKey != c.PublicKey || !validURL(result.URL) {
-		return core.Connection{}, fmt.Errorf("%w: pairing response did not match invite", core.ErrDenied)
+	if json.Unmarshal(b, &result) != nil || result.Provider != target.Provider || fingerprint(result.PublicKey) != fingerprint(target.PublicKey) || !validURL(result.URL) {
+		return core.Connection{}, status, fmt.Errorf("%w: pairing response did not match invite", core.ErrDenied)
 	}
+	target.PublicKey = result.PublicKey
 	target.URL = result.URL
 	target.Display = result.Display
 	target.CreatedAt = f.o.Clock().UTC()
 	target.Fingerprint = fingerprint(target.PublicKey)
 	f.mu.Lock()
 	e = f.mutate(func() error {
-		if p := f.find(c.Provider); p != nil {
-			if p.PublicKey != target.PublicKey {
+		if p := f.find(target.Provider); p != nil {
+			if fingerprint(p.PublicKey) != fingerprint(target.PublicKey) {
 				return core.ErrDenied
 			}
 			// Pairing again with the same key moves the peer to its current URL
@@ -124,10 +138,10 @@ func (f *Engine) AcceptInvite(ctx context.Context, code string) (core.Connection
 	})
 	f.mu.Unlock()
 	if e != nil {
-		return core.Connection{}, e
+		return core.Connection{}, status, e
 	}
 	f.event("Paired " + target.Provider)
-	return target.Connection, nil
+	return target.Connection, status, nil
 }
 func validProvider(s string) bool {
 	_, d, e := amp.ParseAddress("x@" + s)
@@ -392,6 +406,7 @@ func (f *Engine) pair(w http.ResponseWriter, r *http.Request, raw []byte) {
 				return
 			}
 		}
+		f.friendPairedLocked(f.friendInviteRow(r.Context(), hash), b)
 		jsonResponse(w, 200, pairBody{Version: 1, Provider: f.o.Provider.Name(), Display: f.o.Display, URL: f.selfURL(), PublicKey: f.pub})
 		return
 	}
@@ -442,6 +457,7 @@ func (f *Engine) pair(w http.ResponseWriter, r *http.Request, raw []byte) {
 		return
 	}
 	go f.event("Paired " + p.Provider)
+	f.friendPairedLocked(f.friendInviteRow(r.Context(), hash), b)
 	jsonResponse(w, 200, pairBody{Version: 1, Provider: f.o.Provider.Name(), Display: f.o.Display, URL: f.selfURL(), PublicKey: f.pub})
 }
 

@@ -74,10 +74,17 @@ type Engine struct {
 	approvals []func(core.Grant)
 	changes   []func(core.Mail)
 	wake      chan struct{}
-	urlMu     sync.RWMutex // guards o.URL, which SetURL changes at runtime
+	urlMu     sync.RWMutex // guards o.URL, which SetURL changes at runtime, and the hub settings below
+	// Friend links (friend.go): the app's hub membership, the built-in hub
+	// and the base of invite links.
+	hubMember  HubMember
+	defaultHub string
+	joinURL    string
+	pendingMu  sync.Mutex // one retry of pending accepts at a time
 }
 
 var _ core.Federator = (*Engine)(nil)
+var _ core.FriendInviter = (*Engine)(nil)
 var _ amp.Remote = (*Engine)(nil)
 
 const schema = `
@@ -127,6 +134,9 @@ func New(o Options) (*Engine, error) {
 		return nil, e
 	}
 	if _, e := o.DB.Exec(schema); e != nil {
+		return nil, e
+	}
+	if e := migrateFriends(o.DB); e != nil {
 		return nil, e
 	}
 	if e := f.load(); e != nil {
