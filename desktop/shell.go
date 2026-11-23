@@ -70,11 +70,17 @@ func newShell(app *application.App, win *application.WebviewWindow, base string,
 		func(url string) { application.InvokeAsync(func() { win.SetURL(url) }) },
 		func() { application.InvokeAsync(func() { win.Reload() }) },
 	)
-	// The first finished navigation (the bundled offline page) proves the
-	// webview exists. Each platform has its own event; the other never fires.
-	ready := func(*application.WindowEvent) { s.nav.Ready() }
-	win.OnWindowEvent(events.Windows.WebViewNavigationCompleted, ready)
-	win.OnWindowEvent(events.Mac.WebViewDidFinishNavigation, ready)
+	if runtime.GOOS == "windows" {
+		// A finished navigation proves WebView2 exists. Wails creates it and
+		// loads the bundled offline page even for a hidden window (the
+		// --background Run-key launch), and emits this event for every
+		// completed navigation, so a delayed first load still opens the gate.
+		win.OnWindowEvent(events.Windows.WebViewNavigationCompleted, func(*application.WindowEvent) { s.nav.Ready() })
+	} else {
+		// Elsewhere the webview is there from the start (beta.1 navigated
+		// directly and never crashed), so the gate starts open.
+		s.nav.Ready()
+	}
 	return s
 }
 
@@ -108,8 +114,9 @@ func (s *shell) showMain() {
 		s.win.Show()
 		// On Windows, Restore and Focus read the WebView2 controller without a
 		// nil check (Wails v3.1.0), so they wait for the webview. Show is safe,
-		// and a window that was never shown has nothing to restore.
-		if runtime.GOOS != "windows" || s.nav.IsReady() {
+		// and a window that was never shown has nothing to restore. (The gate
+		// is always open elsewhere.)
+		if s.nav.IsReady() {
 			s.win.Restore()
 			s.win.Focus()
 		}

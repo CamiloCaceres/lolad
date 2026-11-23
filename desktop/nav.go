@@ -2,7 +2,8 @@ package main
 
 import "sync"
 
-// navGate holds window navigation until the webview exists.
+// navGate holds window navigation until the webview exists. Only Windows
+// needs it; on other systems the shell opens it at once.
 //
 // On Windows, Wails creates the window object before WebView2: SetURL or
 // Reload in that gap dereferences a nil webview and the app dies (v0.2.0-beta.1
