@@ -9,12 +9,28 @@ or in the desktop app (docs/desktop.md section 7). It is a standalone page
 * `/` redirects to `/welcome` only while onboarding is not finished, nobody has
   left it ("Set up later") and there are **no agents**. Anyone with agents is
   never redirected. Without `Options.Setup` nothing changes.
-* Steps: 1 start at login, 2 agent tools (claude, codex, codewhale: Ready /
-  Not signed in / Not installed, Install and Sign in open the embedded terminal,
-  Re-scan, Continue needs one Ready), 3 agents folder (default
-  `~/Lolad Agents`, live macOS privacy warning), 4 your name (saved to
-  `org.yaml` through `SaveOrg`), 5 first agent (name, job, tool; defaults filled
-  in, directory under the chosen folder), then done with notification opt-in.
+* Screens follow the Ob-* boards (redesign v2), on top of setup's unchanged
+  steps:
+  - **Hello** (setup's login step): "Let's wake up your first assistant." Get
+    started saves `ServiceDone`; starting at login is offered on Ready.
+  - **Claude** (harnesses): Ready / Not signed in / Not installed; Install and
+    Sign in open the embedded terminal; Check again; Continue needs Claude
+    Ready and also saves the default assistants folder (setup's folder step),
+    so the folder has no screen of its own unless saving it fails.
+  - **Name**: the first name, saved to `org.yaml` through `SaveOrg`.
+  - **Job** and **Shape** (setup's agent step): pick a first job (six
+    presets in `welcomeJobs`, or your own words), then a name with ideas,
+    "Asks you first (in Lolad)" or "Works on its own", and Advanced (brain
+    and folder). "Asks you first" keeps PermBypass and adds an instruction to
+    the mission and on-wake text: check in through ask_user before anything
+    new, costly or outward-facing. The orb's colour follows the name live
+    (same hash as the server); there is no stored colour yet.
+  - **Waking**: a checklist polled from `/welcome/waking` until the assistant
+    is up (or 60 s), then **Ready**: "Atlas is awake.", the assistant's real
+    first message once it arrives (never a made-up greeting), the job's
+    suggestion chips and a composer that write to it, "Keep Atlas running"
+    (InstallService) and "Connect your phone".
+  - Done (no assistant made) keeps the notification opt-in.
 * Progress is in `<state>/setup.json`; `/welcome` resumes at the first
   incomplete step. Finished steps can be revisited (`?step=`), later ones cannot.
 * Every step is a plain form post that redirects, so it works without scripts;
@@ -27,7 +43,7 @@ or in the desktop app (docs/desktop.md section 7). It is a standalone page
 
 `welcome.go` (handlers), `templates/pages/welcome.html` (layout and steps),
 `templates/partials/welcome.html` (live fragments), `static/pages/welcome.css`,
-`static/welcome.js` (notification button only), `welcome_test.go`. Shared
+`static/welcome.js` (notification button, Shape's live name and orb), `welcome_test.go`. Shared
 files touched: `web.go` (the `Setup` option and `welcomeRoutes`), `inbox.go`
 (the redirect), `static/term.js` (`data-term-path`, `data-term-control`,
 `data-autostart`). The logic and API are in `internal/setup`; see

@@ -18,68 +18,72 @@
 <body class="welcome-body" hx-boost="true" hx-headers='{"X-Lolad-Build": "{{build}}"}'>
 {{template "icons"}}
 <a class="skip" href="#main">Skip to content</a>
-<div class="welcome" id="app">
+<div class="welcome dots-bg is-{{.Step}}" id="app">
   <header class="welcome-head">
     <a class="welcome-brand" href="/welcome" aria-label="lolad setup">
       <img class="brand-mark" src="{{asset "logo.svg"}}" alt="" width="30" height="30">
       <span>lolad</span>
     </a>
-    <form method="post" action="/welcome/leave" hx-boost="false"><button class="btn btn-ghost btn-sm" type="submit">Set up later</button></form>
+    {{template "welcome-dots" .Step}}
+    <div class="welcome-head-end">
+      {{if eq .Step "hello"}}<form method="post" action="/welcome/leave" hx-boost="false"><button class="btn btn-ghost" type="submit">I’ve used lolad before</button></form>
+      {{else if eq .Step "ready"}}<a class="btn btn-ghost" href="/" hx-boost="false">Go to Home</a>
+      {{else}}{{with welcomeBack .}}<a class="btn btn-ghost" href="{{.}}">{{template "icon" "back"}}Back</a>{{end}}{{end}}
+    </div>
   </header>
   <main id="main" class="welcome-main" tabindex="-1">
-    <nav aria-label="Setup progress">
-      <ol class="welcome-steps">
-        {{range .Steps}}<li class="ws ws-{{.State}}"{{if eq .State "current"}} aria-current="step"{{end}}>{{if .Href}}<a href="{{.Href}}"><span class="ws-n" aria-hidden="true">{{template "icon" "check"}}</span><span class="ws-label" data-n="{{.N}}"><span class="sr-only">Step {{.N}}, done: </span>{{.Label}}</span></a>{{else}}<span class="ws-n" aria-hidden="true">{{.N}}</span><span class="ws-label" data-n="{{.N}}"><span class="sr-only">Step {{.N}}{{if eq .State "todo"}}, not yet: {{else}}: {{end}}</span>{{.Label}}</span>{{end}}</li>
-        {{end}}
-      </ol>
-    </nav>
     <section class="welcome-card" aria-labelledby="welcome-title">
       {{with .Error}}<div class="flash is-error welcome-error" role="alert" tabindex="-1">{{template "icon" "alert"}}<div>{{.}}</div></div>{{end}}
-      {{if eq .Step "login"}}{{template "welcome-login" .}}
+      {{if eq .Step "hello"}}{{template "welcome-hello" .}}
       {{else if eq .Step "harnesses"}}{{template "welcome-harnesses" .}}
       {{else if eq .Step "folder"}}{{template "welcome-folder" .}}
       {{else if eq .Step "name"}}{{template "welcome-name" .}}
-      {{else if eq .Step "agent"}}{{template "welcome-agent" .}}
+      {{else if eq .Step "job"}}{{template "welcome-job" .}}
+      {{else if eq .Step "shape"}}{{template "welcome-shape" .}}
+      {{else if eq .Step "waking"}}{{template "welcome-waking" .}}
+      {{else if eq .Step "ready"}}{{template "welcome-ready" .}}
       {{else if eq .Step "friend"}}{{template "welcome-friend" .}}
       {{else if eq .Step "friend-done"}}{{template "welcome-friend-done" .}}
       {{else}}{{template "welcome-done" .}}{{end}}
     </section>
+    {{if not (or (eq .Step "hello") (eq .Step "ready") (eq .Step "waking") (eq .Step "done"))}}<form class="welcome-later" method="post" action="/welcome/leave" hx-boost="false"><button class="btn btn-ghost btn-sm" type="submit">Set up later</button></form>{{end}}
   </main>
 </div>
 <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
 </body>
 </html>{{end}}
 
-{{define "welcome-login"}}
-<h1 class="welcome-title" id="welcome-title">Keep lolad running in the background</h1>
-<p class="welcome-lede">lolad starts when you log in to your computer, so your assistants can work while this window is closed, and reach you when you’re away.</p>
-{{if .S.Service.Installed}}
-<p class="welcome-status"><span class="state st-idle"><i></i>On</span> lolad starts when you sign in.</p>
-<form method="post" action="/welcome/service" class="welcome-actions"><input type="hidden" name="op" value="skip"><button class="btn btn-primary" type="submit" autofocus>Continue{{template "icon" "next"}}</button></form>
-{{else if .S.Service.Available}}
-{{if eq .S.Platform "darwin"}}<p class="help">macOS will show a “Background item added” notice. That is lolad.</p>{{end}}
-<div class="welcome-actions">
-  <form method="post" action="/welcome/service"><input type="hidden" name="op" value="install"><button class="btn btn-primary" type="submit" autofocus>Start at login</button></form>
-  <form method="post" action="/welcome/service"><input type="hidden" name="op" value="skip"><button class="btn btn-ghost" type="submit">Not now</button></form>
+{{/* Five quiet dots: Claude, name, job, shape, awake. */}}
+{{define "welcome-dots"}}{{$n := welcomeDot .}}{{if $n}}<ol class="welcome-dots" aria-label="Step {{$n}} of 5">{{range $i := seq 5}}<li class="{{if lt $i $n}}is-done{{else if eq $i $n}}is-now{{end}}"></li>{{end}}</ol>{{else}}<span></span>{{end}}{{end}}
+
+{{define "welcome-hello"}}
+<div class="welcome-hero">
+  <div class="welcome-big-orb" aria-hidden="true"><span class="orb h0" style="--h: #7AA2FF; --h2: #A98BFF"><span class="c"><i></i><i></i><i></i><i></i></span></span></div>
+  <p class="welcome-kicker">Hi, I’m lolad.</p>
+  <h1 class="welcome-title is-hero" id="welcome-title">Let’s wake up your first assistant.</h1>
+  <p class="welcome-lede">It takes about three minutes. You’ll need a Claude account. Everything runs on this computer, and your assistants’ memory stays here.</p>
+  <form method="post" action="/welcome/service" class="welcome-actions is-center"><input type="hidden" name="op" value="skip"><button class="btn btn-primary btn-wide" type="submit" autofocus>Get started</button></form>
+  <ul class="welcome-ready-list" aria-label="This computer">
+    <li>{{template "icon" "check"}}lolad is running</li>
+    <li>{{if .AnyReady}}{{template "icon" "check"}}Claude is ready{{else}}{{template "icon" "pulse"}}Claude comes next{{end}}</li>
+    <li>{{template "icon" "check"}}Assistant jobs ready</li>
+  </ul>
 </div>
-{{else}}
-<p class="welcome-note">This copy of lolad cannot set that up by itself. You can do it later by running <code>lolad service install</code> in a terminal.</p>
-<form method="post" action="/welcome/service" class="welcome-actions"><input type="hidden" name="op" value="skip"><button class="btn btn-primary" type="submit" autofocus>Continue{{template "icon" "next"}}</button></form>
-{{end}}
 {{end}}
 
 {{define "welcome-harnesses"}}
 <h1 class="welcome-title" id="welcome-title">First, a brain for your assistants.</h1>
-<p class="welcome-lede">Your assistants think with an AI tool on this computer, like Claude Code. Get at least one to <strong>Ready</strong>. Install and Sign in open a terminal below, so you can see exactly what happens.</p>
+<p class="welcome-lede">Your assistants think with Claude, on this computer. Connect your Claude account: <strong>Install</strong> and <strong>Sign in</strong> open Claude’s own screen below, so you can see exactly what happens. You need Claude Pro or Max.</p>
 {{template "welcome-harnesses-list" .}}
 {{with .Terminal}}{{template "welcome-terminal" .}}{{end}}
 <div class="welcome-foot">
-  {{template "welcome-next" (dict "Ready" .AnyReady)}}
+  {{template "welcome-next" (dict "Ready" .AnyReady "Folder" .Folder)}}
   <form method="post" action="/welcome/harnesses/rescan" class="welcome-rescan">
     {{with .Terminal}}<input type="hidden" name="terminal" value="{{.Session}}">{{end}}
     <input type="hidden" name="capture_path_present" value="1">
-    <button class="btn" type="submit">{{template "icon" "restart"}}<span>Re-scan</span></button>
-    <details class="welcome-adv"><summary>Advanced</summary>
+    <button class="btn btn-ghost" type="submit">{{template "icon" "restart"}}<span>Check again</span></button>
+    <details class="welcome-adv"><summary>Using a different tool, like Codex?</summary>
+      <p class="help">Install it and sign in from a terminal, then press Check again. It appears here once it’s ready.</p>
       <label class="check"><input type="checkbox" name="capture_path" value="on"{{if .S.CapturePath}} checked{{end}}><span><span class="check-title">Use my terminal’s PATH</span><span class="help">Lets lolad find tools your shell can run. Only PATH is read, never other variables or passwords.</span></span></label>
     </details>
   </form>
@@ -95,72 +99,152 @@
   </label>
   <span class="new-field-error" id="folder-error">{{.Fields.dir}}</span>
   <div id="folder-check" aria-live="polite">{{template "welcome-folder-check" (dict "Path" .Folder "Warning" .FolderWarning)}}</div>
-  <div class="welcome-actions"><button class="btn btn-primary" type="submit">Use this folder{{template "icon" "next"}}</button><a class="btn btn-ghost" href="/welcome?step=harnesses">Back</a></div>
+  <div class="welcome-actions"><button class="btn btn-primary" type="submit">Use this folder{{template "icon" "next"}}</button></div>
 </form>
 {{end}}
 
 {{define "welcome-name"}}
+<div class="welcome-narrow">
+{{with welcomeHarness .}}<p class="welcome-kicker">{{template "icon" "check"}}{{.}} connected</p>{{end}}
 <h1 class="welcome-title" id="welcome-title">What should your assistants call you?</h1>
-<p class="welcome-lede">Just a first name is fine. We started with the name on your computer’s account. You can change it later.</p>
 <form method="post" action="/welcome/name" class="welcome-form">
-  <label class="field"><span class="label">Your name</span>
-    <input name="name" value="{{.Name}}" required maxlength="100" autocomplete="name" autofocus aria-describedby="name-error"{{if .Fields.name}} aria-invalid="true"{{end}}>
+  <label class="field"><span class="label">Your first name</span>
+    <input name="name" value="{{firstName .Name}}" required maxlength="100" autocomplete="given-name" autofocus aria-describedby="name-help name-error"{{if .Fields.name}} aria-invalid="true"{{end}}>
   </label>
+  <span class="help" id="name-help">Just a first name is fine. You can change it later in Settings.</span>
   <span class="new-field-error" id="name-error">{{.Fields.name}}</span>
-  {{with .S.LoladName}}<p class="welcome-note">Your lolad’s name is <strong class="mono">{{.}}</strong>, so addresses here look like <span class="mono">you@{{.}}.lolad.local</span>. If you connect with a friend’s lolad, theirs needs a different name.</p>{{end}}
-  <div class="welcome-actions"><button class="btn btn-primary" type="submit">Continue{{template "icon" "next"}}</button><a class="btn btn-ghost" href="/welcome?step=folder">Back</a></div>
+  <div class="welcome-actions"><button class="btn btn-primary btn-wide" type="submit">Continue</button></div>
+  {{with .S.LoladName}}<details class="welcome-adv"><summary>About this computer’s name</summary><p class="help">Your lolad’s name is <strong class="mono">{{.}}</strong>, so addresses here look like <span class="mono">you@{{.}}.lolad.local</span>. If you connect with a friend’s lolad, theirs needs a different name.</p></details>{{end}}
 </form>
+</div>
 {{end}}
 
-{{define "welcome-agent"}}
-<h1 class="welcome-title" id="welcome-title">Wake up your first assistant</h1>
-<p class="welcome-lede">Tell it what to do and give it a name. It writes to you on Home as soon as it’s awake.</p>
+{{define "welcome-job"}}
 {{if not .Creatable}}
-<div class="flash is-warn" role="status">{{template "icon" "alert"}}<div><p>None of the ready tools can run lolad assistants yet. Get Claude Code to Ready first.</p></div></div>
-<div class="welcome-actions"><a class="btn btn-primary" href="/welcome?step=harnesses">Back to the brain step</a>
+<h1 class="welcome-title" id="welcome-title">Connect Claude first</h1>
+<div class="flash is-warn" role="status">{{template "icon" "alert"}}<div><p>None of the ready tools can run lolad assistants yet. Get Claude to Ready first.</p></div></div>
+<div class="welcome-actions"><a class="btn btn-primary" href="/welcome?step=harnesses">Back to Claude</a>
   <form method="post" action="/welcome/later"><button class="btn btn-ghost" type="submit">I’ll do this later</button></form></div>
 {{else}}
-<form method="post" action="/welcome/agent" class="welcome-form welcome-agent-form" hx-disabled-elt="find button[type=submit]">
-  <label class="field"><span class="label">Name</span>
-    <input name="name" value="{{.Agent.Name}}" required maxlength="100" autocomplete="off" autofocus aria-describedby="agent-name-error"{{if .Fields.name}} aria-invalid="true"{{end}}>
-    <span class="new-field-error" id="agent-name-error">{{.Fields.name}}</span>
-  </label>
-  <label class="field"><span class="label">What should it do?</span>
-    <textarea name="mission" rows="4" required aria-describedby="agent-mission-help agent-mission-error"{{if .Fields.mission}} aria-invalid="true"{{end}}>{{.Agent.Mission}}</textarea>
-    <span class="help" id="agent-mission-help">For example: “Keep my week on track and remind me before I forget things.” This becomes your first message to it.</span>
-    <span class="new-field-error" id="agent-mission-error">{{.Fields.mission}}</span>
-  </label>
-  {{if gt (len .Creatable) 1}}<label class="field"><span class="label">Brain</span><select name="harness">{{range .Creatable}}<option value="{{.ID}}"{{if eq .ID $.Agent.Harness}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
-  {{else}}{{range .Creatable}}<input type="hidden" name="harness" value="{{.ID}}"><p class="welcome-meta">Thinks with <strong>{{.Name}}</strong>.</p>{{end}}{{end}}
-  <span class="new-field-error" id="agent-harness-error">{{.Fields.harness}}</span>
-  <p class="welcome-meta">It works on its own, without stopping to ask before each step, and can use this computer the way you can. To have it ask you first, change “Before acting” in its settings.</p>
-  <div class="welcome-actions">
-    <button class="btn btn-primary" type="submit"><span>Wake it up</span></button>
-    <a class="btn btn-ghost" href="/welcome?step=name">Back</a>
+<p class="welcome-kicker">{{with .S.UserName}}Nice to meet you, {{firstName .}}.{{else}}Nice to meet you.{{end}}</p>
+<h1 class="welcome-title is-center" id="welcome-title">What would you like help with first?</h1>
+<form method="get" action="/welcome" class="welcome-jobs-form">
+  <input type="hidden" name="step" value="shape">
+  <div class="welcome-jobs" role="radiogroup" aria-label="First job">
+    {{range $i, $j := .Jobs}}<label class="job{{if eq $j.Key "other"}} is-other{{end}}"><input type="radio" name="job" value="{{$j.Key}}"{{if eq $j.Key $.Job.Key}} checked{{end}}>
+      <span class="job-halo h{{$i}}" aria-hidden="true">{{template "icon" (jobIcon $j.Key)}}</span>
+      <span class="job-text"><b>{{$j.Label}}</b><span>{{$j.Desc}}</span></span></label>{{end}}
   </div>
-  <div class="welcome-progress" role="status" aria-live="polite"><strong>Waking it up…</strong><p>Making a home for it on this computer, giving it its job and your name. This can take a minute. Keep this page open.</p><progress aria-label="Assistant setup in progress"></progress></div>
+  <div class="field welcome-other"><label class="label" for="job-mission">In your own words, what should it do?</label><textarea id="job-mission" name="mission" rows="3" placeholder="For example: keep my week on track and remind me before I forget things.">{{if eq .Job.Key "other"}}{{.Agent.Mission}}{{end}}</textarea></div>
+  <div class="welcome-actions is-center"><button class="btn btn-primary btn-wide" type="submit">Continue</button></div>
+  <p class="welcome-meta is-center">You can add more assistants later. Most people start with one.</p>
 </form>
-<div class="welcome-alt">
-  <form method="post" action="/welcome/later"><button class="btn btn-ghost btn-sm" type="submit">I’ll do this later</button></form>
-  <a class="btn btn-ghost btn-sm" href="/new" hx-boost="false">More options</a>
-</div>
+<div class="welcome-alt"><form method="post" action="/welcome/later"><button class="btn btn-ghost btn-sm" type="submit">I’ll do this later</button></form><a class="btn btn-ghost btn-sm" href="/new" hx-boost="false">More options</a></div>
 {{end}}
 {{end}}
 
-{{define "welcome-done"}}
-{{if .Created}}<span class="orb {{hue .CreatedName}} avatar-xl st-starting welcome-orb" aria-hidden="true"><span class="c"><i></i><i></i><i></i><i></i></span></span>{{end}}
-<h1 class="welcome-title" id="welcome-title">{{if .Created}}{{.CreatedName}} is waking up.{{else}}You’re all set{{end}}</h1>
-<p class="welcome-lede">{{if .Created}}Its first message will arrive on Home. You answer there, never in a terminal.{{else}}lolad is ready. Make your first assistant whenever you like with <strong>New assistant</strong>.{{end}}</p>
-<div class="welcome-actions">
-  {{if .Created}}<a class="btn btn-primary" href="/inbox/{{.Created}}?created=1" hx-boost="false">Say hi to {{.CreatedName}}{{template "icon" "next"}}</a><a class="btn" href="/" hx-boost="false">Go to Home</a>
-  {{else}}<a class="btn btn-primary" href="/new" hx-boost="false">{{template "icon" "plus"}}<span>New assistant</span></a><a class="btn" href="/" hx-boost="false">Go to Home</a>{{end}}
+{{define "welcome-shape"}}{{$j := .Job}}
+<div class="welcome-shape">
+  <div class="welcome-shape-orb">
+    <div class="welcome-big-orb" aria-hidden="true"><span class="orb {{hue .Agent.Name}}" data-shape-orb><span class="c"><i></i><i></i><i></i><i></i></span></span></div>
+    <p class="welcome-shape-name" data-shape-name>{{.Agent.Name}}</p>
+    <p class="muted">{{$j.Role}}</p>
+  </div>
+  <form method="post" action="/welcome/agent" class="welcome-form welcome-shape-form" hx-disabled-elt="find button[type=submit]">
+    <input type="hidden" name="job" value="{{$j.Key}}">
+    {{if eq $j.Key "other"}}<input type="hidden" name="mission" value="{{.Agent.Mission}}">{{end}}
+    <div>
+      <p class="welcome-kicker">{{if eq $j.Key "other"}}Your own job. Good choice.{{else}}{{article $j.Label}} {{lower $j.Label}}. Good choice.{{end}}</p>
+      <h1 class="welcome-title" id="welcome-title">Give it a name.</h1>
+    </div>
+    {{if .Fields.mission}}<p class="new-field-error">{{.Fields.mission}} <a href="/welcome?step=job&amp;job=other">Describe it</a></p>{{end}}
+    <div class="field">
+      <label class="label" for="shape-name">Name</label>
+      <input id="shape-name" name="name" value="{{.Agent.Name}}" required maxlength="100" autocomplete="off" autofocus aria-describedby="agent-name-error"{{if .Fields.name}} aria-invalid="true"{{end}} data-shape-input>
+      <span class="new-field-error" id="agent-name-error">{{.Fields.name}}</span>
+      <div class="welcome-names" aria-label="Ideas">{{range $j.Names}}<button class="chip" type="button" data-shape-pick="{{.}}">{{.}}</button>{{end}}</div>
+    </div>
+    <fieldset class="welcome-work">
+      <legend class="label">How should <span data-shape-name>{{.Agent.Name}}</span> work?</legend>
+      <label class="choice-card"><input type="radio" name="work" value="ask"{{if ne .Work "own"}} checked{{end}}><span class="choice-body"><span class="choice-title">Asks you first (in Lolad)</span><span class="help">Checks with you here before anything new, anything that costs money, or anything sent out. Best to start.</span></span></label>
+      <label class="choice-card"><input type="radio" name="work" value="own"{{if eq .Work "own"}} checked{{end}}><span class="choice-body"><span class="choice-title">Works on its own</span><span class="help">Gets on with it and tells you what it did.</span></span></label>
+    </fieldset>
+    <details class="welcome-adv"{{if or .Fields.harness .Fields.dir}} open{{end}}><summary>Advanced: brain and folder</summary>
+      <div class="welcome-adv-body">
+      {{if gt (len .Creatable) 1}}<label class="field"><span class="label">Brain</span><select name="harness">{{range .Creatable}}<option value="{{.ID}}"{{if eq .ID $.Agent.Harness}} selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+      {{else}}{{range .Creatable}}<input type="hidden" name="harness" value="{{.ID}}"><p class="welcome-meta">Thinks with <strong>{{.Name}}</strong>.</p>{{end}}{{end}}
+      <span class="new-field-error" id="agent-harness-error">{{.Fields.harness}}</span>
+      <label class="field"><span class="label">Assistants folder</span><input name="dir" class="mono" value="{{.Folder}}" autocomplete="off" spellcheck="false"></label>
+      <span class="new-field-error">{{.Fields.dir}}</span>
+      </div>
+    </details>
+    <div class="welcome-actions">
+      <button class="btn btn-primary btn-wide" type="submit"><span>Wake&#32;<span data-shape-name>{{.Agent.Name}}</span></span></button>
+    </div>
+    <div class="welcome-progress" role="status" aria-live="polite"><strong>Waking it up…</strong><p>Making a home for it on this computer. Keep this page open.</p><progress aria-label="Assistant setup in progress"></progress></div>
+  </form>
 </div>
-{{if .Friend.On}}<div class="welcome-friend" id="friend">
+{{end}}
+
+{{define "welcome-waking"}}
+<div class="welcome-hero">
+  <div class="welcome-big-orb" aria-hidden="true"><span class="orb {{hue .CreatedName}} st-starting"><span class="c"><i></i><i></i><i></i><i></i></span></span></div>
+  <h1 class="welcome-title is-hero" id="welcome-title">Waking {{.CreatedName}} up…</h1>
+  {{template "welcome-waking-list" (dict "A" (dict "Name" .Created "Display" .CreatedName "State" .CreatedState) "Job" .Job.Key "Since" now)}}
+</div>
+{{end}}
+
+{{define "welcome-ready"}}{{$n := .CreatedName}}{{$up := or (eq .CreatedState "idle") (eq .CreatedState "busy") (eq .CreatedState "waiting")}}
+<div class="welcome-ready">
+  <div class="welcome-ready-head">
+    <span class="orb {{hue $n}} avatar-lg st-{{.CreatedState}}" aria-hidden="true"><span class="c"><i></i><i></i><i></i><i></i></span></span>
+    <div><h1 class="welcome-title" id="welcome-title">{{if $up}}{{$n}} is awake.{{else if eq .CreatedState "failed"}}{{$n}} couldn’t start.{{else}}{{$n}} is still waking up.{{end}}</h1>
+    <p class="welcome-meta">{{template "state" (dict "State" .CreatedState)}}{{with .CreatedRole}} · {{.}}{{end}}</p></div>
+  </div>
+  {{if eq .CreatedState "failed"}}<div class="flash is-error" role="alert">{{template "icon" "alert"}}<div><p>Something stopped {{$n}} from starting. lolad can walk you through fixing it.</p><p><a href="/agents/{{.Created}}" hx-boost="false">See what happened</a></p></div></div>{{end}}
+  <div class="welcome-hello-card"{{if not .Hello}} hx-get="/welcome?step=ready&amp;agent={{.Created}}&amp;job={{.Job.Key}}" hx-trigger="every 4s" hx-select=".welcome-hello-card" hx-swap="outerHTML" hx-push-url="false"{{end}}>
+    {{if .Hello}}<p class="welcome-hello-from">{{$n}}</p><p class="welcome-hello-text">{{.Hello}}</p>
+    {{else}}<p class="welcome-hello-text is-quiet">Say hello to {{$n}}, or pick one of these to start. {{$n}} answers here and on Home.</p>{{end}}
+  </div>
+  <form method="post" action="/inbox/{{.Created}}" hx-boost="false" class="welcome-say">
+    <div class="welcome-chips">{{range .Job.Chips}}<button class="chip" type="submit" name="body" value="{{.}}">{{.}}</button>{{end}}</div>
+  </form>
+  <form method="post" action="/inbox/{{.Created}}" hx-boost="false" class="composer welcome-composer">
+    <label class="sr-only" for="ready-body">Message {{$n}}</label>
+    <textarea id="ready-body" name="body" rows="1" placeholder="Message {{$n}}…" required></textarea>
+    <button class="send" type="submit" aria-label="Send">{{template "icon" "send"}}</button>
+  </form>
+  <div class="welcome-two">
+    <h2 class="eyebrow">Two quick things</h2>
+    <div class="welcome-thing">
+      <div><strong>Keep {{$n}} running</strong><p class="help">Starts lolad when you log in, so {{$n}} can work while this window is closed.</p></div>
+      {{if .S.Service.Installed}}<span class="state st-idle"><i></i>On</span>
+      {{else if .S.Service.Available}}<form method="post" action="/welcome/service" hx-boost="false"><input type="hidden" name="op" value="install"><input type="hidden" name="back" value="ready"><input type="hidden" name="agent" value="{{.Created}}"><input type="hidden" name="job" value="{{.Job.Key}}"><button class="btn btn-sm" type="submit">Turn on</button></form>
+      {{else}}<span class="help">Run <code>lolad service install</code> once in a terminal.</span>{{end}}
+    </div>
+    <div class="welcome-thing">
+      <div><strong>Want to talk from your phone too?</strong><p class="help">Answer {{$n}} from anywhere.</p></div>
+      <a class="btn btn-sm" href="/devices" hx-boost="false">Connect your phone</a>
+    </div>
+  </div>
+  {{template "welcome-friend-paste" .}}
+</div>
+{{end}}
+
+{{define "welcome-friend-paste"}}{{if .Friend.On}}<div class="welcome-friend" id="friend">
   <h2>Got an invite from a friend?</h2>
   <p class="welcome-meta">Paste the link they sent you to connect. You can also do this later, under <strong>Sharing</strong>.</p>
   {{with .Friend.Error}}<div class="flash is-error" role="alert">{{template "icon" "alert"}}<div>{{.}}</div></div>{{end}}
   <form method="post" action="/welcome/friend" hx-boost="false" autocomplete="off" class="welcome-friend-paste"><label for="welcome-friend-link" class="sr-only">Invite link</label><input id="welcome-friend-link" name="link" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" required placeholder="https://lolad.caceresdev.com/join#…"><button class="btn" type="submit">Continue</button></form>
-</div>{{end}}
+</div>{{end}}{{end}}
+
+{{define "welcome-done"}}
+<div class="welcome-hero">
+<h1 class="welcome-title is-hero" id="welcome-title">You’re all set</h1>
+<p class="welcome-lede">lolad is ready. Make your first assistant whenever you like with <strong>New assistant</strong>.</p>
+<div class="welcome-actions is-center"><a class="btn btn-primary" href="/new" hx-boost="false">{{template "icon" "plus"}}<span>New assistant</span></a><a class="btn" href="/" hx-boost="false">Go to Home</a></div>
+</div>
+{{template "welcome-friend-paste" .}}
 <div class="welcome-notify" data-notify hidden>
   <p class="welcome-meta">Want a nudge when it’s your turn? Never for progress updates.</p>
   <button class="btn btn-sm" type="button" data-notify-ask>Tell me when I’m needed</button>

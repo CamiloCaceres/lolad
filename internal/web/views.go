@@ -45,26 +45,40 @@ func funcs(s *server) template.FuncMap {
 		"receipt":       receiptLine,
 		"kindOf":        reqKind,
 		"updMore":       updMore,
-		"excerpt":       excerpt,
-		"short":         shortID,
-		"attention":     attention,
-		"running":       running,
-		"plural":        plural,
-		"has":           slices.Contains[[]string],
-		"add":           func(a, b int) int { return a + b },
-		"dict":          dict,
-		"chat":          userChat,
-		"subject":       subject,
-		"json":          func(v any) (string, error) { b, err := json.Marshal(v); return string(b), err },
-		"harness":       harnessLabel,
-		"list":          func(v ...string) []string { return v },
-		"hasPrefix":     strings.HasPrefix,
-		"indent":        func(depth int) string { return strings.Repeat("\u00a0\u00a0\u00a0", max(depth-1, 0)) },
-		"evtime":        evtime,
-		"stampNano":     func(t time.Time) string { return t.Format(time.RFC3339Nano) },
-		"sentence":      sentence,
-		"baseOf":        path.Base,
-		"pathMid":       settingsPath, // Settings keeps path context around a middle ellipsis.
+		"seq": func(n int) []int {
+			out := make([]int, n)
+			for i := range out {
+				out[i] = i + 1
+			}
+			return out
+		},
+		"lower":          strings.ToLower,
+		"article":        article,
+		"now":            func() int64 { return time.Now().Unix() },
+		"welcomeDot":     welcomeDot,
+		"welcomeBack":    welcomeBack,
+		"welcomeHarness": welcomeHarness,
+		"jobIcon":        jobIcon,
+		"excerpt":        excerpt,
+		"short":          shortID,
+		"attention":      attention,
+		"running":        running,
+		"plural":         plural,
+		"has":            slices.Contains[[]string],
+		"add":            func(a, b int) int { return a + b },
+		"dict":           dict,
+		"chat":           userChat,
+		"subject":        subject,
+		"json":           func(v any) (string, error) { b, err := json.Marshal(v); return string(b), err },
+		"harness":        harnessLabel,
+		"list":           func(v ...string) []string { return v },
+		"hasPrefix":      strings.HasPrefix,
+		"indent":         func(depth int) string { return strings.Repeat("\u00a0\u00a0\u00a0", max(depth-1, 0)) },
+		"evtime":         evtime,
+		"stampNano":      func(t time.Time) string { return t.Format(time.RFC3339Nano) },
+		"sentence":       sentence,
+		"baseOf":         path.Base,
+		"pathMid":        settingsPath, // Settings keeps path context around a middle ellipsis.
 		"dirOf": func(p string) string {
 			if d := path.Dir(p); d != "." {
 				return d

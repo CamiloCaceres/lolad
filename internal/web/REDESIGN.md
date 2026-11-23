@@ -47,7 +47,7 @@ package and what is done.
 | Activity | `/traffic` | `pages/traffic.html`, `partials/traffic.html` | done |
 | App settings | `/settings` (new) | `appsettings.go`, `pages/appsettings.html` | done (only real settings) |
 | Edge states | `/login`, 404 | `pages/login.html`, `pages/notfound.html` | done ("lolad isn't running" lives in the desktop app's waiting page) |
-| First run (7 boards) | `/welcome` | `welcome*` (owned by the setup agent) | look and copy done; the steps are unchanged (the boards' job picker and "waking" screens would need setup changes) |
+| First run (7 boards) | `/welcome` | `welcome*` | v2 done: Hello, Claude, Name, Job, Shape, Waking, Ready on setup's unchanged steps (see WELCOME.md) |
 
 ## Backlog
 
@@ -57,9 +57,8 @@ package and what is done.
   Options: an SVG with SMIL or CSS-animated paths, a small canvas/WebGL
   shader, or our own Lottie file.
 - Light theme.
-- First run in the boards' order: a job picker and a "Waking Atlas up…"
-  screen. Needs the setup agent.
+- Notifications on first-run Ready (lolad-desktop).
 - Activity's "Group by conversation" and per-message plain-word reasons
   ("Different team, so it has to go through Lola").
-- Assistant colour picker (needs a colour field in `lolabot.yaml`).
+- Assistant colour picker, on Ob-Shape and in settings (needs a colour field in `lolabot.yaml`).
 - Logo: `static/logo.svg` and `desktop/assets/icons/gen.go` share one drawing.

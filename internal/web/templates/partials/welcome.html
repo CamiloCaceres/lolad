@@ -17,8 +17,20 @@
   </div>
 </li>{{end}}
 
+{{/* Continue keeps the default home for the assistants (the folder step
+of setup); it can be changed under Advanced when shaping the assistant. */}}
 {{define "welcome-next"}}<div id="wh-next" class="welcome-actions"{{if .OOB}} hx-swap-oob="true"{{end}}>
-  {{if .Ready}}<a class="btn btn-primary" href="/welcome?step=folder">Continue{{template "icon" "next"}}</a>{{else}}<button class="btn btn-primary" type="button" disabled aria-describedby="wh-need">Continue{{template "icon" "next"}}</button><span class="help" id="wh-need">Get at least one tool to Ready to continue.</span>{{end}}
+  {{if .Ready}}<form method="post" action="/welcome/folder"><input type="hidden" name="dir" value="{{.Folder}}"><button class="btn btn-primary btn-wide" type="submit">Continue</button></form>{{else}}<button class="btn btn-primary btn-wide" type="button" disabled aria-describedby="wh-need">Continue</button><span class="help" id="wh-need">Get Claude to Ready to continue.</span>{{end}}
+</div>{{end}}
+
+{{/* Ob-Waking's checklist, polled until the assistant is up. */}}
+{{define "welcome-waking-list"}}{{$a := .A}}<div class="welcome-waking" id="waking"{{if ne (printf "%v" $a.State) "failed"}} hx-get="/welcome/waking?agent={{$a.Name}}&amp;job={{.Job}}&amp;since={{.Since}}" hx-trigger="every 1500ms" hx-swap="outerHTML" hx-push-url="false"{{end}}>
+  <ul class="welcome-checklist">
+    <li class="is-done">{{template "icon" "check"}}Made a home for {{$a.Display}} on this computer</li>
+    <li class="is-done">{{template "icon" "check"}}Gave it its job and your name</li>
+    {{if eq (printf "%v" $a.State) "failed"}}<li class="is-fail">{{template "icon" "alert"}}Claude didn’t start</li>{{else}}<li class="is-now"><span class="upd-ring" aria-hidden="true"></span>Starting Claude</li>{{end}}
+  </ul>
+  {{if eq (printf "%v" $a.State) "failed"}}<div class="welcome-actions is-center"><a class="btn btn-primary" href="/agents/{{$a.Name}}" hx-boost="false">See what happened</a></div>{{else}}<p class="welcome-meta">Usually about 20 seconds.</p>{{end}}
 </div>{{end}}
 
 {{define "welcome-harnesses-list"}}<ul class="wh-list" id="wh-list" aria-label="Agent tools"{{if .Poll}} hx-get="/welcome/harnesses{{if .Terminal}}?terminal={{.Terminal.Session}}{{end}}" hx-trigger="every 3s" hx-swap="outerHTML" hx-push-url="false"{{end}}>
