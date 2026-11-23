@@ -366,8 +366,10 @@ Muted, desaturated palette; hue only as a state/scanning anchor. Light and dark.
 
 ### Requests (`internal/web/requests.go`, `core/ask.go`)
 An agent's `ask` is a request the user answers when ready. `UserChat` carries
-`Options` (buttons), `Fields` (`AskField`: text, longtext, number, date,
-choice, secret, logs, file; at most 12), or neither (an answer in words).
+`Options` (buttons; an option written "Label — consequence", split on the first
+" — ", shows the consequence as a quiet line under the label), `Fields`
+(`AskField`: text, longtext, number, date, choice, secret, logs, file; at most
+12), or neither (an answer in words).
 `Task` marks an ask for something the user does themselves: its two
 `Options` are the done and couldn't buttons, and the user may add a note.
 - An open request stays where it was asked, in the thread, with a small

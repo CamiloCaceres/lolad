@@ -202,7 +202,7 @@ func mcpTools() []any {
 	}
 	msg := map[string]any{"kind": map[string]any{"type": "string", "enum": []string{"say", "update", "deliver"}, "description": "say (default): conversation. update: progress and what remains. deliver: a finished result."}}
 	ask := map[string]any{
-		"options": map[string]any{"type": "array", "minItems": 2, "maxItems": maxOptions, "items": map[string]any{"type": "string"}, "description": "2-6 short buttons for a decision, e.g. [\"Deploy now\", \"Wait until Monday\"]. The user can also answer in words."},
+		"options": map[string]any{"type": "array", "minItems": 2, "maxItems": maxOptions, "items": map[string]any{"type": "string"}, "description": "2-6 short buttons for a decision, e.g. [\"Deploy now\", \"Wait until Monday\"]. To add what a choice leads to, write \"Label — consequence\" (em dash with spaces), e.g. \"Book the 11:40 — €212 · lands 12:10\"; the part after the first \" — \" shows as a quiet line under the label. The user can also answer in words."},
 		"task": obj("Use when the user must do something themselves (run a command, add a DNS record, change a setting in a dashboard): lay out exactly what to do with blocks, and they get a done button, a couldn't button and room to say what happened.", map[string]any{
 			"done":   str("Done button label, e.g. \"Added\" or \"Done\"."),
 			"failed": str("Couldn't button label, default \"I couldn't do it\"."),

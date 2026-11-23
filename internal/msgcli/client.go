@@ -31,7 +31,7 @@ const help = `lolad msg [--as name] <command>
   thread <id|last8>
   who
   tell-user say|update|deliver "<text>" [--attach FILE]...
-  tell-user ask "<question>" [--option "Yes" --option "No"]
+  tell-user ask "<question>" [--option "Yes" --option "No"]   (an option "Label — consequence" shows the consequence quietly under the label)
   tell-user ask "<question>" --field "Label[?][:text|longtext|number|date|logs|file|choice:A|B]"... [--secret ENV_NAME[:Label]]...
   tell-user say|update|deliver|ask --json '{"text":…,"blocks":[…]}' | --json -   (same arguments as the MCP tools)
   mcp                          (MCP server on stdio: message_user, ask_user; lolad starts it for you)
