@@ -13,3 +13,7 @@
 .set-group .set-row.is-link:hover { background: rgba(255, 255, 255, 0.04); }
 .set-ico { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: rgba(255, 255, 255, 0.05); color: var(--ink-2); flex: none; }
 .set-ico .i { width: 20px; height: 20px; }
+.set-state { font-weight: 500; color: var(--aqua); }
+.set-state.is-off { color: var(--warn-text); }
+.set-group .set-row form { margin: 0; }
+.set-group .set-row .mono { overflow-wrap: anywhere; }

@@ -341,3 +341,22 @@ func (w *welcome) lastMission(t *testing.T, agent string) string {
 	}
 	return ""
 }
+
+// App-Settings board: Claude's state, "Keep lolad running" and where the
+// assistants live, from setup.
+func TestAppSettingsFromSetup(t *testing.T) {
+	w := newWelcome(t, false)
+	w.ready()
+	_, body, _ := w.get("/settings")
+	for _, want := range []string{"Claude <span class=\"set-state\">· Connected</span>", "Keep lolad running", `action="/settings/service"`, "Where assistants live"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("settings lack %q", want)
+		}
+	}
+	if code, _, h := w.post("/settings/service", nil); code != 303 || h.Get("Location") != "/settings" {
+		t.Fatalf("service: %d %v", code, h)
+	}
+	if _, body, _ = w.get("/settings"); strings.Contains(body, `action="/settings/service"`) || !strings.Contains(body, "<i></i>On</span>") {
+		t.Error("keep running should now be on")
+	}
+}

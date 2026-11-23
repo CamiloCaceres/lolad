@@ -147,7 +147,7 @@ func New(svc core.Service, opts Options) http.Handler {
 	mux.HandleFunc("POST /adopt", s.adopt)
 
 	// Email provisioning routes (optional mailprov.Service).
-	mux.HandleFunc("GET /settings", s.appSettings)
+	s.appSettingsRoutes(mux)
 	mux.HandleFunc("GET /email", s.emailPage)
 	mux.HandleFunc("POST /email/provider", s.emailProviderSave)
 	mux.HandleFunc("POST /email/{name}/{op}", s.emailAction)

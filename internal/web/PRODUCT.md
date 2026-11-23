@@ -56,9 +56,9 @@ a status chip.
 - Identity hues: Ion #6C9BFF, Lilac #A98BFF, Plasma #FF6BD6, Aqua #3DE8D0,
   Volt #C4F25A, Frost #DCE6FF. Your turn #FFB547. Failure #FF5C7A. Action
   #7AA2FF.
-- Logo: an orb with a silk band of light and the amber "your turn" moon
-  (`static/logo.svg`; the desktop icons are drawn from the same geometry in
-  `desktop/assets/icons/gen.go`).
+- Logo: a periwinkle ring with a dot (Main board), the "your turn" ring at
+  rest (`static/logo.svg`, also the favicon and the site's logo; the desktop
+  icons in `desktop/assets/icons/gen.go` are to be redrawn from it).
 
 ## Accessibility & Inclusion
 WCAG 2.2 AA contrast. State is never conveyed by colour or motion alone: always
