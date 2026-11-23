@@ -102,7 +102,7 @@ func TestPages(t *testing.T) {
 		{"/inbox/lola", "Ship pricing today?"},
 		{"/inbox/scout", "No messages with Scout yet"},
 		{"/agents", "Ledger"},
-		{"/agents/lola", "Live terminal"},
+		{"/agents/lola", "See what Lola sees"},
 		{"/agents/quill", "restart in"},
 		{"/org", "Who can message whom"},
 		{"/new", "A new assistant"},

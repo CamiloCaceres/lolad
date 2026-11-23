@@ -1,19 +1,12 @@
 {{/* Agents surface: an operating roster. State and current work lead; team headings
 keep a growing staff legible. Recovery actions always name their consequence. */}}
-{{define "controls"}}{{$a := .A}}{{$c := eq .From "fleet"}}
-<div class="agent-controls" role="group" aria-label="Controls for {{$a.Display}}" hx-target="{{if $c}}#fleet{{else}}#agent-head{{end}}" hx-swap="outerHTML" hx-include="{{if $c}}#fleet-filters{{else}}this{{end}}" hx-disabled-elt="find button">
- {{if or (not (running $a.State)) (eq $a.State "crashed")}}
- <form method="post" action="/agents/{{$a.Name}}/start" hx-post="/agents/{{$a.Name}}/start"><input type="hidden" name="from" value="{{.From}}"><button class="btn btn-sm" title="Resume the last conversation; clear crash backoff">{{template "icon" "start"}}<span>{{if eq $a.State "crashed"}}Retry now{{else}}Start{{end}}</span></button></form>
- {{end}}
- <details class="agent-action-menu"><summary class="btn btn-sm">Actions {{template "icon" "down"}}</summary><div class="agent-action-options">
- {{if running $a.State}}
- <form method="post" action="/agents/{{$a.Name}}/restart" hx-post="/agents/{{$a.Name}}/restart"><input type="hidden" name="from" value="{{.From}}"><button><strong>Restart</strong><span>A quick restart. It keeps its conversation and picks up changed settings.</span></button></form>
- <form method="post" action="/agents/{{$a.Name}}/interrupt" hx-post="/agents/{{$a.Name}}/interrupt"><input type="hidden" name="from" value="{{.From}}"><button{{if not (or (eq $a.State "busy") (eq $a.State "waiting"))}} disabled{{end}}><strong>Stop what it’s doing</strong><span>Interrupts the current step. It stays awake.</span></button></form>
- <form method="post" action="/agents/{{$a.Name}}/stop" hx-post="/agents/{{$a.Name}}/stop" hx-confirm="Put {{$a.Display}} to sleep? Current work is interrupted.{{if $a.Runtime.WakeOnMessageEnabled}} A new message wakes it up again.{{else}} It stays asleep until you press Start.{{end}}"><input type="hidden" name="from" value="{{.From}}"><button><strong>Put to sleep</strong><span>End current work. {{if $a.Runtime.WakeOnMessageEnabled}}New mail can wake it again.{{else}}Stays asleep until you press Start.{{end}}</span></button></form>
- {{end}}
- <form method="post" action="/agents/{{$a.Name}}/fresh" hx-post="/agents/{{$a.Name}}/fresh" hx-confirm="Start {{$a.Display}} fresh? Current work ends and it begins a new conversation. Its memory and instructions are kept."><input type="hidden" name="from" value="{{.From}}"><button><strong>Start fresh</strong><span>A new conversation. It keeps its memory and instructions.</span></button></form>
- <a href="/inbox/{{$a.Name}}">Open conversation {{template "icon" "message"}}</a>
- <a href="/agents/{{$a.Name}}/settings">Settings {{template "icon" "next"}}</a>
+{{/* controls: the assistant page's quieter actions, under More. Talk, Put to
+sleep, Restart and Settings are buttons beside it (agent-head). */}}
+{{define "controls"}}{{$a := .A}}
+<div class="agent-controls" role="group" aria-label="More for {{$a.Display}}" hx-target="#agent-head" hx-swap="outerHTML" hx-include="this" hx-disabled-elt="find button">
+ <details class="agent-action-menu"><summary class="btn btn-ghost">More {{template "icon" "down"}}</summary><div class="agent-action-options">
+ {{if running $a.State}}<form method="post" action="/agents/{{$a.Name}}/interrupt" hx-post="/agents/{{$a.Name}}/interrupt"><input type="hidden" name="from" value="detail"><button{{if not (or (eq $a.State "busy") (eq $a.State "waiting"))}} disabled{{end}}><strong>Stop what it’s doing</strong><span>Interrupts the current step. It stays awake.</span></button></form>{{end}}
+ <form method="post" action="/agents/{{$a.Name}}/fresh" hx-post="/agents/{{$a.Name}}/fresh" hx-confirm="Start {{$a.Display}} fresh? Current work ends and it begins a new conversation. Its memory and instructions are kept."><input type="hidden" name="from" value="detail"><button><strong>Start fresh</strong><span>A new conversation. It keeps its memory and instructions.</span></button></form>
  </div></details>
 </div>{{end}}
 
@@ -28,7 +21,10 @@ keep a growing staff legible. Recovery actions always name their consequence. */
   <div class="as-status">{{template "state" .AgentStatus}}{{if and (eq .State "busy") (not .LastActivity.IsZero)}}<span class="muted">· <time datetime="{{stamp .LastActivity}}" title="{{long .LastActivity}}" data-ago>{{ago .LastActivity}}</time></span>{{end}}</div>
   <p class="as-now">{{template "state-detail" .AgentStatus}}</p>
   <p class="as-meta">{{if .Unread}}<a href="/agents/{{.Name}}#h-activity">{{plural .Unread "message" "messages"}} not read yet</a>{{end}}{{if not .NextTrigger.IsZero}}<span>Next check-in <time datetime="{{stamp .NextTrigger}}" title="{{long .NextTrigger}}">{{when .NextTrigger}}</time></span>{{end}}{{if .Restarts}}<span>Crashed {{.Restarts}}× in 24h</span>{{end}}{{if .PendingRestart}}<a class="roster-pending" href="/agents/{{.Name}}">Restart to apply changes{{with .PendingReason}} · {{.}}{{end}}</a>{{end}}</p>
-  <div class="as-actions">{{if eq .State "waiting"}}<a class="btn btn-sm btn-you" href="/inbox/{{.Name}}">Answer {{.Display}}</a>{{else if eq .State "failed"}}<a class="btn btn-sm" href="/agents/{{.Name}}">Fix it</a>{{else}}<a class="btn btn-sm" href="/inbox/{{.Name}}" aria-label="Write to {{.Display}}">{{template "icon" "message"}}<span>Write</span></a>{{end}}{{template "controls" (dict "A" .AgentStatus "From" "fleet")}}</div>
+  {{/* The whole card opens the assistant (Assistants board); a button only when there is one obvious next step. */}}
+  {{if eq .State "waiting"}}<div class="as-actions"><a class="btn btn-sm btn-you" href="/inbox/{{.Name}}">Answer {{.Display}}</a></div>
+  {{else if eq .State "failed"}}<div class="as-actions"><a class="btn btn-sm" href="/agents/{{.Name}}">Fix it</a></div>
+  {{else if and (eq .State "stopped") (not .Runtime.WakeOnMessageEnabled)}}<div class="as-actions" hx-target="#fleet" hx-swap="outerHTML" hx-include="#fleet-filters"><form method="post" action="/agents/{{.Name}}/start" hx-post="/agents/{{.Name}}/start" hx-disabled-elt="find button"><input type="hidden" name="from" value="fleet"><button class="btn btn-sm">{{template "icon" "start"}}<span>Start</span></button></form></div>{{end}}
  </li>{{end}}</ul></section>
  {{else}}<div class="roster-empty"><h2>No matching assistants</h2><p>Try another name or team, or show everyone.</p></div>{{end}}
  {{end}}
@@ -37,9 +33,13 @@ keep a growing staff legible. Recovery actions always name their consequence. */
 
 {{define "agent-head"}}<header class="agent-head" id="agent-head" hx-get="/agents/{{.A.Name}}/part/head" hx-trigger="lolad:a-{{.A.Name}} from:body delay:300ms, lolad:mail from:body delay:500ms" hx-swap="outerHTML">
  <div class="agent-title">{{template "avatar" (dict "Display" .A.Display "State" .A.State "Size" "xl")}}<div class="agent-id"><h1>{{.A.Display}}</h1><p class="agent-role">{{.A.Role}}{{with .TeamName}} · {{.}}{{end}}</p><div class="agent-current">{{template "state" .A}}<p>{{template "state-detail" .A}}</p></div></div></div>
- <div class="agent-actions"><a class="btn btn-primary" href="/inbox/{{.A.Name}}">{{template "icon" "message"}}<span>Talk to {{.A.Display}}</span></a><a class="btn" href="/agents/{{.A.Name}}/settings">{{template "icon" "settings"}}<span>Settings</span></a>{{template "controls" (dict "A" .A "From" "detail")}}</div>
+ <div class="agent-actions" hx-target="#agent-head" hx-swap="outerHTML" hx-disabled-elt="find button"><a class="btn btn-primary" href="/inbox/{{.A.Name}}">{{template "icon" "message"}}<span>Talk to {{.A.Display}}</span></a>
+  {{if running .A.State}}<form method="post" action="/agents/{{.A.Name}}/stop" hx-post="/agents/{{.A.Name}}/stop" hx-confirm="Put {{.A.Display}} to sleep? Current work is interrupted.{{if .A.Runtime.WakeOnMessageEnabled}} A new message wakes it up again.{{else}} It stays asleep until you press Start.{{end}}"><input type="hidden" name="from" value="detail"><button class="btn">{{template "icon" "stop"}}<span>Put to sleep</span></button></form>
+  <form method="post" action="/agents/{{.A.Name}}/restart" hx-post="/agents/{{.A.Name}}/restart"><input type="hidden" name="from" value="detail"><button class="btn" title="A quick restart. It keeps its conversation and picks up changed settings.">{{template "icon" "restart"}}<span>Restart</span></button></form>
+  {{else if ne .A.State "failed"}}<form method="post" action="/agents/{{.A.Name}}/start" hx-post="/agents/{{.A.Name}}/start"><input type="hidden" name="from" value="detail"><button class="btn">{{template "icon" "start"}}<span>Start</span></button></form>{{end}}
+  <a class="btn btn-ghost" href="/agents/{{.A.Name}}/settings">{{template "icon" "settings"}}<span>Settings</span></a>{{template "controls" (dict "A" .A "From" "detail")}}</div>
  {{if eq .A.State "failed"}}{{template "agent-fix" .A}}{{else if .A.Problem}}{{template "agent-problem" .A}}{{end}}
- <dl class="agent-vitals"><div><dt>Last heard from</dt><dd>{{if .A.LastActivity.IsZero}}Not received{{else}}<time datetime="{{stamp .A.LastActivity}}" title="{{long .A.LastActivity}}" data-ago>{{ago .A.LastActivity}}</time>{{end}}</dd></div><div><dt>Awake for</dt><dd>{{if and (running .A.State) (not .A.StartedAt.IsZero)}}{{since .A.StartedAt}}{{else}}Asleep{{end}}</dd></div><div><dt>Crashes today</dt><dd>{{.A.Restarts}}</dd></div><div><dt>Messages it hasn't read</dt><dd>{{.A.Unread}}</dd></div><div><dt>Next check-in</dt><dd>{{if not .NextTrigger.IsZero}}<time datetime="{{stamp .NextTrigger}}" title="{{long .NextTrigger}}">{{when .NextTrigger}}</time>{{else}}None{{end}}</dd></div></dl>
+ <dl class="agent-vitals" hidden><div><dt>Last heard from</dt><dd>{{if .A.LastActivity.IsZero}}Not received{{else}}<time datetime="{{stamp .A.LastActivity}}" title="{{long .A.LastActivity}}" data-ago>{{ago .A.LastActivity}}</time>{{end}}</dd></div><div><dt>Awake for</dt><dd>{{if and (running .A.State) (not .A.StartedAt.IsZero)}}{{since .A.StartedAt}}{{else}}Asleep{{end}}</dd></div><div><dt>Crashes today</dt><dd>{{.A.Restarts}}</dd></div><div><dt>Messages it hasn't read</dt><dd>{{.A.Unread}}</dd></div><div><dt>Next check-in</dt><dd>{{if not .NextTrigger.IsZero}}<time datetime="{{stamp .NextTrigger}}" title="{{long .NextTrigger}}">{{when .NextTrigger}}</time>{{else}}None{{end}}</dd></div></dl>
  {{template "pending" (dict "A" .A "From" "detail")}}
 </header>{{end}}
 
@@ -59,8 +59,9 @@ keep a growing staff legible. Recovery actions always name their consequence. */
 {{/* Guided recovery for an assistant the supervisor gave up on. */}}
 {{define "agent-fix"}}<section class="agent-fix" aria-labelledby="fix-h">
  <h2 id="fix-h">{{.Display}} can't start</h2>
- <p>lolad tried {{if .Restarts}}{{.Restarts}} times {{end}}and stopped, so it doesn't keep failing in a loop. Nothing is lost: its memory and files are safe.</p>
- {{with .LastError}}<p class="agent-fix-why"><span class="eyebrow">What it said</span><code>{{.}}</code></p>{{end}}
+ <p>Nothing is lost: {{.Display}}’s memory and messages are safe.</p>
+ <p class="agent-fix-what"><strong>What happened.</strong> lolad tried to start it {{if .Restarts}}{{plural .Restarts "time" "times"}} {{end}}and then stopped trying, so it wouldn’t keep failing in the background.{{if .Unread}} {{plural .Unread "message" "messages"}} to {{.Display}} are waiting. It reads them once it’s back.{{end}}</p>
+ {{with .LastError}}<details class="agent-fix-why"><summary>What {{$.Display}}’s screen said <span class="muted">· Advanced</span></summary><code>{{.}}</code></details>{{end}}
  <ol class="agent-fix-steps" role="list">
   <li><span class="num">1</span><div><strong>Try again</strong><p>Often enough after a hiccup, like no internet or Claude being busy.</p></div><form method="post" action="/agents/{{.Name}}/start" hx-post="/agents/{{.Name}}/start" hx-target="#agent-head" hx-swap="outerHTML" hx-disabled-elt="find button"><input type="hidden" name="from" value="detail"><button class="btn btn-primary">{{template "icon" "start"}}<span>Try again</span></button></form></li>
   <li><span class="num">2</span><div><strong>Look at its screen</strong><p>See exactly where it stops, under Advanced.</p></div><a class="btn" href="#term-panel" data-open-term>{{template "icon" "terminal"}}<span>Open its screen</span></a></li>
@@ -69,14 +70,23 @@ keep a growing staff legible. Recovery actions always name their consequence. */
 </section>{{end}}
 
 {{/* Plain facts: how this assistant wakes and how to reach it. */}}
+{{/* At a glance (Assistant board): how it is set up, in plain words. */}}
 {{define "agent-about"}}{{$rt := .A.Runtime}}<section class="panel agent-about" aria-labelledby="h-about">
- <header class="panel-head"><h2 id="h-about">How it works</h2><a class="panel-link" href="/agents/{{.A.Name}}/settings">{{template "icon" "edit"}}<span>Change</span></a></header>
- <ul class="about-list" role="list">
-  <li>{{template "icon" "mail"}}<span>{{if $rt.WakeOnMessageEnabled}}Wakes up when a message arrives.{{else}}Sleeps until you press Start.{{end}}</span></li>
-  <li>{{template "icon" "pulse"}}<span>{{if not .NextTrigger.IsZero}}Next check-in <time datetime="{{stamp .NextTrigger}}" title="{{long .NextTrigger}}">{{when .NextTrigger}}</time>.{{else if $rt.Triggers}}Checks in when mail or a webhook arrives.{{else}}No scheduled check-ins.{{end}}</span></li>
-  <li>{{template "icon" "shield"}}<span>{{if eq $rt.Permissions "default"}}Asks you before risky steps.{{else}}Works on its own, without asking first.{{end}}</span></li>
-  <li>{{template "icon" "mail"}}<span>{{if .EmailUnavailable}}Couldn't load its email.{{else}}{{range $i, $e := .Emails}}{{if $i}}, {{end}}<span class="agent-email">{{$e}}</span>{{else}}No email address. <a href="/agents/{{.A.Name}}/settings/email">Give it one</a>{{end}}{{end}}</span></li>
- </ul>
+ <h2 id="h-about" class="eyebrow">At a glance</h2>
+ <dl class="glance">
+  <div><dt>Runs on</dt><dd>{{harness $rt}}</dd></div>
+  <div><dt>Before acting</dt><dd>{{if eq $rt.Permissions "default"}}Asks you first{{else}}Works on its own{{end}}</dd></div>
+  <div><dt>Wakes on a message</dt><dd>{{if $rt.WakeOnMessageEnabled}}On{{else}}Off{{end}}</dd></div>
+  <div><dt>Fresh start</dt><dd>{{with $rt.Rotate}}Every day at {{.}}{{else}}Never{{end}}</dd></div>
+  <div><dt>Check-ins</dt><dd>{{if not .NextTrigger.IsZero}}Next check-in <time datetime="{{stamp .NextTrigger}}" title="{{long .NextTrigger}}">{{when .NextTrigger}}</time>{{else if $rt.Triggers}}When mail or a webhook arrives{{else}}None{{end}}</dd></div>
+  <div><dt>Email</dt><dd>{{if .EmailUnavailable}}Couldn’t load it{{else}}{{range $i, $e := .Emails}}{{if $i}}, {{end}}<span class="agent-email">{{$e}}</span>{{else}}None. <a href="/agents/{{.A.Name}}/settings/email">Give it one</a>{{end}}{{end}}</dd></div>
+ </dl>
+ <a class="btn" href="/agents/{{.A.Name}}/settings">{{template "icon" "edit"}}<span>Change settings</span></a>
+</section>
+<section class="panel agent-health{{if or (eq .A.State "failed") (eq .A.State "crashed") .A.Restarts}} is-fault{{end}}" aria-label="Health">
+ {{if eq .A.State "failed"}}<p><strong>Can’t start</strong></p><p class="muted">lolad stopped trying, so it wouldn’t keep failing in the background. See above.</p>
+ {{else if .A.Restarts}}<p><strong>Crashed {{.A.Restarts}}× today</strong></p><p class="muted">lolad restarted it each time.{{if .A.Unread}} {{plural .A.Unread "message" "messages"}} waiting for it.{{end}}</p>
+ {{else}}<p><strong>Healthy</strong></p><p class="muted">No crashes today.{{if and (running .A.State) (not .A.StartedAt.IsZero)}} Awake for {{since .A.StartedAt}}.{{else}} Asleep now.{{end}}{{if not .A.LastActivity.IsZero}} Last heard from <time datetime="{{stamp .A.LastActivity}}" data-ago>{{ago .A.LastActivity}}</time> ago.{{end}}</p>{{end}}
 </section>{{end}}
 
 {{define "agent-events"}}<div id="agent-events" hx-get="/agents/{{.A.Name}}/part/events" hx-trigger="lolad:a-{{.A.Name}} from:body delay:500ms, lolad:mail from:body delay:700ms" hx-swap="outerHTML">
@@ -119,8 +129,8 @@ keep a growing staff legible. Recovery actions always name their consequence. */
 {{define "terminal"}}<details class="term-panel" id="term-panel" data-terminal data-agent="{{.A.Name}}" data-running="{{running .A.State}}"
   data-xterm-js="{{asset "vendor/xterm.js"}}" data-xterm-css="{{asset "vendor/xterm.css"}}" data-fit-js="{{asset "vendor/addon-fit.js"}}">
   <summary>
-    {{template "icon" "terminal"}}<span class="term-title">Live terminal</span>
-    <span class="term-sub">Watch the running session · read-only by default</span>
+    {{template "icon" "terminal"}}<span class="term-title">See what {{.A.Display}} sees</span>
+    <span class="term-sub">Its live screen · read-only by default</span>
     {{template "icon" "down"}}
   </summary>
   <div class="term-bar">

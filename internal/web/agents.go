@@ -244,17 +244,25 @@ func (s *server) agentData(ctx context.Context, name string) (agentView, error) 
 	}
 	// Mail becomes a first-class timeline entry in either direction. Suppress its
 	// corresponding lifecycle event to avoid showing the same delivery twice.
+	// Plain words (Assistant board): "Wrote to you", "Got a message from Lola".
+	names := map[string]string{v.Me: "you"}
+	if list, err := s.list(ctx); err == nil {
+		for _, ag := range list {
+			names[ag.Name] = cmp.Or(ag.Display, ag.Name)
+		}
+	}
+	who := func(n string) string { return cmp.Or(names[n], n) }
 	mailDetails := map[string]bool{}
 	for _, m := range v.Mail {
 		detail := fmt.Sprintf("%s → %s: %s", m.FromName, m.ToName, cmp.Or(subject(m), excerpt(m.Body, 80)))
 		mailDetails[detail] = true
 		mailDetails[fmt.Sprintf("%s → %s: %s", m.FromName, m.ToName, m.Subject)] = true
-		title := "Mail received from " + m.FromName
+		title := "Got a message from " + who(m.FromName)
 		if m.Status == core.MailHeld {
-			title = "Message awaiting approval from " + m.FromName
+			title = "Message from " + who(m.FromName) + ", waiting for your OK"
 		}
 		if m.FromName == name {
-			title = "Mail sent to " + m.ToName
+			title = "Wrote to " + who(m.ToName)
 		}
 		v.Timeline = append(v.Timeline, activityItem{m.CreatedAt, "mail", title, cmp.Or(subject(m), excerpt(m.Body, 120))})
 	}
@@ -262,11 +270,17 @@ func (s *server) agentData(ctx context.Context, name string) (agentView, error) 
 		if e.Kind == "mail" && mailDetails[e.Detail] {
 			continue
 		}
-		title := map[string]string{"state": "Activity changed", "started": "Woke up", "crashed": "Stopped unexpectedly", "exited": "Stopped", "rotated": "Fresh conversation", "trigger": "Automation ran", "notified": "Told about new mail", "restarted": "Restarted", "error": "Error", "policy": "Team rules"}[e.Kind]
+		title := map[string]string{"state": "Now", "started": "Woke up", "crashed": "Stopped unexpectedly", "exited": "Fell asleep", "rotated": "Fresh start for the new day. Memory kept, conversation cleared", "trigger": "Automation ran", "notified": "Told about new mail", "restarted": "Restarted", "error": "Something went wrong", "policy": "A message was blocked by the team rules"}[e.Kind]
 		if title == "" {
 			title = e.Kind
 		}
-		v.Timeline = append(v.Timeline, activityItem{e.At, e.Kind, title, e.Detail})
+		detail := e.Detail
+		if e.Kind == "state" {
+			if w := stateWord(core.State(e.Detail)); w != "" {
+				title, detail = "Now "+strings.ToLower(w), ""
+			}
+		}
+		v.Timeline = append(v.Timeline, activityItem{e.At, e.Kind, title, detail})
 	}
 	slices.SortStableFunc(v.Timeline, func(a, b activityItem) int { return b.At.Compare(a.At) })
 	return v, nil

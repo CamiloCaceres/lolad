@@ -3,7 +3,7 @@
   {{template "agent-head" .Data}}
   <div class="agent-grid">
     <section class="panel" aria-labelledby="h-activity">
-      <header class="panel-head"><h2 id="h-activity">Recent activity</h2><span class="panel-note">What {{.Data.A.Display}} has been doing</span></header>
+      <h2 id="h-activity" class="eyebrow">Recent activity</h2>
       {{template "agent-events" .Data}}
     </section>
     <div class="agent-side">
