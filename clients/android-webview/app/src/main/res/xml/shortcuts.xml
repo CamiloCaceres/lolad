@@ -1,0 +1,5 @@
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+ <shortcut android:shortcutId="server" android:enabled="true" android:shortcutShortLabel="@string/change_server">
+  <intent android:action="dev.caceres.lolad.web.SETTINGS" android:targetPackage="dev.caceres.lolad.web" android:targetClass="dev.caceres.lolad.web.MainActivity"/>
+ </shortcut>
+</shortcuts>
