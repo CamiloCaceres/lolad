@@ -18,6 +18,10 @@ type appSettingsView struct {
 	Service   setup.ServiceStatus
 	AgentsDir string
 	Error     string
+
+	Name *struct {
+		Name, Provider, Me string
+	} // this Lolad's name, when the service can rename it
 }
 
 func (s *server) appSettingsRoutes(m *http.ServeMux) {
@@ -27,6 +31,11 @@ func (s *server) appSettingsRoutes(m *http.ServeMux) {
 
 func (s *server) appSettingsData(r *http.Request) appSettingsView {
 	v := appSettingsView{Remote: s.auth != nil, Version: s.version, Setup: s.setup != nil}
+	if rn, ok := s.renamer(); ok {
+		if n, err := rn.LoladName(r.Context()); err == nil {
+			v.Name = &struct{ Name, Provider, Me string }{n.Name, n.Provider, s.svc.Me().Name}
+		}
+	}
 	if s.setup == nil {
 		return v
 	}

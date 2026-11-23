@@ -160,3 +160,4 @@ a.friend-chip:hover { border-color: var(--action); }
 .friend-pairing { align-items: start; }
 .friend-form > .btn { justify-self: start; }
 .friend-reach dd .muted { font-size: var(--t-sm); }
+.rename-offer { margin: 8px 0 0; }

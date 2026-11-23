@@ -28,6 +28,7 @@ type connectionsView struct {
 	Connections []connectionView
 	Invite      *core.Invite
 	Error       string
+	ErrorFix    string // a refusal\'s fix, e.g. "rename_lolad"
 	// Hub (SPEC.md "Hub (v5)"): shown when the service supports it.
 	HubAvailable bool
 	Hub          *core.HubStatus
@@ -146,6 +147,11 @@ func (s *server) connectionInvite(w http.ResponseWriter, r *http.Request) {
 	s.page(w, r, 200, "connections", layout{Title: "Your invitation", Nav: "connections", Data: v})
 }
 func (s *server) connectionError(w http.ResponseWriter, r *http.Request, msg string) {
+	s.connectionErrorFix(w, r, msg, "")
+}
+
+// connectionErrorFix shows a refusal with the action it offers, if any.
+func (s *server) connectionErrorFix(w http.ResponseWriter, r *http.Request, msg, fix string) {
 	v, e := s.connectionData(r)
 	if e != nil {
 		s.fail(w, r, e)
@@ -155,7 +161,7 @@ func (s *server) connectionError(w http.ResponseWriter, r *http.Request, msg str
 		s.fail(w, r, e)
 		return
 	}
-	v.Error = msg
+	v.Error, v.ErrorFix = msg, fix
 	s.page(w, r, 422, "connections", layout{Title: "Sharing", Data: v})
 }
 func (s *server) connectionAccept(w http.ResponseWriter, r *http.Request) {
@@ -172,7 +178,7 @@ func (s *server) connectionAccept(w http.ResponseWriter, r *http.Request) {
 		if errors.As(e, &um) { // a refusal written for people; never contains the code
 			msg = um.UserMessage()
 		}
-		s.connectionError(w, r, msg)
+		s.connectionErrorFix(w, r, msg, fixOf(e))
 		return
 	}
 	s.redirect(w, r, "/connections")

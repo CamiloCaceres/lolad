@@ -4,6 +4,7 @@
   <section class="set-group" aria-labelledby="as-you">
     <h2 id="as-you" class="eyebrow">You</h2>
     <div class="set-row"><div><strong>{{$.Me.Display}}</strong><p class="muted">What your assistants call you</p></div></div>
+    {{with .Name}}{{template "lolad-name-row" .}}{{end}}
   </section>
 
   <section class="set-group" aria-labelledby="as-computer">

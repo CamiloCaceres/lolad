@@ -52,6 +52,7 @@ type Service struct {
 	connections []core.Connection
 	grants      []core.Grant
 	friends     friendState // friend links (friends.go)
+	rename      renameState // test hooks: a pending or failed rename, manual restart
 	stop        chan struct{}
 	once        sync.Once
 }

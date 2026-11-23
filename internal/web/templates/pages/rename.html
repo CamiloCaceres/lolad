@@ -1,0 +1,41 @@
+{{define "content"}}{{with .Data}}{{$v := .}}<div class="page page-narrow rename">
+  <a class="crumb-back" href="/settings">{{template "icon" "back"}}Settings</a>
+  {{if .Waiting}}
+  <section class="rename-wait"{{if not .Manual}} hx-get="/settings/name/wait" hx-trigger="every 2s" hx-swap="none" hx-push-url="false"{{end}} role="status" aria-live="polite">
+    {{if not .Manual}}<span class="upd-ring rename-ring" aria-hidden="true"></span>{{end}}
+    {{if .Manual}}<h1 class="page-title">Restart lolad to finish.</h1>
+    <p class="lede">Your Lolad becomes <strong class="mono">{{.To}}</strong> the next time lolad starts. Quit it and open it again.</p>
+    {{else}}<h1 class="page-title">Renaming…</h1>
+    <p class="lede">lolad is restarting to become <strong class="mono">{{.To}}</strong>. This page comes back by itself in a few seconds.</p>{{end}}
+  </section>
+  {{else if .Done}}
+  {{with .Last}}{{if .Error}}<section class="rename-result is-no"><h1 class="page-title">Rename didn’t finish</h1><p class="lede">{{.Error}}. Nothing changed: your Lolad is still <strong class="mono">{{$v.Name}}</strong>.</p></section>
+  {{else}}<section class="rename-result"><h1 class="page-title">Renamed to <span class="mono">{{$v.Name}}</span></h1><p class="lede">Addresses now look like <span class="mono">{{$v.Me}}@{{$v.Provider}}</span>. Send your friends new invite links from <a href="/connections">Sharing</a>.</p></section>{{end}}
+  {{else}}<section class="rename-result"><h1 class="page-title">Renamed to <span class="mono">{{.Name}}</span></h1><p class="lede">Addresses now look like <span class="mono">{{.Me}}@{{.Provider}}</span>. Send your friends new invite links from <a href="/connections">Sharing</a>.</p></section>{{end}}
+  <div class="form-actions"><a class="btn btn-primary" href="/settings">Back to Settings</a></div>
+  {{else}}
+  <header class="page-head"><div><h1 class="page-title">Rename this Lolad</h1>
+    <p class="page-sub">It’s called <strong class="mono">{{.Name}}</strong> now, so addresses look like <span class="mono">{{.Me}}@{{.Provider}}</span>. Friends see this name.</p></div></header>
+  {{with .Last}}{{if .Error}}<p class="flash is-warn" role="status">{{template "icon" "alert"}}<span>The last rename, to {{.To}}, didn’t finish: {{.Error}}. Nothing changed.</span></p>{{end}}{{end}}
+  <form class="form rename-form" method="post" action="/settings/name" hx-disabled-elt="find button" autocomplete="off">
+    <div class="field"><label class="label" for="rename-name">New name</label>
+      <input id="rename-name" name="name" value="{{.Typed}}" required maxlength="64" spellcheck="false" autocapitalize="none" placeholder="For example, {{.Me}}-laptop" hx-get="/settings/name/check" hx-trigger="input changed delay:300ms" hx-target="#rename-check" hx-swap="innerHTML" hx-push-url="false"{{if .Error}} aria-invalid="true"{{end}} aria-describedby="rename-check">
+      <div id="rename-check" aria-live="polite">{{template "rename-check" .Check}}</div>
+    </div>
+    {{with .Error}}{{if not $v.Check}}<p class="flash is-error" role="alert">{{template "icon" "x"}}<span>{{.}}</span></p>{{end}}{{end}}
+    {{if or .Connections .OpenLinks .Outbox}}<div class="rename-affects">
+      <h2 class="eyebrow">What renaming changes</h2>
+      <ul>
+        {{with .Connections}}<li>{{template "icon" "link"}}<span>You’re connected with {{range $i, $c := .}}{{if $i}}{{if eq (add $i 1) (len $v.Connections)}} and {{else}}, {{end}}{{end}}{{or $c.Display $c.Provider}}{{end}}. Renaming ends {{if eq (len .) 1}}this{{else}}these{{end}}, and you’ll send {{if eq (len .) 1}}them a new link{{else}}them new links{{end}}.</span></li>{{end}}
+        {{with .OpenLinks}}<li>{{template "icon" "x"}}<span>{{if eq . 1}}1 invite link you made will stop working.{{else}}{{.}} invite links you made will stop working.{{end}}</span></li>{{end}}
+        {{with .Outbox}}<li class="is-warn">{{template "icon" "alert"}}<span>{{if eq . 1}}1 message to friends hasn’t gone out yet and won’t be sent.{{else}}{{.}} messages to friends haven’t gone out yet and won’t be sent.{{end}}</span></li>{{end}}
+      </ul>
+      <p class="muted">Your assistants, their memory and your messages stay as they are. lolad restarts for a few seconds.</p>
+    </div>{{else}}<p class="muted">Your assistants, their memory and your messages stay as they are. lolad restarts for a few seconds.</p>{{end}}
+    <div class="form-actions">
+      {{if .Outbox}}<input type="hidden" name="anyway" value="1"><button class="btn btn-primary" type="submit">Rename anyway</button>{{else}}<button class="btn btn-primary" type="submit">Rename</button>{{end}}
+      <a class="btn btn-ghost" href="/settings">Cancel</a>
+    </div>
+  </form>
+  {{end}}
+</div>{{end}}{{end}}

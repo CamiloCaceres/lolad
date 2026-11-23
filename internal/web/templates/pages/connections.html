@@ -1,6 +1,6 @@
 {{define "content"}}<div class="page connections-page" hx-history="false">
 <header class="page-head"><div><h1 class="page-title">Sharing</h1><p class="page-sub">{{if .Data.Friends}}Connect with a friend’s Lolad, so you can message each other and the assistants you each choose.{{else}}Let a friend’s assistants work with yours. You choose which assistants they can reach, and approve every new person.{{end}}</p></div></header>
-{{with .Data.Error}}<p class="flash is-error" role="alert">{{.}}</p>{{end}}
+{{with .Data.Error}}<p class="flash is-error" role="alert">{{.}}</p>{{end}}{{if eq .Data.ErrorFix "rename_lolad"}}<p class="rename-offer"><a class="btn" href="/settings/name">{{template "icon" "edit"}}<span>Rename this lolad</span></a></p>{{end}}
 {{with .Data.Connected}}<p class="flash is-ok friend-flash" role="status">{{template "icon" "check"}}<span>Connected with {{.}}. You can message {{.}} now.</span></p>{{end}}
 {{if .Data.Friends}}{{template "friend-pairing" .Data}}{{else}}{{template "code-pairing" .Data}}{{end}}
 
@@ -57,9 +57,9 @@
 <div class="friend-waiting" role="status"><span class="orb {{hue .Display}} avatar-lg st-waiting" aria-hidden="true"><span class="c"><i></i><i></i><i></i><i></i></span></span><div><p><strong>Waiting for {{.Display}}’s Lolad to come online.</strong></p><p>{{.Display}}’s computer seems to be off or asleep. This finishes by itself as soon as it’s back. You can close this page.</p></div></div>{{end}}
 {{else if .Friend.Preview}}{{with .Friend.Preview}}{{$who := or .FromDisplay "Your friend"}}
 <h2 id="accept-title">{{$who}} invited you</h2>
-{{with $.Friend.AcceptError}}<p class="flash is-error" role="alert">{{.}}</p>{{end}}
+{{with $.Friend.AcceptError}}<p class="flash is-error" role="alert">{{.}}</p>{{end}}{{if eq $.Friend.AcceptFix "rename_lolad"}}<p class="rename-offer"><a class="btn" href="/settings/name">{{template "icon" "edit"}}<span>Rename this lolad</span></a></p>{{end}}
 {{if .Expired}}<p class="flash is-error" role="alert">This invite has expired. Ask {{$who}} for a new link.</p><a class="btn" href="/connections">Paste a different link</a>
-{{else if .SameName}}<p class="flash is-error" role="alert">Your Lolad and {{$who}}’s have the same name, so they can’t connect yet. Rename yours under Settings, then paste the link again.</p><a class="btn" href="/connections">Back</a>
+{{else if .SameName}}<p class="flash is-error" role="alert">Your Lolad and {{$who}}’s have the same name, so they can’t connect yet. Rename yours, then paste the link again.</p><p class="rename-offer"><a class="btn" href="/settings/name">{{template "icon" "edit"}}<span>Rename this lolad</span></a></p><a class="btn" href="/connections">Back</a>
 {{else if .AlreadyConnected}}<p>You’re already connected with {{$who}}. You’ll find {{$who}} under <a href="#connection-list">Your friends</a>.</p><a class="btn" href="/connections">Done</a>
 {{else}}<div class="friend-offer"><p class="label">{{$who}} is sharing</p>{{if .Agents}}<ul class="friend-chips">{{range .Agents}}<li><span class="orb {{hue .Display}} avatar-sm" aria-hidden="true"><span class="c"><i></i><i></i><i></i><i></i></span></span>{{.Display}}</li>{{end}}</ul>{{else}}<p class="muted">No assistants yet. You’ll be able to message {{$who}}.</p>{{end}}</div>
 <form method="post" action="/connections/friends/accept" hx-boost="false" class="friend-form" data-friend-form><input type="hidden" name="token" value="{{$.Friend.PreviewToken}}">
@@ -67,7 +67,7 @@
 <div class="friend-actions"><button class="btn btn-primary" {{if not $.Info.Enabled}}disabled{{end}}>Connect with {{$who}}</button><a class="btn btn-ghost" href="/connections">Cancel</a></div></form>
 {{end}}{{end}}
 {{else}}<h2 id="accept-title">Got an invite?</h2><p>Paste the link a friend sent you.</p>
-{{with .Friend.AcceptError}}<p class="flash is-error" role="alert">{{.}}</p>{{end}}
+{{with .Friend.AcceptError}}<p class="flash is-error" role="alert">{{.}}</p>{{end}}{{if eq .Friend.AcceptFix "rename_lolad"}}<p class="rename-offer"><a class="btn" href="/settings/name">{{template "icon" "edit"}}<span>Rename this lolad</span></a></p>{{end}}
 <form method="post" action="/connections/friends/preview" hx-boost="false" autocomplete="off" class="friend-paste"><label for="friend-link" class="sr-only">Invite link</label><input id="friend-link" name="link" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" required placeholder="https://lolad.caceresdev.com/join#…"><button class="btn" {{if not .Info.Enabled}}disabled{{end}}>Continue</button></form>
 <p class="muted friend-note">An older invite code works here too.</p>{{end}}
 </section>

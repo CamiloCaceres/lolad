@@ -17,3 +17,20 @@
 .set-state.is-off { color: var(--warn-text); }
 .set-group .set-row form { margin: 0; }
 .set-group .set-row .mono { overflow-wrap: anywhere; }
+
+/* Rename this Lolad (rename.go) */
+.rename { display: grid; gap: 20px; max-width: 640px; }
+.crumb-back { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); text-decoration: none; font-size: var(--t-md); }
+.rename-form { gap: 18px; }
+.rename-check { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: var(--t-sm); color: var(--ink-2); }
+.rename-check .i { width: 15px; height: 15px; flex: none; }
+.rename-check.is-ok .i { color: var(--aqua); }
+.rename-check.is-no { color: var(--st-failed-text); }
+.rename-affects { display: grid; gap: 10px; padding: 18px 20px; border-radius: 18px; border: 1px solid var(--line); background: var(--card); }
+.rename-affects ul { display: grid; gap: 10px; }
+.rename-affects li { display: flex; gap: 10px; align-items: flex-start; color: var(--ink); }
+.rename-affects li .i { width: 16px; height: 16px; flex: none; margin-top: 3px; color: var(--ink-2); }
+.rename-affects li.is-warn, .rename-affects li.is-warn .i { color: var(--warn-text); }
+.rename-wait, .rename-result { display: grid; gap: 12px; justify-items: start; padding: 28px 0 8px; }
+.rename-ring { width: 28px; height: 28px; }
+.rename-result.is-no .page-title { color: var(--st-failed-text); }

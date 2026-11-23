@@ -101,6 +101,7 @@ type friendState struct {
 	Preview      *InvitePreview
 	PreviewToken string
 	AcceptError  string
+	AcceptFix    string // a refusal's fix: "rename_lolad" offers Rename this lolad
 	Waiting      *AcceptResult
 }
 
@@ -247,6 +248,7 @@ func (s *server) friendPreview(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.friendRender(w, r, http.StatusUnprocessableEntity, nil, func(v *connectionsView) {
 			v.Friend.AcceptError = userMessage(err, "That link can’t be used. Ask your friend to send it again.")
+			v.Friend.AcceptFix = fixOf(err)
 		})
 		return
 	}
@@ -282,6 +284,7 @@ func (s *server) friendAccept(w http.ResponseWriter, r *http.Request) {
 		pv, perr := f.PreviewFriendInvite(r.Context(), link)
 		s.friendRender(w, r, http.StatusUnprocessableEntity, agents, func(v *connectionsView) {
 			v.Friend.AcceptError = userMessage(err, "Could not connect. Ask your friend for a new link and try again.")
+			v.Friend.AcceptFix = fixOf(err)
 			if perr == nil {
 				v.Friend.Preview, v.Friend.PreviewToken = &pv, tok
 			}

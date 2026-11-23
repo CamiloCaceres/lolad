@@ -1,6 +1,7 @@
 package fake
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 
@@ -38,7 +39,8 @@ func (s *Service) LoladName(context.Context) (core.LoladName, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	t := s.org.Tenant
-	return core.LoladName{Name: t, Provider: t + ".lolad.local", Restart: "auto", Connections: cloneConnections(s.connections), OpenLinks: len(s.friends.invites), Outbox: s.queuedRemote()}, nil
+	return core.LoladName{Name: t, Provider: t + ".lolad.local", Restart: cmp.Or(s.rename.restart, "auto"), Connections: cloneConnections(s.connections), OpenLinks: len(s.friends.invites), Outbox: s.queuedRemote(),
+		Pending: s.rename.pending, Last: s.rename.last}, nil
 }
 
 func (s *Service) CheckLoladName(_ context.Context, in string) (core.NameCheck, error) {
@@ -67,8 +69,34 @@ func (s *Service) RenameLolad(_ context.Context, r core.RenameRequest) (core.Ren
 			s.mail[i].Delivery, s.mail[i].DeliveryError = core.DeliveryFailed, "not sent: this lolad was renamed"
 		}
 	}
+	if s.rename.restart == "manual" { // applied at the next start, which the user does
+		s.rename.pending = &core.RenameStep{From: s.org.Tenant, To: name, At: s.now()}
+		return core.RenameAccepted{Name: name}, nil
+	}
+	s.rename.last = &core.RenameStep{From: s.org.Tenant, To: name, At: s.now()}
 	s.org.Tenant = name
 	s.connections, s.grants = nil, nil
 	s.friends.invites = nil
 	return core.RenameAccepted{Name: name, Restarting: true}, nil
+}
+
+type renameState struct {
+	restart       string // "manual": the user restarts lolad
+	pending, last *core.RenameStep
+}
+
+// SetRenameRestart makes renames wait for a manual restart ("manual") or
+// happen at once ("" or "auto").
+func (s *Service) SetRenameRestart(how string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.rename.restart = how
+}
+
+// FailLastRename records the last rename as rolled back, with why.
+func (s *Service) FailLastRename(to, why string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.rename.pending = nil
+	s.rename.last = &core.RenameStep{From: s.org.Tenant, To: to, At: s.now(), Error: why}
 }

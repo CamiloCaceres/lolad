@@ -5,6 +5,7 @@
 //	go run ./internal/web/cmd/webdev -live      # re-read templates and assets from disk
 //	go run ./internal/web/cmd/webdev -empty     # first-run state
 //	go run ./internal/web/cmd/webdev -welcome-done  # onboarding finished: /welcome shows the last screen
+//	go run ./internal/web/cmd/webdev -rename manual # renaming waits for a manual restart (or: failed)
 package main
 
 import (
@@ -26,11 +27,18 @@ func main() {
 	quiet := flag.Bool("still", false, "don't simulate activity (no state changes or incoming mail)")
 	empty := flag.Bool("empty", false, "start like a fresh install: no agents, no mail")
 	done := flag.Bool("welcome-done", false, "onboarding already finished, so /welcome shows its last screen")
+	rename := flag.String("rename", "", "manual: renaming waits for a restart; failed: the last rename rolled back")
 	flag.Parse()
 
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	svc := fake.New(fake.Options{Simulate: !*quiet, Empty: *empty})
 	defer svc.Close()
+	switch *rename {
+	case "manual":
+		svc.SetRenameRestart("manual")
+	case "failed":
+		svc.FailLastRename("milo-pc", "lolad couldn’t save the new name, so it put the old one back")
+	}
 
 	demo := setup.NewDemo()
 	if *done {

@@ -1,0 +1,5 @@
+{{/* rename-check: the name field's live answer (rename.go). */}}
+{{define "rename-check"}}{{if .}}<p class="rename-check{{if .OK}} is-ok{{else}} is-no{{end}}">{{if .OK}}{{template "icon" "check"}}{{else}}{{template "icon" "alert"}}{{end}}<span>{{.Message}}</span></p>{{end}}{{end}}
+
+{{/* lolad-name-row: Settings' "Your Lolad's name". */}}
+{{define "lolad-name-row"}}<div class="set-row"><span class="set-ico">{{template "icon" "home"}}</span><div><strong>Your Lolad’s name · <span class="mono">{{.Name}}</span></strong><p class="muted">Addresses look like <span class="mono">{{.Me}}@{{.Provider}}</span>. Friends see this name.</p></div><a class="btn btn-sm" href="/settings/name">Rename…</a></div>{{end}}
