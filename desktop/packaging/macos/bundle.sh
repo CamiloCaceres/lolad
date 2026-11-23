@@ -53,6 +53,16 @@ done
 
 VERSION=${VERSION:-$(git -C "$root" describe --tags --always --dirty 2>/dev/null || echo 0.0.0-dev)}
 VERSION=${VERSION#v}
+# The updater's Ed25519 public key (not a secret): UPDATE_PUBLIC_KEY, else the
+# committed packaging/update-public-key.txt. A release without it would ship the
+# test key, and the app would then refuse to update.
+if [ -z "${UPDATE_PUBLIC_KEY:-}" ] && [ -f "$here/../update-public-key.txt" ]; then
+  UPDATE_PUBLIC_KEY=$(tr -d ' \r\n' <"$here/../update-public-key.txt")
+fi
+if [ "${RELEASE:-0}" = 1 ] && [ -z "${UPDATE_PUBLIC_KEY:-}" ]; then
+  echo "bundle.sh: RELEASE=1 needs the update public key (desktop/packaging/update-public-key.txt or UPDATE_PUBLIC_KEY)" >&2
+  exit 1
+fi
 # Stamp the updater: version, and the Ed25519 public key when provided (UPDATE_PUBLIC_KEY, base64).
 APP_LDFLAGS="-X main.updateVersion=$VERSION"
 [ -n "${UPDATE_PUBLIC_KEY:-}" ] && APP_LDFLAGS="$APP_LDFLAGS -X github.com/CamiloCaceres/lolad/desktop/updater.PublicKeyB64=$UPDATE_PUBLIC_KEY"

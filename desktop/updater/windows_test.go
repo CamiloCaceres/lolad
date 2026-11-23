@@ -51,7 +51,16 @@ func TestApplyWindows(t *testing.T) {
 	refuse("different signer", map[string]string{"Lolad.exe": "Valid|CN=Caceres", "Setup.exe": "Valid|CN=Mallory"}, false, ErrSignatureInvalid)
 	refuse("invalid hash", map[string]string{"Lolad.exe": "Valid|CN=Caceres", "Setup.exe": "HashMismatch|CN=Caceres"}, false, ErrSignatureInvalid)
 	refuse("unsigned installer", map[string]string{"Lolad.exe": "Valid|CN=Caceres"}, true, ErrSignatureInvalid)
-	refuse("running unsigned", map[string]string{"Setup.exe": "Valid|CN=Caceres"}, false, ErrRunningUnsigned)
+	refuse("running unsigned, installer signature broken", map[string]string{"Setup.exe": "HashMismatch|CN=Caceres"}, false, ErrSignatureInvalid)
+
+	// unsigned beta: an unsigned installer, or the first signed one, is accepted
+	for _, m := range []map[string]string{nil, {"Setup.exe": "Valid|CN=Caceres"}} {
+		quit, gotPath = false, ""
+		u := winUpdater(t, psFake(m), false, &quit)
+		if err := u.applyWin(`C:\t\Setup.exe`, `C:\app\Lolad.exe`, start); err != nil || !quit || gotPath == "" {
+			t.Fatalf("unsigned beta %v: %v", m, err)
+		}
+	}
 
 	// dev: running exe unsigned + AllowUnsigned skips the check
 	quit = false

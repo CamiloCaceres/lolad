@@ -45,6 +45,17 @@ sign() { if [ -n "${SIGN_PS1:-}" ]; then powershell -NoProfile -ExecutionPolicy 
 rm -rf "$stage"
 mkdir -p "$stage/bin/psmux" "$out"
 
+# The updater's Ed25519 public key (not a secret): UPDATE_PUBLIC_KEY, else the
+# committed packaging/update-public-key.txt. A release without it would ship the
+# test key, and the app would then refuse to update.
+if [ -z "${UPDATE_PUBLIC_KEY:-}" ] && [ -f "$here/../update-public-key.txt" ]; then
+  UPDATE_PUBLIC_KEY=$(tr -d ' \r\n' <"$here/../update-public-key.txt")
+fi
+if [ "${RELEASE:-0}" = 1 ] && [ -z "${UPDATE_PUBLIC_KEY:-}" ]; then
+  echo "build.sh: RELEASE=1 needs the update public key (desktop/packaging/update-public-key.txt or UPDATE_PUBLIC_KEY)" >&2
+  exit 1
+fi
+
 step "lolad.exe (console CLI) and lolad-daemon.exe (no console window)"
 (cd "$root" &&
   CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath \
@@ -102,7 +113,12 @@ if command -v makensis >/dev/null 2>&1; then
   step "installer"
   set -- -V2 "-DVERSION=$nsis_version" "-DSTAGE=$stage" "-DOUTFILE=$out/Lolad-Setup.exe"
   [ -n "${SIGN_PS1:-}" ] && set -- "$@" "-DSIGN_PS1=$SIGN_PS1"
-  makensis "$@" "$here/installer.nsi"
+  # makensis (3.x on macOS) aborts with std::bad_alloc without a UTF-8 locale,
+  # which is what launchd- and agent-started shells have.
+  case "${LC_ALL:-${LC_CTYPE:-${LANG:-}}}" in
+    *UTF-8*|*utf8*|*UTF8*) makensis "$@" "$here/installer.nsi" ;;
+    *) LC_ALL=en_US.UTF-8 makensis "$@" "$here/installer.nsi" ;;
+  esac
   echo "built: $out/Lolad-Setup.exe"
 else
   echo "build.sh: makensis not found; skipped the installer. Run on the Windows runner:" >&2

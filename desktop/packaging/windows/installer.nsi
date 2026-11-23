@@ -53,10 +53,7 @@ VIAddVersionKey "LegalCopyright" "MIT License"
 !include LogicLib.nsh
 !include FileFunc.nsh
 !include nsDialogs.nsh
-!include StrFunc.nsh
 !insertmacro GetSize
-${StrRep}
-${UnStrRep}
 
 !ifdef SIGN_PS1
   !finalize 'powershell -NoProfile -ExecutionPolicy Bypass -File "${SIGN_PS1}" "%1"'
@@ -108,33 +105,36 @@ Var UnCheckbox
 !insertmacro BroadcastEnv ""
 !insertmacro BroadcastEnv "un."
 
+; Path edits go through path.ps1: NSIS's ReadRegStr fails silently on values
+; longer than NSIS_MAX_STRLEN (1024), and a Path that long would have been
+; replaced (install) or deleted (uninstall). If PowerShell fails, the Path is
+; left untouched and the log says how to add it by hand.
+!macro EditPath PREFIX
+  Function ${PREFIX}EditPath ; stack: action
+    Exch $R0
+    InitPluginsDir
+    File "/oname=$PLUGINSDIR\path.ps1" "${__FILEDIR__}\path.ps1"
+    nsExec::ExecToLog '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\path.ps1" $R0 "$INSTDIR\bin"'
+    Pop $0
+    ${If} $0 != 0
+      DetailPrint "Could not update your Path ($0). The lolad command is in $INSTDIR\bin."
+    ${Else}
+      Call ${PREFIX}BroadcastEnv
+    ${EndIf}
+    Pop $R0
+  FunctionEnd
+!macroend
+!insertmacro EditPath ""
+!insertmacro EditPath "un."
+
 Function AddToPath
-  ReadRegStr $0 HKCU "Environment" "Path"
-  ; already there?
-  ${StrRep} $1 "$0;" "$INSTDIR\bin;" ""
-  ${If} $1 != "$0;"
-    Return
-  ${EndIf}
-  ${If} $0 == ""
-    StrCpy $0 "$INSTDIR\bin"
-  ${Else}
-    StrCpy $0 "$0;$INSTDIR\bin"
-  ${EndIf}
-  WriteRegExpandStr HKCU "Environment" "Path" "$0"
-  Call BroadcastEnv
+  Push "add"
+  Call EditPath
 FunctionEnd
 
 Function un.RemoveFromPath
-  ReadRegStr $0 HKCU "Environment" "Path"
-  ${UnStrRep} $0 "$0" ";$INSTDIR\bin" ""
-  ${UnStrRep} $0 "$0" "$INSTDIR\bin;" ""
-  ${UnStrRep} $0 "$0" "$INSTDIR\bin" ""
-  ${If} $0 == ""
-    DeleteRegValue HKCU "Environment" "Path"
-  ${Else}
-    WriteRegExpandStr HKCU "Environment" "Path" "$0"
-  ${EndIf}
-  Call un.BroadcastEnv
+  Push "remove"
+  Call un.EditPath
 FunctionEnd
 
 ; Runs `psmux -L lolad kill-server` (all agents stop) when the multiplexer

@@ -24,7 +24,6 @@ var (
 	ErrNoPlatform       = errors.New("the update has no build for this platform")
 	ErrChecksum         = errors.New("downloaded update does not match the manifest")
 	ErrManualInstall    = errors.New("this version is too old to update in place; install the new version manually")
-	ErrRunningUnsigned  = errors.New("the running app is not signed; refusing to update (set AllowUnsigned for development)")
 	ErrSignatureInvalid = errors.New("the update's code signature is not valid or not from the same publisher")
 )
 
@@ -47,8 +46,9 @@ type Config struct {
 	// AppPath is the running bundle (macOS: .../Lolad.app) or executable.
 	// Default: derived from os.Executable.
 	AppPath string
-	// AllowUnsigned is a development switch: with an ad-hoc signed running
-	// app it skips the code-signature checks, and it permits the test key.
+	// AllowUnsigned is a development switch: it permits the public test key
+	// and, with an ad-hoc running app, skips the code-signature checks. An
+	// unsigned release build updates without it (see verifyMacUpdate).
 	AllowUnsigned bool
 	// Quit ends the app after an update has been handed off. Required for
 	// Apply to finish the restart.

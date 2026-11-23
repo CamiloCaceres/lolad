@@ -23,23 +23,31 @@ func authenticode(run runner, file string) (status, subject string, err error) {
 	return status, subject, nil
 }
 
-// verifyWinInstaller requires a valid Authenticode signature whose signer
-// matches the running executable's, unless the running one is unsigned and
-// AllowUnsigned is set.
+// verifyWinInstaller checks the installer against the running executable.
+// As on macOS, the installer's SHA-256 is pinned by the signed manifest. A
+// signed running app requires a Valid Authenticode signature from the same
+// signer. An unsigned running app (the unsigned beta) accepts an unsigned
+// installer, or a signed one whose signature is Valid (a broken signature is
+// still refused). AllowUnsigned (development) skips the checks for an
+// unsigned running app.
 func (u *Updater) verifyWinInstaller(installer, runningExe string) error {
 	cs, csub, err := authenticode(u.cfg.run, runningExe)
 	if err != nil {
 		return err
 	}
-	if cs != "Valid" || csub == "" {
-		if u.cfg.AllowUnsigned {
-			return nil
-		}
-		return ErrRunningUnsigned
+	unsigned := cs != "Valid" || csub == ""
+	if unsigned && u.cfg.AllowUnsigned {
+		return nil
 	}
 	ns, nsub, err := authenticode(u.cfg.run, installer)
 	if err != nil {
 		return err
+	}
+	if unsigned {
+		if ns == "NotSigned" || ns == "Valid" {
+			return nil
+		}
+		return fmt.Errorf("%w: status %s", ErrSignatureInvalid, ns)
 	}
 	if ns != "Valid" {
 		return fmt.Errorf("%w: status %s", ErrSignatureInvalid, ns)

@@ -129,8 +129,31 @@ func TestApplyMacRefusals(t *testing.T) {
 	run("team mismatch", &fakeCodesign{teams: map[string]string{"apps/Lolad.app": "TEAM123", ".lolad-update-": "OTHER99"}}, false, ErrSignatureInvalid)
 	run("new bundle ad hoc", &fakeCodesign{teams: map[string]string{"apps/Lolad.app": "TEAM123", ".lolad-update-": ""}}, false, ErrSignatureInvalid)
 	run("deep verify fails", &fakeCodesign{verifyErr: true, teams: map[string]string{"apps/Lolad.app": "TEAM123", ".lolad-update-": "TEAM123"}}, false, ErrSignatureInvalid)
-	run("running app ad hoc", &fakeCodesign{teams: map[string]string{}}, false, ErrRunningUnsigned)
-	run("running app unsigned", &fakeCodesign{teams: map[string]string{"apps/Lolad.app": "!"}}, false, ErrRunningUnsigned)
+	run("running ad hoc, new seal broken", &fakeCodesign{verifyErr: true, teams: map[string]string{}}, false, ErrSignatureInvalid)
+	run("running unsigned, new seal broken", &fakeCodesign{verifyErr: true, teams: map[string]string{"apps/Lolad.app": "!"}}, false, ErrSignatureInvalid)
+}
+
+// The unsigned beta updates without any switch: the manifest pins the hash,
+// and the new bundle only needs an intact seal (ad hoc, or the first signed
+// release).
+func TestApplyMacUnsignedBeta(t *testing.T) {
+	for name, newTeam := range map[string]string{"new ad hoc": "", "new signed": "TEAM123"} {
+		t.Run(name, func(t *testing.T) {
+			zipPath, target := setupMac(t)
+			fc := &fakeCodesign{teams: map[string]string{"apps/Lolad.app": "", ".lolad-update-": newTeam}}
+			quit := false
+			u := macUpdater(t, fc, false, &quit)
+			if err := u.applyMac(zipPath, target, 501, func(string) error { return nil }); err != nil {
+				t.Fatal(err)
+			}
+			if marker(t, target) != "NEW" || !quit {
+				t.Fatal("not applied")
+			}
+			if !fc.called("--verify --deep --strict") {
+				t.Fatalf("seal not verified: %v", fc.calls)
+			}
+		})
+	}
 }
 
 func TestApplyMacAllowUnsignedSkipsBothChecks(t *testing.T) {

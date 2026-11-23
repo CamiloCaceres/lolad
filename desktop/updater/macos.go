@@ -43,19 +43,30 @@ func inspectSignature(run runner, app string) codesignInfo {
 	return info
 }
 
-// verifyMacUpdate checks the new bundle against the running one. With
-// AllowUnsigned and an ad-hoc running app, both checks are skipped.
+// verifyMacUpdate checks the new bundle against the running one.
+//
+// The artifact's SHA-256 is pinned by the Ed25519-signed manifest (Check,
+// Download), which is what makes an update authentic. Code signing adds
+// publisher continuity on top:
+//   - a Developer ID running app accepts only a bundle with the same Team ID,
+//     so a signed install never moves back to an unsigned one;
+//   - an unsigned (ad-hoc) running app, the unsigned beta, accepts any bundle
+//     whose seal is intact, ad hoc or signed, so it can move to the first
+//     signed release.
+//
+// AllowUnsigned (development) skips every check when the running app is ad hoc.
 func (u *Updater) verifyMacUpdate(newApp, runningApp string) error {
 	run := u.cfg.run
 	cur := inspectSignature(run, runningApp)
-	if cur.AdHoc || !cur.Signed {
-		if u.cfg.AllowUnsigned {
-			return nil
-		}
-		return ErrRunningUnsigned
+	unsigned := cur.AdHoc || !cur.Signed
+	if unsigned && u.cfg.AllowUnsigned {
+		return nil
 	}
 	if out, err := run("/usr/bin/codesign", "--verify", "--deep", "--strict", newApp); err != nil {
 		return fmt.Errorf("%w: codesign: %s", ErrSignatureInvalid, strings.TrimSpace(string(out)))
+	}
+	if unsigned {
+		return nil
 	}
 	nw := inspectSignature(run, newApp)
 	if nw.TeamID == "" || nw.TeamID != cur.TeamID {

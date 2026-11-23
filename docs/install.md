@@ -4,7 +4,13 @@ Lolad keeps your AI agents running in the background and gives you one window
 to talk to them. You do not need to be a developer to install it. It takes
 about five minutes.
 
-You need a Mac (macOS 13 or newer). A Windows app is planned but is not released yet.
+You need a Mac (macOS 13 or newer) or a Windows 11 PC.
+
+> **This is a beta.** Lolad is not yet signed by Apple or Microsoft. Signing is
+> a paid identity check that tells your computer who made an app. Without it,
+> your Mac or PC shows one extra warning the first time you open Lolad. The
+> steps below walk you through it. It takes a minute, and you only do it once.
+> Updates after that install without the warning.
 
 ---
 
@@ -22,20 +28,21 @@ Open the file you downloaded. A small window appears. Drag **Lolad** onto the
 
 ### 3. Open it for the first time
 
-Lolad is not sold through the App Store, so your Mac asks you to confirm that
-you trust it. You only do this once.
+Open the **Applications** folder and double-click **Lolad**. Because this beta
+is not signed by Apple yet, your Mac asks you to confirm it the first time. You
+may see **"Lolad Not Opened"** or **"Apple could not verify 'Lolad' is free of
+malware"**. That message appears for every app that is not signed by Apple. It
+does not mean anything was found.
 
-Open the **Applications** folder and double-click **Lolad**. If your Mac says
-**"Lolad Not Opened"**, **"Apple could not verify..."** or **"Lolad can't be
-opened"** (this is normal while Lolad is not notarized by Apple):
-
-1. Click **Done** (or **OK**) to close the warning. Do not move Lolad to the Trash.
+1. Click **Done** to close the message. (Do not choose Move to Trash.)
 2. Open **System Settings**, then **Privacy & Security**.
-3. Scroll down to **Security**. You will see "Lolad was blocked". Click
-   **Open Anyway**.
-4. Type your Mac password (or use Touch ID), then click **Open Anyway** again.
+3. Scroll down to the **Security** section. Next to "Lolad was blocked to
+   protect your Mac", click **Open Anyway**.
+4. Confirm with your Mac password or Touch ID, then click **Open Anyway**
+   once more.
 
-You will not be asked again.
+Lolad opens. Your Mac remembers the choice, so you will not see this again,
+including after updates.
 
 If Lolad says it is running from a temporary place, click **Move to
 Applications**. It copies itself there and reopens. It has to live in
@@ -47,6 +54,37 @@ macOS shows a message like "Lolad added items that can run in the
 background". That is how Lolad keeps your agents running when the window is
 closed. Leave it on. You can change it later in **System Settings, General,
 Login Items**.
+
+---
+
+## On Windows
+
+### 1. Download
+
+Go to the [latest release](https://github.com/CamiloCaceres/lolad/releases/latest)
+and download **Lolad-Setup.exe**.
+
+If your browser says the file "isn't commonly downloaded", choose **Keep**
+(in Edge: the **...** menu next to the download, then **Keep**, then
+**Keep anyway**). This appears for new programs that few people have
+downloaded yet.
+
+### 2. Run the installer
+
+Double-click **Lolad-Setup.exe**. Because this beta is not signed yet, Windows
+may show a blue **"Windows protected your PC"** window first:
+
+1. Click **More info**.
+2. Check that the app name is **Lolad-Setup.exe**, then click **Run anyway**.
+
+The installer does not ask for an administrator password. Lolad installs only
+for your Windows account, in your own folder. Click **Install**. At the end,
+leave **Open Lolad now** ticked and click **Finish**.
+
+### 3. Lolad opens
+
+Lolad starts and shows its setup. Its icon lives in the notification area at
+the bottom right of the screen. Click the **^** arrow if you do not see it.
 
 ---
 
@@ -73,13 +111,19 @@ agents.** They keep working in the background.
 
 ## Everyday use
 
-- **Open Lolad:** click its icon (the menu bar at the top of the screen), or open it like any other app.
+- **Open Lolad:** click its icon (in the menu bar at the top of the screen on a
+  Mac, or the notification area at the bottom right on Windows), or open it
+  like any other app.
 - **Quit the app:** use the icon's menu and choose **Quit Lolad (agents keep
   running)**. The agents do not stop. To stop agents, use the Lolad window.
-- **Updates:** for now, get a new version by downloading the newest
-  **Lolad.dmg** from the release page and dragging it to Applications again
-  (choose **Replace**). Your assistants, messages and settings are kept.
-  Automatic updates will come with the first release signed by Apple.
+- **Updates:** Lolad checks once a day. When a new version is ready, the
+  icon's menu shows **Restart to update**. Choose it when it suits you; your
+  agents keep running. You can also choose **Check for updates...** at any
+  time. Every update is checked against a digital signature from the Lolad
+  project before it installs, so only real Lolad releases are accepted. If an
+  update ever cannot install by itself, download the newest file from the
+  release page and install it over the old one. Your agents, messages and
+  settings are kept.
 
 ---
 
@@ -103,9 +147,12 @@ restart.
 Your agents, mail and settings are **kept** unless you choose otherwise, so you
 can install Lolad again later and carry on.
 
-Click the Lolad icon, choose **Uninstall...**, and follow the
-questions. It also turns off start at login. (Dragging Lolad to the Trash works
-too, but the menu is cleaner.)
+- **Mac:** click the Lolad icon, choose **Uninstall...**, and follow the
+  questions. It also turns off start at login. (Dragging Lolad to the Trash
+  works too, but the menu is cleaner.)
+- **Windows:** open **Settings**, **Apps**, **Installed apps**, find **Lolad**,
+  and choose **Uninstall**. It asks whether to stop your agents, and only
+  deletes your data if you tick that box and confirm.
 
 ---
 
@@ -115,6 +162,7 @@ too, but the menu is cleaner.)
 |---|---|
 | Settings | `.config/lolad` in your home folder |
 | Messages, logs, agent records | `.local/share/lolad` in your home folder |
+| The program (Windows) | `AppData\Local\Programs\Lolad` in your user folder |
 | Your agents | the folder you picked, usually **Lolad Agents** in your home folder |
 
 Your home folder is the one named after you. Folders whose names start with a
@@ -125,6 +173,6 @@ dot are hidden; press Command, Shift, and period in Finder to show them.
 ## For developers
 
 Prefer the terminal? The release page also has the plain `lolad` program for
-macOS and Linux, and the project [README](../README.md) shows how to
+macOS, Windows and Linux, and the project [README](../README.md) shows how to
 install from source. How the app is built, signed and updated is in
 [desktop.md](desktop.md).
