@@ -45,6 +45,9 @@ type Account struct {
 	CreatedAt time.Time `json:"created_at"`
 	LastSeen  time.Time `json:"last_seen,omitzero"`
 	Disabled  bool      `json:"disabled"`
+	// Note is the note of the invite this account joined with (operator
+	// only; empty for accounts made before notes were linked).
+	Note string `json:"note,omitempty"`
 }
 
 // Store is the hub database: accounts and sign-up invites. The admin CLI and
@@ -97,7 +100,7 @@ func scanAccount(row interface{ Scan(...any) error }) (Account, error) {
 	var a Account
 	var created, seen int64
 	var disabled int
-	if e := row.Scan(&a.Handle, &a.PublicKey, &a.Display, &created, &seen, &disabled); e != nil {
+	if e := row.Scan(&a.Handle, &a.PublicKey, &a.Display, &created, &seen, &disabled, &a.Note); e != nil {
 		if errors.Is(e, sql.ErrNoRows) {
 			return a, ErrNotFound
 		}
@@ -111,7 +114,10 @@ func scanAccount(row interface{ Scan(...any) error }) (Account, error) {
 	return a, nil
 }
 
-const accountCols = `handle,public_key,display,created_at,last_seen,disabled`
+// accountCols ends with the note of the latest invite used for the handle
+// since the account was created.
+const accountCols = `handle,public_key,display,created_at,last_seen,disabled,
+  COALESCE((SELECT note FROM hub_invites i WHERE i.used_by=hub_accounts.handle AND i.used_at>=hub_accounts.created_at ORDER BY i.used_at DESC LIMIT 1),'')`
 
 // Account looks up one account by handle.
 func (s *Store) Account(ctx context.Context, handle string) (Account, error) {
@@ -230,4 +236,64 @@ func (s *Store) suggest(ctx context.Context, handle string) string {
 		}
 	}
 	return ""
+}
+
+// Invite is a sign-up code as the operator sees it: never the code itself,
+// which exists only at creation.
+type Invite struct {
+	ID        int64     `json:"id"`
+	Note      string    `json:"note"`
+	CreatedAt time.Time `json:"created_at"`
+	ExpiresAt time.Time `json:"expires_at"`
+	UsedBy    string    `json:"used_by,omitempty"`
+	UsedAt    time.Time `json:"used_at,omitzero"`
+}
+
+// Invites lists codes still waiting to be used (newest first) and codes
+// already used (most recent first, at most 50). Expired unused codes are left
+// out.
+func (s *Store) Invites(ctx context.Context) (pending, used []Invite, err error) {
+	now := s.now().Unix()
+	rows, err := s.db.QueryContext(ctx, `SELECT rowid,note,created_at,expires_at,COALESCE(used_by,''),COALESCE(used_at,0) FROM hub_invites
+	  WHERE used_at IS NOT NULL OR expires_at>? ORDER BY COALESCE(used_at,0) DESC, created_at DESC, rowid DESC`, now)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+	pending, used = []Invite{}, []Invite{}
+	for rows.Next() {
+		var v Invite
+		var created, exp, usedAt int64
+		if err = rows.Scan(&v.ID, &v.Note, &created, &exp, &v.UsedBy, &usedAt); err != nil {
+			return nil, nil, err
+		}
+		v.CreatedAt, v.ExpiresAt = time.Unix(created, 0).UTC(), time.Unix(exp, 0).UTC()
+		if usedAt > 0 {
+			v.UsedAt = time.Unix(usedAt, 0).UTC()
+			if len(used) < 50 {
+				used = append(used, v)
+			}
+			continue
+		}
+		pending = append(pending, v)
+	}
+	return pending, used, rows.Err()
+}
+
+// CreateInviteID is CreateInvite that also returns the invite's id.
+func (s *Store) CreateInviteID(ctx context.Context, note string, ttl time.Duration) (Invite, string, error) {
+	code, exp, err := s.CreateInvite(ctx, note, ttl)
+	if err != nil {
+		return Invite{}, "", err
+	}
+	v := Invite{Note: note, ExpiresAt: time.Unix(exp.Unix(), 0).UTC()}
+	var created int64
+	err = s.db.QueryRowContext(ctx, `SELECT rowid,created_at FROM hub_invites WHERE code_hash=?`, hashCode(code)).Scan(&v.ID, &created)
+	v.CreatedAt = time.Unix(created, 0).UTC()
+	return v, code, err
+}
+
+// CancelInvite deletes a code that has not been used yet.
+func (s *Store) CancelInvite(ctx context.Context, id int64) error {
+	return s.affect(s.db.ExecContext(ctx, `DELETE FROM hub_invites WHERE rowid=? AND used_at IS NULL`, id))
 }

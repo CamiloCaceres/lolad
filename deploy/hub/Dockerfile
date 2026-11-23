@@ -22,6 +22,9 @@ USER lolad-hub
 VOLUME /var/lib/lolad-hub
 
 # LOLAD_HUB_PUBLIC_URL must be set at deploy time (https://<your hub domain>).
+# LOLAD_HUB_ADMIN_TOKEN (optional, secret, 24+ characters) turns on the
+# operator console at /console and the admin API at /v1/hub/admin/. Unset,
+# both are off (404). Set it as a secret in Coolify, never in this file.
 # The proxy in front (Traefik under Coolify) reaches the container over a
 # private Docker network, so its X-Forwarded-For is trusted from those ranges.
 # Only the proxy can reach the container: do not publish the port publicly.

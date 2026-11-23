@@ -8,7 +8,10 @@
 //
 // The database defaults to $LOLAD_HUB_DB, else /var/lib/lolad-hub/hub.db.
 // serve also reads $LOLAD_HUB_PUBLIC_URL, $LOLAD_HUB_LISTEN and
-// $LOLAD_HUB_TRUSTED_PROXIES (see deploy/hub/Dockerfile).
+// $LOLAD_HUB_TRUSTED_PROXIES (see deploy/hub/Dockerfile), and
+// $LOLAD_HUB_ADMIN_TOKEN: when set (24+ characters), the operator console is
+// served at /console and the admin API at /v1/hub/admin/. It is read from the
+// environment only, never a flag, so it stays out of process listings.
 package main
 
 import (
@@ -80,7 +83,9 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) error {
 		if err != nil {
 			return fmt.Errorf("--trusted-proxies: %w", err)
 		}
-		return serve(ctx, *db, *listen, *public, trusted)
+		token := os.Getenv("LOLAD_HUB_ADMIN_TOKEN")
+		os.Unsetenv("LOLAD_HUB_ADMIN_TOKEN")
+		return serve(ctx, *db, *listen, *public, trusted, token)
 	case "invite":
 		note := fs.String("note", "", "who it is for (shown in accounts)")
 		ttl := fs.Duration("ttl", 7*24*time.Hour, "how long the code is valid")
@@ -129,6 +134,15 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) error {
 		if err := fs.Parse(rest); err != nil {
 			return err
 		}
+		// Flags may also follow the handle (disable bob --db PATH).
+		if fs.NArg() > 1 {
+			h := fs.Arg(0)
+			if err := fs.Parse(fs.Args()[1:]); err != nil {
+				return err
+			}
+			rest = append([]string{h}, fs.Args()...)
+			_ = fs.Parse(rest)
+		}
 		if fs.NArg() != 1 {
 			return fmt.Errorf("usage: lolad-hub %s <handle>", cmd)
 		}
@@ -155,7 +169,7 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) error {
 	return errors.New(usage)
 }
 
-func serve(ctx context.Context, dbPath, listen, public string, trusted []netip.Prefix) error {
+func serve(ctx context.Context, dbPath, listen, public string, trusted []netip.Prefix, adminToken string) error {
 	if public == "" {
 		return errors.New("--public-url is required")
 	}
@@ -165,7 +179,7 @@ func serve(ctx context.Context, dbPath, listen, public string, trusted []netip.P
 		return err
 	}
 	defer st.Close()
-	srv, err := hub.NewServer(hub.Options{Store: st, PublicURL: public, Logger: log, TrustedProxies: trusted})
+	srv, err := hub.NewServer(hub.Options{Store: st, PublicURL: public, Logger: log, TrustedProxies: trusted, AdminToken: adminToken})
 	if err != nil {
 		return err
 	}
@@ -177,7 +191,7 @@ func serve(ctx context.Context, dbPath, listen, public string, trusted []netip.P
 	go func() { defer close(done); srv.Run(ctx) }()
 	errc := make(chan error, 1)
 	go func() { errc <- hs.ListenAndServe() }()
-	log.Info("lolad-hub listening", "addr", listen, "public_url", public, "db", dbPath, "trusted_proxies", len(trusted))
+	log.Info("lolad-hub listening", "addr", listen, "public_url", public, "db", dbPath, "trusted_proxies", len(trusted), "console", adminToken != "")
 	select {
 	case err = <-errc:
 		stop()

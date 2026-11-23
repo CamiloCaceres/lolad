@@ -1,0 +1,16 @@
+{{define "page"}}{{template "head" .}}
+<body>
+<div class="signin">
+<form method="post" action="/console/signin">
+<div class="brand"><img src="/console/static/logo.svg" alt=""><div><b>lolad hub</b><small>Console</small></div></div>
+<div class="stack"><h1 class="title">Sign in</h1><p class="lede">Use the admin secret this hub was started with.</p></div>
+{{if .Flash}}<p class="notice bad" role="alert">{{.Flash}}</p>{{end}}
+<div class="field">
+<label for="token">Admin secret</label>
+<input id="token" name="token" type="password" autocomplete="current-password" required autofocus>
+</div>
+<button class="btn" type="submit">Sign in</button>
+</form>
+</div>
+</body>
+</html>{{end}}

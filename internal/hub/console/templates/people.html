@@ -1,0 +1,44 @@
+{{define "page"}}{{template "layout" .}}{{end}}
+{{define "content"}}{{with .Data}}
+<div class="head">
+<div class="stack"><h1 class="title">People</h1><p class="lede">{{.Summary}}</p></div>
+<a class="btn" href="/console/invites"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>Invite someone</a>
+</div>
+
+<section class="sky" aria-label="Who is connected right now">
+<div aria-hidden="true">{{range .Stars}}<span class="star" style="{{.}}"></span>{{end}}</div>
+<span class="label">Right now</span>
+<span class="legend"><span><i></i>Connected</span><span><i class="off"></i>Offline</span></span>
+{{range .Sky}}<div class="who {{.State}}" style="{{.Pos}}"><span class="ring {{.State}}" style="{{.Hue}}">{{.Initial}}</span><span>{{.Handle}}</span></div>
+{{else}}<p class="empty">Nobody has joined yet.</p>{{end}}
+</section>
+
+<section class="stack" aria-label="Everyone on this hub" style="gap:16px">
+<div class="bar">
+<div class="chips" role="group" aria-label="Show">
+{{range .Chips}}<a class="chip" href="{{.Href}}" aria-current="{{.On}}">{{.Label}}<span>{{.Count}}</span></a>{{end}}
+</div>
+<form class="find" method="get" action="/console/people" role="search">
+{{if .Show}}<input type="hidden" name="show" value="{{.Show}}">{{end}}
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8A91AE" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.5-4.5"/></svg>
+<label class="sr" for="find">Find a person</label><input id="find" name="q" value="{{.Q}}" placeholder="Find a person" autocomplete="off">
+</form>
+</div>
+<div class="tablewrap">
+<table>
+<thead><tr><th scope="col">Person</th><th scope="col">Status</th><th scope="col">Joined</th><th scope="col" class="num">Carried today</th><th scope="col"><span class="sr">Actions</span></th></tr></thead>
+<tbody>
+{{range .Rows}}<tr data-find="{{.Find}}">
+<td><div class="person {{.State}}"><span class="ring {{.State}}" style="{{.Hue}}">{{.Initial}}</span><div><b>{{.Handle}}</b><small>{{.Note}}</small></div></div></td>
+<td><span class="state {{.State}}"><span class="{{.Dot}}"></span>{{.StateText}}</span></td>
+<td class="soft">{{.Joined}}</td>
+<td class="soft num">{{.Today}}</td>
+<td class="right"><form method="post" action="/console/people/{{.Handle}}/{{.Action}}"{{if eq .Action "disable"}} data-confirm="Turn off {{.Handle}}? Their connection closes now."{{end}}><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="btn ghost sm" type="submit" aria-label="{{.ActionText}} {{.Handle}}">{{.ActionText}}</button></form></td>
+</tr>
+{{else}}<tr><td colspan="5" class="soft">{{if .Filtered}}No one matches.{{else}}Nobody has joined yet. <a href="/console/invites">Invite someone</a>.{{end}}</td></tr>{{end}}
+</tbody>
+</table>
+</div>
+<p class="fine">Turning someone off closes their connection and stops the hub carrying messages to or from them. Their own lolad keeps working.</p>
+</section>
+{{end}}{{end}}

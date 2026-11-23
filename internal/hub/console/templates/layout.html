@@ -1,0 +1,36 @@
+{{define "head"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>{{.Title}} · lolad hub</title>
+<link rel="icon" href="/console/static/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/console/static/console.css">
+<script src="/console/static/console.js" defer></script>
+</head>
+{{end}}
+
+{{define "layout"}}{{template "head" .}}
+<body>
+<div class="shell">
+<aside class="side">
+<div class="brand"><img src="/console/static/logo.svg" alt=""><div><b>lolad hub</b><small>Console</small></div></div>
+<nav class="nav" aria-label="Console">
+<a href="/console/people"{{if eq .Nav "people"}} aria-current="page"{{end}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.5 3-6 6.5-6s6.5 2.5 6.5 6"/><circle cx="17.5" cy="9" r="2.5"/><path d="M17 14c2.6 0 4.5 2 4.5 5"/></svg>People</a>
+<a href="/console/invites"{{if eq .Nav "invites"}} aria-current="page"{{end}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16v12H4z"/><path d="m4 7 8 6 8-6"/></svg>Invites</a>
+<a href="/console/health"{{if eq .Nav "health"}} aria-current="page"{{end}}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l3 7 4-14 3 7h4"/></svg>Health</a>
+</nav>
+<div class="hubcard">
+<span class="run"><span class="dot-on"></span>Running</span>
+<span class="meta">{{.Host}}<br>Up for {{.Uptime}} · version {{.Version}}</span>
+<form method="post" action="/console/signout"><input type="hidden" name="csrf" value="{{.CSRF}}"><button class="linkbtn" type="submit">Sign out</button></form>
+</div>
+</aside>
+<main>
+{{if .Flash}}<p class="notice{{if .FlashBad}} bad{{end}}" role="status">{{.Flash}}</p>{{end}}
+{{template "content" .}}
+</main>
+</div>
+</body>
+</html>{{end}}

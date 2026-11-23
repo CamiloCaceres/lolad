@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -33,6 +34,10 @@ type Options struct {
 	// believed. Loopback is always trusted (Caddy on the same host). In a
 	// container the proxy (Traefik under Coolify) is on a private network.
 	TrustedProxies []netip.Prefix
+	// AdminToken turns on the operator console (/console) and the admin API
+	// (/v1/hub/admin/...), both behind it. Empty leaves them off (404).
+	// cmd/lolad-hub reads it from LOLAD_HUB_ADMIN_TOKEN.
+	AdminToken string
 }
 
 // Server is the hub. Mount Handler behind a TLS-terminating proxy and run Run
@@ -44,7 +49,10 @@ type Server struct {
 	mu      sync.Mutex
 	tunnels map[string]*tunnel // handle → current tunnel
 
-	limits *limiter
+	limits  *limiter
+	traffic *traffic
+	started time.Time
+	admin   *admin // nil when the console is off
 }
 
 type tunnel struct {
@@ -83,7 +91,14 @@ func NewServer(o Options) (*Server, error) {
 		o.Clock = time.Now
 	}
 	o.Store.now = o.Clock
-	return &Server{o: o, store: o.Store, tunnels: map[string]*tunnel{}, limits: newLimiter(o.Clock)}, nil
+	s := &Server{o: o, store: o.Store, tunnels: map[string]*tunnel{}, limits: newLimiter(o.Clock), traffic: newTraffic(o.Clock), started: o.Clock()}
+	if o.AdminToken != "" {
+		if len(o.AdminToken) < MinAdminToken {
+			return nil, fmt.Errorf("hub: admin token must be at least %d characters", MinAdminToken)
+		}
+		s.admin = newAdmin(s, o.AdminToken)
+	}
+	return s, nil
 }
 
 // Handler serves the hub API, the tunnel and the public member URLs.
@@ -94,6 +109,9 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("DELETE /v1/hub/account", s.deleteAccount)
 	m.HandleFunc("GET /v1/hub/tunnel", s.serveTunnel)
 	m.HandleFunc("/p/", s.forward)
+	if s.admin != nil {
+		s.admin.routes(m)
+	}
 	m.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { fail(w, 404, "not_found", "Unknown endpoint") })
 	return m
 }
@@ -117,6 +135,9 @@ func (s *Server) Run(ctx context.Context) {
 // Sweep closes tunnels whose account is gone or disabled.
 func (s *Server) Sweep(ctx context.Context) {
 	s.limits.prune()
+	if s.admin != nil {
+		s.admin.prune()
+	}
 	s.mu.Lock()
 	list := make([]*tunnel, 0, len(s.tunnels))
 	for _, t := range s.tunnels {
@@ -159,6 +180,12 @@ type registerBody struct {
 
 func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	ip := s.clientIP(r)
+	start := s.o.Clock()
+	rw := &statusWriter{ResponseWriter: w}
+	w = rw
+	defer func() {
+		s.traffic.record(Request{Time: start, Path: "/v1/hub/register", Status: rw.code(), Ms: s.o.Clock().Sub(start).Milliseconds(), ip: ip})
+	}()
 	if !s.limits.peek("fail:"+ip, 10, time.Hour) {
 		fail(w, 429, "rate_limited", "Too many failed sign-up attempts")
 		return
@@ -395,8 +422,11 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	status := 0
+	ip := s.clientIP(r)
 	defer func() {
-		s.o.Logger.Info("forward", "handle", handle, "path", path, "status", status, "ms", s.o.Clock().Sub(start).Milliseconds())
+		ms := s.o.Clock().Sub(start).Milliseconds()
+		s.o.Logger.Info("forward", "handle", handle, "path", path, "status", status, "ms", ms)
+		s.traffic.record(Request{Time: start, Handle: handle, Path: "/p/" + handle + path, Status: status, Ms: ms, ip: ip})
 	}()
 	a, e := s.store.Account(r.Context(), handle)
 	if errors.Is(e, ErrNotFound) {
@@ -413,7 +443,6 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request) {
 		fail(w, 403, "provider_disabled", "This lolad is disabled on the hub")
 		return
 	}
-	ip := s.clientIP(r)
 	if !s.limits.allow("h:"+handle, 300, time.Minute) || !s.limits.allow("ip:"+ip, 600, time.Minute) {
 		status = 429
 		w.Header().Set("Retry-After", "60")
@@ -462,10 +491,12 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request) {
 		delete(t.pending, id)
 		t.mu.Unlock()
 	}()
+	// The query goes down the tunnel but not into logs (metadata only).
+	target := path
 	if r.URL.RawQuery != "" {
-		path += "?" + r.URL.RawQuery
+		target += "?" + r.URL.RawQuery
 	}
-	if e = t.send(r.Context(), frame{Type: "req", ID: id, Method: r.Method, Path: path, Headers: pick(r.Header, requestHeaders), Body: body, ClientIP: ip}); e != nil {
+	if e = t.send(r.Context(), frame{Type: "req", ID: id, Method: r.Method, Path: target, Headers: pick(r.Header, requestHeaders), Body: body, ClientIP: ip}); e != nil {
 		offline()
 		return
 	}
@@ -558,6 +589,33 @@ func ParsePrefixes(v string) ([]netip.Prefix, error) {
 		out = append(out, p.Masked())
 	}
 	return out, nil
+}
+
+// statusWriter remembers the status a handler wrote.
+type statusWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (w *statusWriter) WriteHeader(c int) {
+	if w.status == 0 {
+		w.status = c
+	}
+	w.ResponseWriter.WriteHeader(c)
+}
+
+func (w *statusWriter) Write(b []byte) (int, error) {
+	if w.status == 0 {
+		w.status = 200
+	}
+	return w.ResponseWriter.Write(b)
+}
+
+func (w *statusWriter) code() int {
+	if w.status == 0 {
+		return 200
+	}
+	return w.status
 }
 
 func reply(w http.ResponseWriter, status int, v any) {

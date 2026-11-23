@@ -1,0 +1,39 @@
+{{define "page"}}{{template "layout" .}}{{end}}
+{{define "content"}}{{with .Data}}
+<div class="hero">
+<span class="orb" aria-hidden="true"><span class="c"><i></i></span></span>
+<div class="stack" style="gap:8px;min-width:0"><h1 class="title">Everything is running</h1><p class="lede">{{.Lede}}</p></div>
+</div>
+
+<dl class="facts">
+<div><dt>Up for</dt><dd>{{.UpFor}}</dd></div>
+<div><dt>Connected now</dt><dd>{{.Connected}}</dd></div>
+<div><dt>Carried in 24 hours</dt><dd>{{.Carried}}</dd></div>
+<div><dt>Slowed down today</dt><dd>{{.Limited}}</dd></div>
+<div><dt>Version</dt><dd>{{.Version}} · lolad-hub</dd></div>
+</dl>
+
+<section class="panel" aria-label="Traffic">
+<div class="sechead"><h2>Messages carried per hour</h2><span class="fine">Last 24 hours · {{.LastHour}} in the last hour</span></div>
+{{.Chart}}
+</section>
+
+<section class="stack" aria-label="Recent requests" style="gap:14px">
+<div class="sechead"><h2>Recent requests</h2><span class="fine">Who, where, result and time taken. Never what was said.</span></div>
+<div class="tablewrap">
+<table class="log">
+<thead><tr><th scope="col">Time</th><th scope="col">To</th><th scope="col">Path</th><th scope="col">Result</th><th scope="col" class="num">Took</th></tr></thead>
+<tbody>
+{{range .Log}}<tr><td class="time">{{.Time}}</td><td class="to">{{.To}}</td><td class="path">{{.Path}}</td><td><span class="result {{.Class}}"><i></i>{{.Label}} <span>{{.Status}}</span></span></td><td class="time num">{{.Took}}</td></tr>
+{{else}}<tr><td colspan="5" class="soft">No requests since the hub started.</td></tr>{{end}}
+</tbody>
+</table>
+</div>
+<p class="fine">Kept in memory for the last 24 hours and cleared when the hub restarts.</p>
+</section>
+
+<section class="keeps" aria-label="What this hub keeps">
+<span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8A91AE" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6z"/></svg></span>
+<div><h2>What this hub keeps</h2><p>Each person’s handle and public key, and the request log above. No mail, no message bodies and no invite codes. Messages pass through and are gone.</p></div>
+</section>
+{{end}}{{end}}

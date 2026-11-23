@@ -720,7 +720,12 @@ the request down the tunnel to the right lolad.
   - `hub_accounts`: handle, public_key, display, created_at, last_seen,
     disabled.
   - `hub_invites`: code sha256, note, expires_at, used_by, used_at.
-- **Admin:** CLI only, run on the VPS against the DB. There is no admin HTTP API.
+- **Admin:** The CLI below, run on the VPS against the DB. When
+  `LOLAD_HUB_ADMIN_TOKEN` (24+ chars) is set, there is also an operator console
+  at `/console` and a JSON admin API under `/v1/hub/admin/`, both behind that
+  secret (Bearer, or a console session with CSRF). Unset, both are 404. The
+  console shows people, invites and traffic metadata only; an invite code is
+  shown once, at creation. See `deploy/hub/README.md`.
   - `lolad-hub invite [--note ""] [--ttl 168h]` prints a `hubinv_…` code once.
     It is single use.
   - `lolad-hub accounts`
@@ -730,7 +735,8 @@ the request down the tunnel to the right lolad.
   - The CLI writes the DB directly. A running hub checks accounts on every
     forward and closes tunnels of disabled or removed accounts within 30 s.
 - **Logs:** Metadata only: handle, path, status, size and duration. Never a body
-  or an invite code.
+  or an invite code. Query strings are not logged. The console's request log
+  and hourly counts are in memory (24 h) and reset on restart.
 
 **Endpoints.** Signed requests use the Federation header scheme
 (`X-AMP-Provider` = handle or `-`, `X-AMP-Timestamp`, `X-AMP-Signature` over
@@ -858,7 +864,8 @@ the request down the tunnel to the right lolad.
   (`hub.example.com { reverse_proxy 127.0.0.1:8095 }`).
 
 `serve` reads `LOLAD_HUB_PUBLIC_URL`, `LOLAD_HUB_LISTEN` (default
-`127.0.0.1:8095`), `LOLAD_HUB_DB` and `LOLAD_HUB_TRUSTED_PROXIES`. The client IP
+`127.0.0.1:8095`), `LOLAD_HUB_DB`, `LOLAD_HUB_TRUSTED_PROXIES` and the secret
+`LOLAD_HUB_ADMIN_TOKEN` (environment only, never a flag). The client IP
 used for rate limits is the rightmost `X-Forwarded-For` entry only when the
 connection comes from loopback or a trusted proxy range (the Docker image
 trusts the private ranges); otherwise it is the connection's address.

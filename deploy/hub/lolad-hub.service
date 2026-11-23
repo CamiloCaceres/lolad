@@ -10,6 +10,9 @@ Group=lolad-hub
 # Set the public URL to the domain Caddy serves for the hub.
 Environment=LOLAD_HUB_PUBLIC_URL=https://hub.example.com
 Environment=LOLAD_HUB_DB=/var/lib/lolad-hub/hub.db
+# Optional console (/console): put LOLAD_HUB_ADMIN_TOKEN=<24+ char secret> in
+# this root-only file (chmod 600), not here.
+EnvironmentFile=-/etc/lolad-hub.env
 ExecStart=/usr/local/bin/lolad-hub serve --listen 127.0.0.1:8095
 Restart=on-failure
 RestartSec=2
