@@ -1,6 +1,7 @@
 /* lolad dashboard — "lolad Night". Midnight surfaces; colour is rationed:
-   each assistant's orb carries its own hue, amber means only "your turn",
-   rose means only "something broke". See REDESIGN.md. */
+   each assistant's orb carries its own hue, bright periwinkle means only
+   "your turn", amber is a real warning and rose means "something broke".
+   See REDESIGN.md. */
 
 @font-face { font-family: "Sora"; src: url("/static/vendor/fonts/sora.woff2") format("woff2"); font-weight: 200 600; font-display: swap; }
 @font-face { font-family: "Manrope"; src: url("/static/vendor/fonts/manrope.woff2") format("woff2"); font-weight: 400 700; font-display: swap; }
@@ -15,7 +16,7 @@
   --t-xs: 0.75rem;    /* 12 */
   --t-sm: 0.8125rem;  /* 13 */
   --t-md: 0.9375rem;  /* 15 */
-  --t-msg: 1rem;      /* 16 */
+  --t-msg: 1.0625rem; /* 17, reading text in conversations */
   --t-lg: 1.125rem;   /* 18 */
   --t-xl: 2.75rem;    /* 44, Sora 200 page titles */
 
@@ -49,12 +50,21 @@
   /* identity hues (orbs, name dots, selection only; never body text) */
   --ion: #6C9BFF; --lilac: #A98BFF; --plasma: #FF6BD6; --aqua: #3DE8D0; --volt: #C4F25A; --frost: #DCE6FF;
 
-  /* your turn: amber, and nothing else is amber */
-  --you: #FFB547;
-  --you-ink: #1A1003;
-  --you-text: #FFC877;
-  --you-wash: rgba(255, 181, 71, 0.07);
-  --you-line: rgba(255, 181, 71, 0.38);
+  /* your turn: bright periwinkle (the board's "Flare"). It shares the hue
+     of the primary action on purpose; the ripple ring and the word carry it. */
+  --you: #7AA2FF;
+  --you-ink: #060818;
+  --you-text: #A9C0FF;
+  --you-wash: rgba(122, 162, 255, 0.08);
+  --you-line: rgba(122, 162, 255, 0.38);
+  --you-glow: rgba(122, 162, 255, 0.55);
+
+  /* a real warning (unsaved edits, you hold the keyboard): amber, rare */
+  --warn: #FFB547;
+  --warn-ink: #1A1003;
+  --warn-text: #FFC877;
+  --warn-wash: rgba(255, 181, 71, 0.07);
+  --warn-line: rgba(255, 181, 71, 0.38);
 
   /* agent states */
   --st-idle: #8FB0FF;
@@ -168,8 +178,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .btn-primary { background: var(--btn-primary); border-color: var(--btn-primary); color: var(--btn-primary-ink); box-shadow: 0 0 26px rgba(122, 162, 255, 0.35); }
 .btn-primary:hover { background: #8FB2FF; }
 .btn-primary:active { background: #6B94F5; }
-.btn-you { background: var(--you); border-color: var(--you); color: var(--you-ink); }
-.btn-you:hover { background: #FFC266; }
+.btn-you { background: var(--you); border-color: var(--you); color: var(--you-ink); box-shadow: 0 0 26px rgba(122, 162, 255, 0.35); }
+.btn-you:hover { background: #8FB2FF; }
 .btn-ghost { border-color: transparent; background: transparent; color: var(--ink-2); }
 .btn-ghost:hover { background: rgba(255, 255, 255, 0.06); color: var(--ink); }
 .btn-ghost:disabled { background: transparent; }
@@ -195,6 +205,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
   font-size: var(--t-xs); font-weight: 550; line-height: 1; white-space: nowrap;
 }
 .tag.is-you { background: var(--you); border-color: var(--you); color: var(--you-ink); }
+
+.eyebrow { font: 600 var(--t-xs)/1.4 var(--font); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.eyebrow .muted { letter-spacing: 0; text-transform: none; font-weight: 500; }
 
 /* People are plain rings with an initial. */
 .avatar {
@@ -237,8 +250,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .orb::after { content: ""; position: absolute; pointer-events: none; border-radius: 50%; }
 .orb.st-busy { --spd: 2.8; }
 .orb.st-busy::after { inset: -9%; background: conic-gradient(from 0deg, transparent 0 62%, color-mix(in srgb, var(--h) 70%, transparent) 88%, #fff 99%, transparent 100%); -webkit-mask: radial-gradient(closest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px)); mask: radial-gradient(closest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px)); animation: orb-spin 1.8s linear infinite; }
-.orb.st-waiting::before { background: radial-gradient(closest-side, color-mix(in srgb, var(--h) 36%, transparent) 0, rgba(255, 181, 71, 0.22) 55%, transparent 100%); }
-.orb.st-waiting::after { inset: -7%; border: 2px solid var(--you); box-shadow: 0 0 12px rgba(255, 181, 71, 0.55); animation: orb-ripple 2.4s cubic-bezier(0.2, 0.6, 0.3, 1) infinite; }
+.orb.st-waiting::before { background: radial-gradient(closest-side, color-mix(in srgb, var(--h) 36%, transparent) 0, rgba(122, 162, 255, 0.22) 55%, transparent 100%); }
+.orb.st-waiting::after { inset: -7%; border: 2px solid var(--you); box-shadow: 0 0 12px var(--you-glow); animation: orb-ripple 2.4s cubic-bezier(0.2, 0.6, 0.3, 1) infinite; }
 .orb.st-stopped::before, .orb.st-failed::before, .orb.st-crashed::before { opacity: 0.1; animation: none; }
 .orb.st-stopped > .c, .orb.st-failed > .c, .orb.st-crashed > .c { filter: saturate(0.2) brightness(0.42); }
 .orb.st-stopped > .c > i, .orb.st-failed > .c > i { animation-play-state: paused; }
@@ -277,6 +290,12 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .state.st-waiting { color: var(--you-text); }
 .state.st-crashed { color: var(--st-crashed-text); }
 .state.st-failed { color: var(--st-failed-text); }
+/* In a state word the marker is a hollow ring in the word's colour (the
+   board's .tag i); only "Needs you" is filled, so it never reads as Ready. */
+.state i { background: transparent !important; outline: 0 !important; box-shadow: inset 0 0 0 1.5px currentColor !important; }
+.state.st-waiting i { background: var(--you) !important; box-shadow: 0 0 8px var(--you-glow) !important; }
+.state.st-stopped i { box-shadow: none !important; outline: 1.5px dashed currentColor !important; outline-offset: -1.5px; }
+.state.st-unknown i { box-shadow: none !important; outline: 1.5px dotted currentColor !important; outline-offset: -1.5px; }
 .state.st-busy i { animation: breathe 1.8s ease-in-out infinite; }
 .state.st-starting i { animation: breathe 0.9s ease-in-out infinite; }
 @keyframes breathe { 50% { opacity: 0.35; } }
@@ -433,8 +452,8 @@ th.c-num { text-align: right; }
 .term-mode .i { width: 13px; height: 13px; }
 .term-status { color: var(--muted); }
 .term-spacer { flex: 1; }
-.term-panel.is-control .term-mode { background: var(--you); color: var(--you-ink); }
-.term-panel.is-control .term { box-shadow: inset 0 0 0 2px var(--you); }
+.term-panel.is-control .term-mode { background: var(--warn); color: var(--warn-ink); }
+.term-panel.is-control .term { box-shadow: inset 0 0 0 2px var(--warn); }
 .term { height: min(56vh, 520px); padding: var(--s2) var(--s3); background: var(--term-bg); }
 .term { overflow: auto; }
 .term .xterm { height: 100%; }
@@ -538,10 +557,10 @@ th.c-num { text-align: right; }
 .opt { font-weight: 400; color: var(--muted); }
 .help { font-size: var(--t-xs); color: var(--muted); }
 input[type="text"], input:not([type]), input[type="search"], input[type="email"], input[type="password"], input[type="time"], input[type="date"], select, textarea {
-  width: 100%; min-height: 44px; padding: 10px 16px;
-  border: 1px solid var(--line-2); border-radius: 14px;
-  background: rgba(255, 255, 255, 0.03); color: var(--ink);
-  font-size: var(--t-md); line-height: 1.4;
+  width: 100%; min-height: 48px; padding: 11px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 16px;
+  background: rgba(4, 5, 12, 0.6); color: var(--ink);
+  font-size: 1rem; line-height: 1.4;
   transition: border-color 120ms var(--ease), box-shadow 120ms var(--ease);
 }
 textarea { resize: vertical; min-height: 64px; line-height: 1.6; }
@@ -555,9 +574,16 @@ select { appearance: none; padding-right: 30px; background-image: linear-gradien
 .check input { margin: 2px 0 0; width: 18px; height: 18px; accent-color: var(--action); flex: none; }
 .check-pad { align-self: end; padding-bottom: 9px; }
 .checks { display: flex; flex-wrap: wrap; gap: 6px; }
-.chip { align-items: center; padding: 8px 14px 8px 12px; border: 1px solid var(--line-2); border-radius: 999px; background: rgba(255, 255, 255, 0.03); }
+.chip { align-items: center; min-height: 44px; padding: 0 18px 0 14px; border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 999px; background: rgba(255, 255, 255, 0.03); color: #E6E9FA; font-size: var(--t-md); font-weight: 500; }
 .chip input { margin: 0; }
-.chip:has(input:checked) { border-color: var(--action); background: rgba(122, 162, 255, 0.12); color: var(--ink); }
+.chip:has(input:checked) { border-color: var(--action); background: rgba(122, 162, 255, 0.14); color: var(--ink); box-shadow: 0 0 22px rgba(122, 162, 255, 0.3); }
+/* A switch: <label class="switch"><input type="checkbox" role="switch"><span>Label</span></label> */
+.switch { display: inline-flex; align-items: center; gap: 12px; cursor: pointer; color: var(--ink); }
+.switch input { appearance: none; flex: none; position: relative; width: 52px; height: 30px; margin: 0; border-radius: 15px; background: rgba(255, 255, 255, 0.10); border: 1px solid var(--line-2); cursor: pointer; transition: background-color 160ms var(--ease), box-shadow 160ms var(--ease); }
+.switch input::after { content: ""; position: absolute; left: 3px; top: 3px; width: 22px; height: 22px; border-radius: 50%; background: var(--ink-2); transition: transform 160ms var(--ease), background-color 160ms; }
+.switch input:checked { background: #3A5BB8; border-color: #3A5BB8; box-shadow: 0 0 16px rgba(122, 162, 255, 0.4); }
+.switch input:checked::after { transform: translateX(22px); background: #fff; }
+.switch input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s3); }
 .form-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
 .form-actions-end { justify-content: flex-end; }
@@ -780,7 +806,7 @@ select { appearance: none; padding-right: 30px; background-image: linear-gradien
 .editor-title { flex: 1; min-width: 0; display: grid; line-height: 1.35; }
 .editor-path { font-size: var(--t-sm); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .editor-meta { font-size: var(--t-xs); color: var(--muted); }
-.editor-dirty { color: var(--you-text); font-weight: 600; }
+.editor-dirty { color: var(--warn-text); font-weight: 600; }
 .editor-note { display: flex; align-items: flex-start; gap: 6px; padding: 7px var(--s3); border-bottom: 1px solid var(--line); font-size: var(--t-xs); color: var(--ink-2); }
 .editor-note .i { width: 14px; height: 14px; margin-top: 1px; color: var(--muted); }
 .editor > .flash { margin: var(--s3) var(--s3) 0; }

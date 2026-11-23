@@ -21,7 +21,10 @@ package and what is done.
   States: idle → Ready, busy → Working, waiting → Needs you,
   stopped → Asleep, starting → Waking up, crashed → Restarting,
   failed → Can't start, unknown → Not sure.
-- **Amber is your turn.** It is used for nothing else. Failures use rose.
+- **Periwinkle is your turn** (v2 canvas). `--you` is #7AA2FF, shared with
+  the primary action. Amber (`--warn`) is only for real warnings: unsaved
+  edits, holding an assistant's keyboard, Activity's warning line. Failures
+  use rose.
 - **Type.** Sora (display, 200–300) and Manrope (UI), served from
   `static/vendor/fonts`. Mono only behind Advanced.
 - **Nav.** Home, Assistants, Team, Sharing, Settings. Email, Devices and

@@ -147,7 +147,7 @@
 a.friend-chip:hover { border-color: var(--action); }
 .friend-chip.is-static { border-color: var(--line); background: var(--bg-2); color: var(--ink-2); }
 .friend-chip .i { width: 14px; height: 14px; }
-.connection-status.is-wait { color: var(--you-text); background: var(--you-wash); border: 1px solid var(--you-line); }
+.connection-status.is-wait { color: var(--ink-2); background: rgba(255, 255, 255, 0.04); border: 1px dashed var(--line-2); }
 .connection-controls { flex-wrap: wrap; }
 .connection-grants p { margin: 8px 0 0; color: var(--muted); }
 .connection-codes { padding: 8px 0 28px; }

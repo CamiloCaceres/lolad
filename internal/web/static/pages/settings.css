@@ -47,7 +47,7 @@
 .page-settings .acct { padding: 18px 20px; border: 1px solid var(--line); border-radius: 18px; background: var(--card); }
 .page-settings .acct-addr { font-weight: 600; }
 .page-settings .pending { border-color: var(--you-line); background: var(--you-wash); border-radius: 18px; padding: 14px 14px 14px 18px; }
-.page-settings .pending-icon { background: rgba(255, 181, 71, 0.16); color: var(--you-text); }
+.page-settings .pending-icon { background: rgba(122, 162, 255, 0.16); color: var(--you-text); }
 .page-settings .set-actions { background: linear-gradient(180deg, rgba(7, 8, 15, 0), rgba(7, 8, 15, 0.92) 30%); border-top: 0; padding: 18px 0; }
 .page-settings .files { grid-template-columns: 300px minmax(0, 1fr); gap: 20px; align-items: stretch; }
 .page-settings .file-list { position: static; max-height: max(460px, calc(100dvh - 290px)); overflow: auto; padding: 0 12px 12px 0; scrollbar-width: thin; border-right: 1px solid var(--line); }

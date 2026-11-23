@@ -1,6 +1,4 @@
 /* Settings hub (/settings). */
-.eyebrow { font: 600 var(--t-xs)/1.4 var(--font); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
-.eyebrow .muted { letter-spacing: 0; text-transform: none; font-weight: 500; }
 .appsettings { display: flex; flex-direction: column; gap: 34px; }
 .appsettings .page-head { margin-bottom: 0; }
 .set-group { display: flex; flex-direction: column; }

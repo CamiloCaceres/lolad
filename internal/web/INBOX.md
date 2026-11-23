@@ -8,7 +8,7 @@ conversation where they were asked, quiet until the user opens the small
 composer counts what is waiting and, once answers are staged, sends them all
 together. Home shows one row per assistant linking to the question. Chatting
 doesn't answer a request. Typed answers, chosen files and open "Answer" sections survive live
-refreshes (app.js). Amber is only the small "your turn" dot.
+refreshes (app.js). Periwinkle is only the small "your turn" dot.
 
 Agents lay messages out with blocks (SPEC "User tools and blocks";
 partials/blocks.html): commands and snippets with Copy, values that copy one

@@ -39,8 +39,10 @@ a status chip.
 1. Home is home. What needs you first, then everything else is one click away.
 2. Assistants are orbs; people are rings. Each assistant has its own colour
    from its name, and its orb moves with its state.
-3. Amber means your turn, and only that. Rose means something broke, and only
-   that. Blue is the action colour. Nothing else competes.
+3. Bright periwinkle (#7AA2FF) means your turn: a ripple ring, a dot, the
+   word "Needs you". It is also the primary-button colour, so it is never
+   used as decoration. Amber is a real warning and rare; rose means
+   something broke.
 4. Plain words, one idea per sentence. Explain what happened and what to do.
 5. Advanced is one click away, never in the way. Every technical control still
    exists, folded under Advanced.

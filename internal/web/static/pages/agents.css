@@ -9,7 +9,7 @@
 .roster-team > .eyebrow > span { letter-spacing: 0; }
 .as-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 18px; }
 .as-card { position: relative; display: flex; flex-direction: column; gap: 12px; padding: 24px; border-radius: var(--r-lg); background: var(--card); border: 1px solid var(--line); min-width: 0; }
-.as-card.is-you { border-color: var(--you-line); background: linear-gradient(180deg, rgba(255, 181, 71, 0.06), rgba(255, 181, 71, 0.015)); }
+.as-card.is-you { border-color: var(--you-line); background: linear-gradient(180deg, rgba(122, 162, 255, 0.07), rgba(122, 162, 255, 0.015)); }
 .as-card.is-fault { border-color: rgba(255, 92, 122, 0.32); }
 .as-id { display: flex; align-items: center; gap: 16px; text-decoration: none; min-width: 0; }
 .as-id::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
