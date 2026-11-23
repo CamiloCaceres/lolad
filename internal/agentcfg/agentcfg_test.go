@@ -376,10 +376,27 @@ if sys.argv[1] == "secrets-needed":
 else:
     sys.exit(0 if os.environ.get("EMAIL_PASSWORD_TEST") == "local-only-password" else 5)
 `)
+	// Hermetic: email.sh installs PyYAML over the network when its interpreter
+	// lacks it. Give the agent a .venv python that finds a stub yaml module, so
+	// the wrapper takes its normal path and never reaches pip.
+	py, err := exec.LookPath("python3")
+	if err != nil {
+		t.Skip("python3 not installed")
+	}
+	stub := t.TempDir()
+	put(t, stub, "yaml.py", "def safe_load(f):\n    return {}\n")
+	put(t, d.root, ".venv/bin/python", "#!/bin/sh\nPYTHONPATH="+stub+" exec "+py+" \"$@\"\n")
+	if err := os.Chmod(filepath.Join(d.root, ".venv/bin/python"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	cmd := exec.Command("bash", filepath.Join(d.root, "tools/email.sh"), "accounts")
 	cmd.Env = append(os.Environ(), "LOLABOT_HOME="+d.root, "EMAIL_PASSWORD_TEST=local-only-password")
-	if _, e := cmd.CombinedOutput(); e != nil {
-		t.Fatal("wrapper did not use exported secret", e)
+	out, e := cmd.CombinedOutput()
+	if e != nil {
+		t.Fatal("wrapper did not use exported secret", e, string(out))
+	}
+	if strings.Contains(string(out), "installing it") {
+		t.Fatal("wrapper tried to install PyYAML (network)", string(out))
 	}
 }
 
