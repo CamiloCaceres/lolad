@@ -38,6 +38,11 @@
       <li><a href="/settings" class="nav-link" {{if or (eq .Nav "settings") (eq .Nav "email") (eq .Nav "devices") (eq .Nav "traffic")}}aria-current="page"{{end}}>{{template "icon" "sliders"}}<span>Settings</span></a></li>
     </ul>
     <a href="/new" class="btn nav-new" {{if eq .Nav "new"}}aria-current="page"{{end}}>{{template "icon" "plus"}}<span>New assistant</span></a>
+    {{/* In a conversation the other conversations sit in the nav (Thread board). */}}
+    {{if eq .Nav "inbox"}}{{with .Data}}{{if .Thread}}<div class="nav-convs" aria-label="Conversations" role="region">
+      <div class="nav-convs-head"><p class="eyebrow">Conversations</p>{{if .Agents}}{{template "new-message" .Agents}}{{end}}</div>
+      {{template "conv-list" .}}
+    </div>{{end}}{{end}}{{end}}
     <div class="nav-foot">
       <span class="avatar avatar-md" aria-hidden="true">{{initials .Me.Display}}</span>
       <span class="nav-me"><span class="nav-me-name">{{.Me.Display}}</span><span class="live" id="live" role="status" title="Live updates"><i></i><span>lolad is running</span></span></span>

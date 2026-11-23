@@ -104,6 +104,66 @@ func (v inboxView) HomeLine() string {
 	return strconv.Itoa(v.Needs) + " things need you."
 }
 
+// CaughtUp is Home with nothing new and nothing waiting (Home-Empty board):
+// the screen becomes a quiet "All caught up".
+func (v inboxView) CaughtUp() bool {
+	return len(v.Agents) > 0 && len(v.Convs) > 0 && v.Needs == 0 && len(v.Unread) == 0
+}
+
+// CaughtUpLine says how the team is, in one sentence.
+func (v inboxView) CaughtUpLine() string {
+	ready, asleep := 0, 0
+	for _, a := range v.Team {
+		switch a.State {
+		case core.StateStopped:
+			asleep++
+		case core.StateIdle, core.StateBusy, core.StateStarting:
+			ready++
+		}
+	}
+	line := "Nothing needs you right now."
+	switch ready {
+	case 0:
+	case 1:
+		line += " One assistant is ready"
+	default:
+		line += " " + capitalize(numberWord(ready)) + " assistants are ready"
+	}
+	switch {
+	case asleep == 0 && ready > 0:
+		line += "."
+	case asleep == 1 && ready > 0:
+		line += " and one is asleep. It wakes when a message arrives."
+	case asleep == 1:
+		line += " One assistant is asleep. It wakes when a message arrives."
+	case asleep > 1 && ready > 0:
+		line += " and " + numberWord(asleep) + " are asleep. They wake when a message arrives."
+	case asleep > 1:
+		line += " " + capitalize(numberWord(asleep)) + " assistants are asleep. They wake when a message arrives."
+	}
+	return line
+}
+
+func numberWord(n int) string {
+	words := []string{"no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"}
+	if n >= 0 && n < len(words) {
+		return words[n]
+	}
+	return strconv.Itoa(n)
+}
+
+func capitalize(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
+}
+
+// Cluster is up to five of the team, for the caught-up orbs.
+func (v inboxView) Cluster() []core.AgentStatus {
+	return v.Team[:min(len(v.Team), 5)]
+}
+
 type approvalView struct {
 	core.Grant
 	LocalDisplay string

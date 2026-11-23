@@ -1,10 +1,3 @@
 {{define "content"}}<div class="inbox{{if not .Data.Convs}} is-empty{{if not .Data.Agents}} is-first-run{{end}}{{end}}">
-  {{if .Data.Thread}}<aside class="inbox-list" aria-label="Conversations">
-    <header class="pane-head">
-      <h1 class="pane-title">Conversations</h1>
-      {{if .Data.Agents}}{{template "new-message" .Data.Agents}}{{end}}
-    </header>
-    {{template "conv-list" .Data}}
-  </aside>{{end}}
   {{with .Data.Thread}}{{template "thread" .}}{{else}}{{template "home" .Data}}{{end}}
 </div>{{end}}

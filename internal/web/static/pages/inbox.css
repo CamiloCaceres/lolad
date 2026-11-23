@@ -597,3 +597,89 @@
   .msg.k-ask, .msg.k-deliver { max-width: 100%; }
   .ask-when { width: 100%; margin-left: 0; }
 }
+
+/* ---------------------------------------------------------------- v2: Thread, Home-Empty
+   A conversation fills the page; the other conversations sit in the nav as
+   one compact list. The assistant's orb sits beside what it says. */
+.has-thread .inbox { grid-template-columns: minmax(0, 1fr); }
+.nav-convs { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; margin-top: 22px; }
+.nav-convs-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 6px 6px 12px; }
+.nav-convs-head .new-message-btn { min-height: 32px; width: 32px; padding: 0; border-color: transparent; background: transparent; color: var(--ink-2); }
+.nav-convs-head .new-message-btn:hover { background: rgba(255, 255, 255, 0.06); color: var(--ink); }
+.nav-convs-head .nm-label { display: none; }
+.nav-convs .conv-list { padding: 0 0 8px; }
+.nav-convs .conv { align-items: center; gap: 12px; min-height: 44px; padding: 6px 10px; border-radius: 14px; }
+.nav-convs .conv:hover { background: rgba(255, 255, 255, 0.04); }
+.nav-convs .conv.is-active { background: rgba(255, 255, 255, 0.06); box-shadow: inset 0 0 0 1px var(--line); }
+.nav-convs .conv > .orb, .nav-convs .conv > .avatar { width: 28px; height: 28px; font-size: var(--t-xs); }
+.nav-convs .conv-main { display: flex; align-items: center; gap: 8px; }
+.nav-convs .conv-top { flex: 1; min-width: 0; }
+.nav-convs .conv-name { font-weight: 500; color: var(--ink-2); }
+.nav-convs .conv.is-active .conv-name, .nav-convs .conv.is-unread .conv-name { color: var(--ink); }
+.nav-convs .conv-time, .nav-convs .conv-preview, .nav-convs .remote-origin { display: none; }
+.nav-convs .conv-bottom { flex: none; }
+.nav-convs .empty-list { padding: 8px 12px; font-size: var(--t-sm); }
+.nav-convs + .nav-foot { margin-top: 0; }
+@media (max-width: 1180px) and (min-width: 761px) {
+  .nav-convs { align-items: center; margin-top: 16px; }
+  .nav-convs-head { display: none; }
+  .nav-convs .conv { justify-content: center; width: 52px; padding: 6px; position: relative; }
+  .nav-convs .conv-main { position: absolute; right: 0; top: 0; }
+  .nav-convs .conv-top { display: none; }
+  .nav-convs .count { min-width: 17px; height: 17px; padding: 0 4px; font-size: 10px; }
+}
+
+.thread-head { padding: 22px 40px; gap: 16px; border-bottom-color: rgba(255, 255, 255, 0.06); }
+.thread-head .orb { width: 52px; height: 52px; }
+.thread-name { font: 400 1.5rem/1.2 var(--display); letter-spacing: -0.02em; }
+.thread-sub { font-size: var(--t-md); }
+.thread-sub .state { font-size: var(--t-md); }
+.msgs { max-width: 920px; padding: 32px 40px 24px; }
+.sep { justify-content: center; margin: 22px 0 6px; font-size: var(--t-sm); font-weight: 500; }
+.sep::before, .sep::after { display: none; }
+.sep.is-new { color: var(--you-text); }
+.sep.is-new::before, .sep.is-new::after { display: block; background: var(--you-line); }
+
+.msg.is-theirs { position: relative; padding-left: 46px; max-width: min(86%, 686px); }
+.msg.is-theirs.k-ask, .msg.is-theirs.k-deliver { max-width: min(96%, 726px); }
+.msg.is-update { padding-left: 46px; }
+.msg-orb { position: absolute; left: 0; top: 20px; }
+.msg-orb .orb, .msg-orb .avatar { width: 32px; height: 32px; }
+.is-theirs .bubble { background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 14px 20px; }
+.is-theirs:not(.is-cont) .bubble { border-top-left-radius: 6px; }
+.is-mine .bubble { background: #1C2647; border: 1px solid rgba(122, 162, 255, 0.25); border-radius: 22px; padding: 14px 20px; }
+.is-mine:not(.is-cont) .bubble { border-bottom-right-radius: 6px; border-top-right-radius: 22px; }
+.msg.is-mine { max-width: min(78%, 560px); }
+
+.composer-wrap { max-width: 920px; width: 100%; margin: 0 auto; padding: 16px 40px 24px; }
+.composer { border-radius: 26px; border: 1px solid var(--line-2); background: rgba(4, 5, 12, 0.75); padding: 8px; }
+.composer-hint { margin: 8px 0 0 12px; }
+
+@media (max-width: 760px) {
+  .thread-head { padding: 10px 12px; padding-top: max(10px, env(safe-area-inset-top)); gap: 8px; }
+  .thread-name { font-size: 1.2rem; }
+  .msgs { padding: 12px 14px 20px; }
+  .msg.is-theirs { padding-left: 0; max-width: 94%; }
+  .msg.is-update { padding-left: 0; }
+  .msg-orb { display: none; }
+  .composer-wrap { padding: 10px 12px max(12px, env(safe-area-inset-bottom)); }
+}
+
+/* All caught up */
+.caught-up { display: flex; flex-direction: column; align-items: center; gap: 26px; padding: 72px 16px 56px; text-align: center; }
+.cu-orbs { position: relative; width: 300px; height: 220px; }
+.cu-orb { position: absolute; }
+.cu-orb .orb { width: 100%; height: 100%; }
+.cu-0 { width: 110px; height: 110px; left: 95px; top: 20px; }
+.cu-1 { width: 64px; height: 64px; left: 10px; top: 110px; }
+.cu-2 { width: 72px; height: 72px; left: 220px; top: 100px; }
+.cu-3 { width: 48px; height: 48px; left: 60px; top: 10px; }
+.cu-4 { width: 44px; height: 44px; left: 200px; top: 8px; }
+.cu-title { font: 200 2.875rem/1.1 var(--display); letter-spacing: -0.025em; }
+.cu-line { max-width: 460px; color: var(--ink-2); font-size: var(--t-msg); }
+.cu-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+.cu-actions .new-message-btn { background: var(--btn-primary); border-color: var(--btn-primary); color: var(--btn-primary-ink); box-shadow: 0 0 26px rgba(122, 162, 255, 0.35); }
+.cu-actions .new-message-btn:hover { background: #8FB2FF; }
+.caught-up + .eyebrow { margin-top: 24px; scroll-margin-top: 24px; }
+@media (max-width: 400px) { .cu-orbs { transform: scale(0.85); } }
+.msg.k-ask:not(.is-open) .msg-orb { top: 8px; }

@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/CamiloCaceres/lolad/internal/core"
+	"github.com/CamiloCaceres/lolad/internal/web"
+	"github.com/CamiloCaceres/lolad/internal/web/fake"
 )
 
 func TestInboxHomePriorityAndLiveRefresh(t *testing.T) {
@@ -24,7 +26,7 @@ func TestInboxHomePriorityAndLiveRefresh(t *testing.T) {
 		t.Error("home must refresh on live mail")
 	}
 	_, thread := e.get("/inbox/lola")
-	if !strings.Contains(thread, `<aside class="inbox-list"`) {
+	if !strings.Contains(thread, `class="nav-convs"`) {
 		t.Error("open thread needs conversation navigation")
 	}
 	// Opening the unread conversation moves it to recent while keeping its thread available.
@@ -85,5 +87,44 @@ func TestInboxArrivalBanner(t *testing.T) {
 	_, body := e.get("/inbox/scout")
 	if strings.Contains(body, "data-dismiss-arrival") {
 		t.Error("ordinary thread must not show creation welcome")
+	}
+}
+
+// Thread board: the other conversations sit in the nav, and the assistant's
+// orb sits beside what it says.
+func TestThreadConversationsInNav(t *testing.T) {
+	e := setup(t)
+	_, page := e.get("/inbox/ultron")
+	nav := page[strings.Index(page, `<nav class="nav"`):strings.Index(page, "</nav>")]
+	for _, want := range []string{`class="nav-convs"`, "Conversations", `id="conv-list"`, `href="/inbox/lola"`} {
+		if !strings.Contains(nav, want) {
+			t.Errorf("nav missing %q", want)
+		}
+	}
+	if strings.Count(page, `id="conv-list"`) != 1 {
+		t.Error("the conversation list should appear once")
+	}
+	if !strings.Contains(page, `class="msg-orb"`) {
+		t.Error("assistant messages should carry its orb")
+	}
+	if _, home := e.get("/"); strings.Contains(home, `class="nav-convs"`) {
+		t.Error("Home has no conversation list in the nav")
+	}
+}
+
+// Home-Empty board: nothing waiting and nothing new is "All caught up".
+func TestHomeCaughtUp(t *testing.T) {
+	e := setupWith(t, fake.Options{Empty: true}, web.Options{})
+	if _, err := e.svc.Create(context.Background(), core.CreateRequest{Name: "Iris", Role: "Researcher", Harness: "claude"}); err != nil {
+		t.Fatal(err)
+	}
+	if resp, _ := e.do("POST", "/inbox/iris", url.Values{"body": {"Hello"}}, false); resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("send: %d", resp.StatusCode)
+	}
+	_, home := e.get("/")
+	for _, want := range []string{`class="caught-up"`, "All caught up.", "Nothing needs you right now.", "Read earlier conversations", `id="earlier"`} {
+		if !strings.Contains(home, want) {
+			t.Errorf("home missing %q", want)
+		}
 	}
 }

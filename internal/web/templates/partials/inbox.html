@@ -83,11 +83,13 @@
   </li>
   {{else if and (eq .Kind "ask") (not .Mine)}}
   <li class="msg is-theirs k-ask{{if not .Answered}} is-open{{end}}" id="m-{{short .ID}}">
+    {{if true}}<span class="msg-orb">{{template "avatar" (dict "Display" $t.Display "Size" "sm" "State" "" "Person" (not $t.Agent))}}</span>{{end}}
     {{if not .Answered}}<p class="msg-meta"><span class="msg-from">{{$t.Display}}</span><time datetime="{{stamp .CreatedAt}}" title="{{long .CreatedAt}}">{{clock .CreatedAt}}</time></p>{{end}}
     {{if .Req}}{{template "ask-card" (dict "M" . "T" $t)}}{{else if .Answered}}{{template "ask-receipt" (dict "M" . "Who" $t.Display)}}{{else}}<div class="ask-card is-closed">{{template "ask-body" .}}{{template "atts" .Files}}</div>{{end}}
   </li>
   {{else if and (eq .Kind "deliver") (not .Mine)}}
   <li class="msg is-theirs k-deliver" id="m-{{short .ID}}">
+    {{if true}}<span class="msg-orb">{{template "avatar" (dict "Display" $t.Display "Size" "sm" "State" "" "Person" (not $t.Agent))}}</span>{{end}}
     <p class="msg-meta"><span class="msg-from">{{$t.Display}}</span><time datetime="{{stamp .CreatedAt}}" title="{{long .CreatedAt}}">{{clock .CreatedAt}}</time></p>
     <div class="deliver-card">
       <p class="deliver-tag">{{template "icon" "check"}}Finished</p>
@@ -99,6 +101,7 @@
   </li>
   {{else}}
   <li class="msg {{if .Mine}}is-mine{{else}}is-theirs{{end}} k-{{.Kind}}{{if .Chat.Blocks}} has-blocks{{end}}{{if .Cont}} is-cont{{end}}" id="m-{{short .ID}}">
+    {{if not .Mine}}{{if not .Cont}}<span class="msg-orb">{{template "avatar" (dict "Display" $t.Display "Size" "sm" "State" "" "Person" (not $t.Agent))}}</span>{{end}}{{end}}
     {{if not .Cont}}<p class="msg-meta">{{if not .Mine}}<span class="msg-from">{{$t.Display}}</span>{{end}}<time datetime="{{stamp .CreatedAt}}" title="{{long .CreatedAt}}">{{clock .CreatedAt}}</time></p>{{end}}
     {{if not .Bare}}<div class="bubble">
       {{if .ShowSubj}}<p class="bubble-subj">{{subject .Mail}}</p>{{end}}
@@ -149,6 +152,15 @@
 
 {{define "home"}}<section class="home" id="inbox-home" aria-label="Home" hx-get="/" hx-select="#inbox-home" hx-target="this" hx-disinherit="hx-select hx-target hx-swap hx-push-url" hx-swap="outerHTML" hx-trigger="lolad:mail from:body delay:400ms, lolad:federation from:body delay:400ms, lolad:agent from:body delay:900ms" hx-push-url="false">
   <div class="home-inner">
+  {{if .CaughtUp}}
+  <div class="caught-up">
+    <div class="cu-orbs" aria-hidden="true">{{range $i, $a := .Cluster}}<span class="cu-orb cu-{{$i}}">{{template "avatar" (dict "Display" $a.Display "State" (or (and (eq $a.State "stopped") "stopped") "") "Size" "")}}</span>{{end}}</div>
+    <h1 class="cu-title">All caught up.</h1>
+    <p class="cu-line">{{.CaughtUpLine}}</p>
+    <div class="cu-actions">{{template "new-message" .Agents}}{{if .Recent}}<a class="btn" href="#earlier">Read earlier conversations</a>{{end}}</div>
+  </div>
+  {{if .Recent}}<h2 class="eyebrow" id="earlier">Earlier</h2>{{template "home-rows" .Recent}}{{end}}
+  {{else}}
   <header class="hm-head"><div><h1 class="page-title">{{greeting}}, {{firstName .Me}}.</h1><p class="page-sub">{{.HomeLine}}</p></div>{{if .Agents}}{{template "new-message" .Agents}}{{end}}</header>
   {{if .Team}}<ul class="hm-team" role="list" aria-label="Your assistants">{{range .Team}}<li><a href="/inbox/{{.Name}}">{{template "avatar" (dict "Display" .Display "State" .State "Size" "lg")}}<span class="hm-team-name">{{.Display}}</span>{{template "state" .}}</a></li>{{end}}</ul>{{end}}
   {{if .Needs}}
@@ -185,11 +197,7 @@
   {{if .Recent}}<h2 class="eyebrow">Earlier</h2>{{template "home-rows" .Recent}}{{end}}
   {{if not .Agents}}{{if not .Convs}}{{template "first-run" (dict "Title" "Welcome to lolad")}}{{end}}
   {{else if not .Convs}}{{template "start-chat" .Agents}}
-  {{else if and (not .Needs) (not .Unread) (not .Recent)}}
-    <div class="empty empty-home">
-      <p class="empty-title">All caught up.</p>
-      <p>Nothing is waiting on you. Write to an assistant whenever you need something.</p>
-    </div>
+  {{end}}
   {{end}}
   </div>
 </section>{{end}}
