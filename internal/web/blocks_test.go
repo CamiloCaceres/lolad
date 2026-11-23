@@ -90,7 +90,7 @@ func TestTaskLogsAndFiles(t *testing.T) {
 		{"name": "log", "label": "Error output", "type": "logs"},
 	}})
 	_, page := e.get("/inbox/ultron")
-	for _, want := range []string{"Mark it done", `class="req-option is-done"`, `value="Added"`, `enctype="multipart/form-data"`, `type="file" name="f.shot"`, `class="is-mono" name="f.log"`} {
+	for _, want := range []string{"needs you to do this", "data-ask-couldnt", "What went wrong?", `name="files"`, `value="Added"`, `enctype="multipart/form-data"`, `type="file" name="f.shot"`, `class="is-mono" name="f.log"`} {
 		if !strings.Contains(page, want) {
 			t.Errorf("thread missing %q", want)
 		}
@@ -115,6 +115,26 @@ func TestTaskLogsAndFiles(t *testing.T) {
 		t.Fatalf("attachments: %v", out.Attachments)
 	}
 	for _, want := range []string{"Result: I couldn't do it", "Answer: Hostinger says the record exists", "Screenshot: attached to this message (bug.png)", "Error output:\n   ```\n   Error: EADDRINUSE\n       at listen (net.js:1)\n   ```"} {
+		if !strings.Contains(out.Body, want) {
+			t.Errorf("answers body missing %q:\n%s", want, out.Body)
+		}
+	}
+}
+
+// "I couldn't do it" sends what went wrong with a screenshot, at once.
+func TestTaskCouldntWithScreenshot(t *testing.T) {
+	e := setup(t)
+	task := askFrom(t, e, "ultron", "Add the DNS record", "Add the record", map[string]any{"task": true, "options": []string{"Added", "I couldn't do it"}})
+	code, body := multipartPost(t, e, "/inbox/ultron/requests/"+task.ID, map[string]string{"send": "1", "option": "I couldn't do it", "text": "The Name field wants a full domain"},
+		map[string][2]string{"files": {"hostinger.png", "\x89PNG fake"}})
+	if code != 200 || !strings.Contains(body, `class="ask-receipt"`) || !strings.Contains(body, "Sent hostinger.png") {
+		t.Fatalf("couldn't: %d %s", code, body)
+	}
+	out := e.svc.Sent()[0]
+	if len(out.Attachments) != 1 {
+		t.Fatalf("attachments: %v", out.Attachments)
+	}
+	for _, want := range []string{"Result: I couldn't do it", "Answer: The Name field wants a full domain", "Screenshots or logs: attached to this message (hostinger.png)"} {
 		if !strings.Contains(out.Body, want) {
 			t.Errorf("answers body missing %q:\n%s", want, out.Body)
 		}

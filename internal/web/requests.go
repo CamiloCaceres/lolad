@@ -19,11 +19,13 @@ import (
 )
 
 // Requests: what an assistant asked the user for (a choice, a few details, a
-// key, or an answer in words). They stay in the conversation, where they were
-// asked, behind a small "Answer" under the question; a one-line bar above the
-// composer counts them. Chatting doesn't answer them. Answers are staged here,
-// then sent together as one "answers" mail, so the assistant wakes once. See
-// core/ask.go and INBOX.md.
+// key, a task, or an answer in words). Each one is an open card in the
+// conversation, where it was asked; a waiting bar above the composer points
+// at it while it is out of view. Chatting doesn't answer them. A card's Send
+// answer (or Skip) sends that one answer at once, as an "answers" mail with
+// one entry; once answered the card folds into a one-line receipt. The older
+// stage-then-send-together flow is still accepted (a post without send=1).
+// See core/ask.go and INBOX.md.
 
 // legacyAsksBefore: asks older than this were answered by any later message
 // from the user (the rule before requests), so they don't come back as open.
@@ -102,20 +104,93 @@ func closeAsks(msgs []msgView) {
 			}
 			switch {
 			case r.Chat.Kind == "decision" && r.InReplyTo == m.ID:
-				m.Answered, m.Answer = true, r.Chat.Decision
+				m.Answered, m.Answer, m.AnsweredAt = true, r.Chat.Decision, r.CreatedAt
+				m.Reply = &core.AskAnswer{Ask: m.ID, Decision: r.Chat.Decision}
 			case r.Chat.Kind == "answers":
 				if k := slices.IndexFunc(r.Chat.Answers, func(a core.AskAnswer) bool { return a.Ask == m.ID }); k >= 0 {
 					a := r.Chat.Answers[k]
-					m.Answered, m.Skipped, m.Answer = true, a.Skipped, answerSummary(a, m.Chat.Fields)
+					m.Answered, m.Skipped, m.Answer, m.AnsweredAt = true, a.Skipped, answerSummary(a, m.Chat.Fields), r.CreatedAt
+					m.Reply = &a
 				}
 			case r.InReplyTo == m.ID, legacy:
-				m.Answered = true
+				m.Answered, m.AnsweredAt = true, r.CreatedAt
 			}
 			if m.Answered {
 				break
 			}
 		}
 	}
+}
+
+// optSep splits an option into its label and a one-line consequence
+// ("Book the 9:40 — €212 · lands 12:10"). The whole string is still the
+// option's value, so the agent gets back exactly what it offered.
+const optSep = " — "
+
+func optLabel(o string) string {
+	if l, _, ok := strings.Cut(o, optSep); ok && strings.TrimSpace(l) != "" {
+		return strings.TrimSpace(l)
+	}
+	return o
+}
+
+func optNote(o string) string {
+	if l, n, ok := strings.Cut(o, optSep); ok && strings.TrimSpace(l) != "" {
+		return strings.TrimSpace(n)
+	}
+	return ""
+}
+
+// taskFiles is the key, in a task answer's Files and Values, of the
+// screenshots or logs sent with "I couldn't do it".
+const taskFiles = "details"
+
+// receiptLine is the one line an answered card folds into.
+func receiptLine(a core.AskAnswer, uc core.UserChat) string {
+	if a.Skipped {
+		return "Skipped"
+	}
+	var parts []string
+	switch {
+	case a.Decision == "":
+	case uc.Task && len(uc.Options) > 0 && a.Decision == uc.Options[0]:
+		parts = append(parts, optLabel(a.Decision))
+	case uc.Task:
+		parts = append(parts, optLabel(a.Decision))
+	default:
+		parts = append(parts, "You chose: "+optLabel(a.Decision))
+	}
+	for _, f := range uc.Fields {
+		if f.Type == core.FieldSecret {
+			continue
+		}
+		if v, ok := a.Values[f.Name]; ok {
+			if f.Type == core.FieldLogs {
+				v = plural(strings.Count(v, "\n")+1, "line", "lines")
+			}
+			parts = append(parts, fieldLabel(f)+": "+v)
+		}
+	}
+	for _, k := range a.Secrets {
+		label := k
+		for _, f := range uc.Fields {
+			if f.Name == k {
+				label = fieldLabel(f)
+			}
+		}
+		parts = append(parts, label+": Saved")
+	}
+	if names := a.Values[taskFiles]; names != "" && len(a.Files[taskFiles]) > 0 {
+		parts = append(parts, "Sent "+names)
+	}
+	if a.Text != "" {
+		if len(parts) == 0 {
+			parts = append(parts, "You said: "+a.Text)
+		} else {
+			parts = append(parts, a.Text)
+		}
+	}
+	return excerpt(strings.Join(parts, " · "), 160)
 }
 
 // answerLine is one request in the user's answers message, as the user sees it.
@@ -145,6 +220,30 @@ func answerLines(msgs []msgView) {
 			}
 			l.A = answerSummary(a, fields)
 			m.Lines = append(m.Lines, l)
+		}
+	}
+}
+
+// foldAnswers hides the user's answers and decision mails whose every
+// request is shown in this view: each card's receipt already says what was
+// answered. Mails answering requests further back stay, as a list.
+func foldAnswers(msgs []msgView) {
+	asks := map[string]bool{}
+	for _, m := range msgs {
+		if m.Kind == "ask" && !m.Mine {
+			asks[m.ID] = true
+		}
+	}
+	for i := range msgs {
+		m := &msgs[i]
+		if !m.Mine {
+			continue
+		}
+		switch m.Kind {
+		case "decision":
+			m.Folded = m.InReplyTo != "" && asks[m.InReplyTo]
+		case "answers":
+			m.Folded = len(m.Chat.Answers) > 0 && !slices.ContainsFunc(m.Chat.Answers, func(a core.AskAnswer) bool { return !asks[a.Ask] })
 		}
 	}
 }
@@ -451,9 +550,10 @@ func (s *server) stageRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	ask := open[i]
 	do, option := r.FormValue("do"), r.FormValue("option")
-	if do == "" && option != "" {
+	if (do == "" || do == "send") && option != "" {
 		do = "option"
 	}
+	now := r.FormValue("send") == "1" && do != "change" // the card's own Send answer or Skip
 	switch do {
 	case "change":
 		s.drafts.drop(peer, id)
@@ -469,7 +569,19 @@ func (s *server) stageRequest(w http.ResponseWriter, r *http.Request) {
 			s.renderRequests(w, r, peer, http.StatusUnprocessableEntity, map[string]reqEdit{id: {Error: fmt.Sprintf("That note is too long (at most %d characters).", maxAnswerRunes), Text: text}}, "")
 			return
 		}
-		s.drafts.set(peer, core.AskAnswer{Ask: id, Decision: option, Text: text}) // a task's "what happened" rides along
+		a := core.AskAnswer{Ask: id, Decision: option, Text: text} // a task's "what happened" rides along
+		if ask.Chat.Task {
+			names, ids, msg := s.uploadAll(ctx, peer, r, "files")
+			if msg != "" {
+				s.renderRequests(w, r, peer, http.StatusUnprocessableEntity, map[string]reqEdit{id: {Error: msg, Text: text}}, "")
+				return
+			}
+			if len(ids) > 0 {
+				a.Files = map[string][]string{taskFiles: ids}
+				a.Values = map[string]string{taskFiles: names}
+			}
+		}
+		s.drafts.set(peer, a)
 	default:
 		a, edit := s.collect(ctx, peer, ask, r)
 		if edit.Error != "" {
@@ -478,7 +590,57 @@ func (s *server) stageRequest(w http.ResponseWriter, r *http.Request) {
 		}
 		s.drafts.set(peer, a)
 	}
+	if now {
+		if status, msg := s.sendAnswers(ctx, peer, open, []string{id}); msg != "" {
+			s.renderRequests(w, r, peer, status, map[string]reqEdit{id: {Error: msg}}, "")
+			return
+		}
+		if isHX(r) {
+			w.Header().Set("HX-Trigger", `{"lolad:mail":{}}`)
+		}
+		if !isHX(r) && r.FormValue("back") == "home" {
+			http.Redirect(w, r, "/", http.StatusSeeOther)
+			return
+		}
+	}
 	s.renderRequests(w, r, peer, http.StatusOK, nil, "")
+}
+
+// uploadAll uploads the files posted under name, for a task's "I couldn't
+// do it". It returns their names, their attachment IDs, or why it couldn't.
+func (s *server) uploadAll(ctx context.Context, peer string, r *http.Request, name string) (string, []string, string) {
+	if r.MultipartForm == nil {
+		return "", nil, ""
+	}
+	var parts []*multipart.FileHeader
+	for _, p := range r.MultipartForm.File[name] {
+		if p.Filename != "" {
+			parts = append(parts, p)
+		}
+	}
+	if len(parts) == 0 {
+		return "", nil, ""
+	}
+	if off := fileOff(peer); off != "" {
+		return "", nil, off
+	}
+	if len(parts) > maxAnswerFiles {
+		return "", nil, fmt.Sprintf("Choose at most %d files.", maxAnswerFiles)
+	}
+	var names, ids []string
+	for _, p := range parts {
+		f, err := p.Open()
+		if err != nil {
+			return "", nil, fmt.Sprintf("Couldn't read %s.", p.Filename)
+		}
+		att, err := s.svc.UploadAttachment(ctx, p.Filename, p.Header.Get("Content-Type"), f)
+		f.Close()
+		if err != nil {
+			return "", nil, fmt.Sprintf("Couldn't attach %s: %s", p.Filename, humanize(err, ""))
+		}
+		names, ids = append(names, p.Filename), append(ids, att.ID)
+	}
+	return strings.Join(names, ", "), ids, ""
 }
 
 // collect reads and checks a card's inputs. Keys are saved to the agent's env
@@ -497,6 +659,9 @@ func (s *server) collect(ctx context.Context, peer string, ask msgView, r *http.
 	fields := ask.Chat.Fields
 	if len(fields) == 0 {
 		if text == "" {
+			if len(ask.Chat.Options) > 0 {
+				return fail("Choose one of the answers, or write your own.")
+			}
 			return fail("Write an answer, or skip this request.")
 		}
 		a.Text = text
@@ -643,16 +808,32 @@ func (s *server) sendRequests(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	if status, msg := s.sendAnswers(ctx, peer, open, nil); msg != "" {
+		s.renderRequests(w, r, peer, status, nil, msg)
+		return
+	}
+	if isHX(r) {
+		w.Header().Set("HX-Trigger", `{"lolad:mail":{}}`)
+	}
+	s.renderRequests(w, r, peer, http.StatusOK, nil, "")
+}
+
+// sendAnswers sends the staged answers to the open asks named by only (every
+// staged answer when only is nil) in one mail, and forgets them. It returns
+// an HTTP status and a message for the user when nothing was sent.
+func (s *server) sendAnswers(ctx context.Context, peer string, open []msgView, only []string) (int, string) {
 	var asks []msgView
 	var answers []core.AskAnswer
 	for _, m := range open {
+		if only != nil && !slices.Contains(only, m.ID) {
+			continue
+		}
 		if a, ok := s.drafts.get(peer, m.ID); ok {
 			asks, answers = append(asks, m), append(answers, a)
 		}
 	}
 	if len(answers) == 0 {
-		s.renderRequests(w, r, peer, http.StatusUnprocessableEntity, nil, "Answer or skip a request first.")
-		return
+		return http.StatusUnprocessableEntity, "Answer or skip a request first."
 	}
 	subj := "Answers to " + plural(len(answers), "request", "requests")
 	if len(answers) == 1 {
@@ -665,24 +846,19 @@ func (s *server) sendRequests(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if len(files) > maxAnswerFiles {
-		s.renderRequests(w, r, peer, http.StatusUnprocessableEntity, nil, fmt.Sprintf("These answers carry %d files; one send takes %d. Change one, send, then send the rest.", len(files), maxAnswerFiles))
-		return
+		return http.StatusUnprocessableEntity, fmt.Sprintf("These answers carry %d files; one send takes %d. Change one, send, then send the rest.", len(files), maxAnswerFiles)
 	}
 	out := core.Outgoing{To: peer, Subject: subj, Body: answersBody(asks, answers), Type: "response", InReplyTo: asks[len(asks)-1].ID,
 		Context: map[string]any{"userchat": jsonMap(core.UserChat{Kind: "answers", Answers: answers})}, Attachments: files}
 	if _, err := s.svc.UserSend(ctx, out); err != nil {
-		s.renderRequests(w, r, peer, statusFor(err), nil, "Not sent: "+humanize(err, ""))
-		return
+		return statusFor(err), "Not sent: " + humanize(err, "")
 	}
 	ids := make([]string, len(answers))
 	for i, a := range answers {
 		ids[i] = a.Ask
 	}
 	s.drafts.drop(peer, ids...)
-	if isHX(r) {
-		w.Header().Set("HX-Trigger", `{"lolad:mail":{}}`)
-	}
-	s.renderRequests(w, r, peer, http.StatusOK, nil, "")
+	return http.StatusOK, ""
 }
 
 // jsonMap is v as the provider stores it: plain JSON values.
@@ -733,6 +909,9 @@ func answersBody(asks []msgView, answers []core.AskAnswer) string {
 			default:
 				fmt.Fprintf(&b, "   %s: %s\n", fieldLabel(f), indentLines(v))
 			}
+		}
+		if names := a.Values[taskFiles]; names != "" && len(a.Files[taskFiles]) > 0 {
+			fmt.Fprintf(&b, "   Screenshots or logs: attached to this message (%s)\n", names)
 		}
 		for _, k := range a.Secrets {
 			fmt.Fprintf(&b, "   %s: saved in your .env file (the value is not in this message). Read it from there or from your environment.\n", k)

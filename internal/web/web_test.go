@@ -284,7 +284,7 @@ func TestDecisionButtons(t *testing.T) {
 		t.Errorf("sent %+v", out)
 	}
 	// The answered ask now shows the choice and leaves the requests panel.
-	if !strings.Contains(body, `<p class="ask-state">`) || !strings.Contains(body, "<span>Hold until Thursday</span>") {
+	if !strings.Contains(body, `class="ask-receipt"`) || !strings.Contains(body, "You chose: Hold until Thursday") {
 		t.Errorf("answered ask not marked")
 	}
 	if strings.Contains(body, `action="/inbox/lola/requests/`+ask.ID+`"`) {

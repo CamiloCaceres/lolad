@@ -178,6 +178,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .btn-primary { background: var(--btn-primary); border-color: var(--btn-primary); color: var(--btn-primary-ink); box-shadow: 0 0 26px rgba(122, 162, 255, 0.35); }
 .btn-primary:hover { background: #8FB2FF; }
 .btn-primary:active { background: #6B94F5; }
+.btn-primary:disabled, .btn-you:disabled { background: var(--btn-primary); border-color: var(--btn-primary); color: var(--btn-primary-ink); box-shadow: none; opacity: 0.35; }
 .btn-you { background: var(--you); border-color: var(--you); color: var(--you-ink); box-shadow: 0 0 26px rgba(122, 162, 255, 0.35); }
 .btn-you:hover { background: #8FB2FF; }
 .btn-ghost { border-color: transparent; background: transparent; color: var(--ink-2); }

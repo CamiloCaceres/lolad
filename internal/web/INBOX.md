@@ -2,19 +2,38 @@
 
 Inbox is a messaging workspace for the operator. Home presents unanswered agent
 questions first, then unread conversations, then read conversations by recency.
-Questions are requests (see requests.go and SPEC "Requests"). They stay in the
-conversation where they were asked, quiet until the user opens the small
-"Answer" under one; nothing takes over the thread. A one-line bar above the
-composer counts what is waiting and, once answers are staged, sends them all
-together. Home shows one row per assistant linking to the question. Chatting
-doesn't answer a request. Typed answers, chosen files and open "Answer" sections survive live
-refreshes (app.js). Periwinkle is only the small "your turn" dot.
+Questions are requests (see requests.go and SPEC "Requests"). Each is an
+open card in the conversation where it was asked (Agent-UI and Thread-Asks
+boards): the choices, fields or steps are right there, nothing hides behind
+an "Answer" toggle. A choice card selects, then **Send answer** commits; the
+last row is always "Something else…", which opens a box for the user's own
+words. Skip is a quiet button ("carry on without me"). Each card sends its one
+answer at once (an answers mail with one entry), then folds into a one-line
+receipt ("You chose: …", "Skipped", "OpenAI key: Saved"); the question stays
+one click away inside it, and the answers mail itself isn't shown again.
+An option may carry one line of consequence after " — " ("Book the 9:40 —
+€212 · lands 12:10"): the label is bold, the rest small, and the whole string
+is still the value sent back. The waiting bar above the composer names the
+assistant and the question, and shows only while that card is out of view;
+"Jump to it" scrolls to it and focuses the first choice. Home shows each
+assistant's oldest request as a card: choices answer in one tap there,
+anything longer opens the conversation. Chatting doesn't answer a request.
+Typed answers, the picked choice, chosen files and an open "I couldn't do it"
+survive live refreshes (app.js); key fields are never kept. Periwinkle means
+only "waiting on you". A post without send=1 still stages an answer for
+the older send-together flow (POST /inbox/{peer}/requests/send).
 
 Agents lay messages out with blocks (SPEC "User tools and blocks";
 partials/blocks.html): commands and snippets with Copy, values that copy one
-click at a time, a link button showing its host, and a checklist. A task
-request ("Mark it done") leads with its done button. File and logs fields
-answer "send me a screenshot" and "paste the error".
+click at a time, a link button showing its host, and a checklist. A task card
+leads with its done button (the first option); "I couldn't do it" (the last
+option) swaps in a "What went wrong?" box and a drop zone for a screenshot or
+log, sent with the answer. File and logs fields answer "send me a screenshot"
+and "paste the error". Say is a bubble. Update is one quiet line, with a
+spinner while it is the newest message and the assistant is working; an
+update followed directly by another from the same assistant is hidden, so a
+run of progress shows only its latest line. Deliver is a card with a teal
+"Finished" tag, its title, its files and a Copy the text button.
 
 Home has one reading column on desktop and phone. A conversation rail appears
 only inside a thread on desktop. Phone threads replace home, with a visible back
@@ -25,10 +44,9 @@ retain multiline input and an explicit send button. Drafts survive navigation.
 
 Messages render with the existing escaped Markdown renderer: headings, lists,
 links, tables and fenced code. Deliverables expose their original Markdown to a
-Copy deliverable button. If Clipboard API access is unavailable (including plain
+Copy the text button. If Clipboard API access is unavailable (including plain
 HTTP remote access), a readonly selected text field provides manual copying.
-Progress updates use quiet, unboxed text. Honey is reserved for pending questions;
-neutral surfaces and state dots follow the shared light/dark tokens.
+Progress updates use quiet, unboxed text.
 
 The shell preserves ordinary additive nav links for Email and devices. On phones
 navigation occupies a sticky top bar with horizontally scrolling destinations,

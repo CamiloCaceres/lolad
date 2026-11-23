@@ -1,67 +1,111 @@
-{{/* Requests: answered in place, under the question that asked them. Nothing
-is shown until the user opens "Answer"; answers are staged and sent together
-from the one-line bar above the composer. See requests.go. */}}
+{{/* Requests: what an assistant asks of the user, as open cards in the
+conversation (Agent-UI and Thread-Asks boards). Everything needed to answer
+is on the card; its Send answer sends that one answer at once (send=1) and
+the card folds into a one-line receipt. See requests.go. */}}
 
-{{/* req-bar: one quiet line above the composer while requests are open. */}}
-{{define "req-bar"}}{{$t := .T}}<div id="req-bar" class="req-bar"{{if .OOB}} hx-swap-oob="true"{{end}}{{if not (and $t $t.Reqs)}} hidden{{end}}>{{with $t}}{{if .Reqs}}
-  <span class="req-dot" aria-hidden="true"></span>
-  {{if .Waiting}}<span>{{if eq .Waiting 1}}1 question waiting{{else}}{{.Waiting}} questions waiting{{end}}</span><a href="#m-{{short .FirstWaiting}}" data-req-jump="{{short .FirstWaiting}}">Show</a>{{end}}
-  {{if .Ready}}{{if .Waiting}}<span class="req-sep" aria-hidden="true">·</span>{{end}}<span>{{.Ready}} ready to send</span>
-  <form method="post" action="/inbox/{{.Peer}}/requests/send" hx-post="/inbox/{{.Peer}}/requests/send" hx-target="#msgs" hx-disabled-elt="find button" data-req-send><button class="req-send-btn" type="submit">{{template "icon" "send"}}Send {{if eq .Ready 1}}answer{{else}}{{.Ready}} answers{{end}}</button></form>{{end}}
+{{/* req-bar: the waiting bar above the composer. app.js hides it while the
+card it points at is on screen. */}}
+{{define "req-bar"}}{{$t := .T}}<div id="req-bar" class="req-bar"{{if .OOB}} hx-swap-oob="true"{{end}}{{if not (and $t $t.Reqs)}} hidden{{end}} data-req-bar{{with $t}}{{with .FirstWaiting}} data-req-target="m-{{short .}}"{{end}}{{end}}>{{with $t}}{{if .Reqs}}
+  <span class="pulse" aria-hidden="true"></span>
+  <span class="req-bar-text">{{if eq (len .Reqs) 1}}<strong>{{.Display}}</strong> <span>is waiting: {{(index .Reqs 0).Line}}</span>{{else}}<strong>{{len .Reqs}} questions</strong> <span>are waiting · oldest first</span>{{end}}</span>
+  {{with .FirstWaiting}}<a class="btn btn-sm" href="#m-{{short .}}" data-req-jump="{{short .}}">Jump to it</a>{{end}}
   {{with .Error}}<span class="req-error" role="alert">{{.}}</span>{{end}}
 {{end}}{{end}}</div>{{end}}
 
-{{/* ask-answer: under an open question in the thread. */}}
-{{define "ask-answer"}}{{$r := .R}}{{$t := .T}}{{$m := $r.Ask}}{{$key := printf "%s.%s" $t.Peer (short $m.ID)}}
-{{if $r.Draft}}
-<form class="ask-staged" method="post" action="/inbox/{{$t.Peer}}/requests/{{$m.ID}}" hx-post="/inbox/{{$t.Peer}}/requests/{{$m.ID}}" hx-target="#msgs">
-  {{if $r.Draft.Skipped}}{{template "icon" "x"}}<span class="is-skip">You’ll skip this</span>{{else}}{{template "icon" "check"}}<span>{{$r.Summary}}</span>{{end}}<span class="ask-staged-note">not sent yet</span>
-  <button class="ask-link" type="submit" name="do" value="change">Change</button>
-</form>
-{{else}}
-<details class="ask-answer" data-ask="{{short $m.ID}}"{{if $r.Error}} open{{end}}>
-  <summary class="ask-link">{{if eq $r.Kind "task"}}{{template "icon" "check"}}Mark it done{{else if $r.Secret}}{{template "icon" "key"}}Add the key{{else}}Answer{{end}}</summary>
-  <form class="req-form" method="post" action="/inbox/{{$t.Peer}}/requests/{{$m.ID}}" hx-post="/inbox/{{$t.Peer}}/requests/{{$m.ID}}" hx-target="#msgs" hx-disabled-elt="find button" autocomplete="off"{{if $r.File}} enctype="multipart/form-data" hx-encoding="multipart/form-data"{{end}}>
-    {{if eq $r.Kind "task"}}
-    <div class="req-options" role="group" aria-label="Did it work?">{{range $i, $o := $m.Chat.Options}}<button class="req-option{{if eq $i 0}} is-done{{end}}" type="submit" name="option" value="{{$o}}">{{if eq $i 0}}{{template "icon" "check"}}{{end}}{{$o}}</button>{{end}}</div>
-    <label class="sr-only" for="w-{{short $m.ID}}">Anything to add</label><textarea id="w-{{short $m.ID}}" name="text" rows="1" placeholder="Anything to add? What you saw, what went wrong… (optional)" data-req-input data-key="{{$key}}.text">{{$r.Text}}</textarea>
-    {{else if eq $r.Kind "options"}}
-    <div class="req-options" role="group" aria-label="Choices">{{range $m.Chat.Options}}<button class="req-option" type="submit" name="option" value="{{.}}">{{.}}</button>{{end}}</div>
-    <label class="sr-only" for="w-{{short $m.ID}}">Or answer in your own words</label><textarea id="w-{{short $m.ID}}" name="text" rows="1" placeholder="Or in your own words…" data-req-input data-key="{{$key}}.text">{{$r.Text}}</textarea>
-    {{else if eq $r.Kind "form"}}
+{{/* ask-tag: who is asking and what for. */}}
+{{define "ask-tag"}}{{$k := kindOf .M.Chat}}<p class="ask-tag"><span class="pulse" aria-hidden="true"></span>{{.Who}} {{if eq $k "options"}}needs a decision{{else if eq $k "task"}}needs you to do this{{else if eq $k "form"}}{{if eq (len .M.Chat.Fields) 1}}has a question{{else}}needs a few details{{end}}{{else}}has a question{{end}}</p>{{end}}
+
+{{/* ask-body: the question itself. */}}
+{{define "ask-body"}}{{$m := .}}{{with subject $m.Mail}}{{if $m.ShowSubj}}<h3 class="ask-title">{{.}}</h3>{{end}}{{end}}
+{{if $m.Chat.Blocks}}{{template "blocks" $m}}{{else if not $m.HideBody}}<div class="rich ask-text">{{chatmd $m.Body}}</div>{{end}}{{end}}
+
+{{/* ask-card: an open request, answered in place. */}}
+{{define "ask-card"}}{{$m := .M}}{{$r := $m.Req}}{{$t := .T}}{{$key := printf "%s.%s" $t.Peer (short $m.ID)}}{{$k := $r.Kind}}
+<div class="ask-card is-{{$k}}" data-ask="{{short $m.ID}}">
+  {{template "ask-tag" (dict "M" $m "Who" $t.Display)}}
+  {{template "ask-body" $m}}
+  {{template "atts" $m.Files}}
+  {{if $r.Draft}}
+  <form class="ask-staged" method="post" action="/inbox/{{$t.Peer}}/requests/{{$m.ID}}" hx-post="/inbox/{{$t.Peer}}/requests/{{$m.ID}}" hx-target="#msgs" hx-disabled-elt="find button">
+    <p>{{if $r.Draft.Skipped}}You’ll skip this.{{else}}{{$r.Summary}}{{end}} <span class="muted">Not sent yet.</span></p>
+    <div class="ask-actions"><button class="btn btn-primary" type="submit" formaction="/inbox/{{$t.Peer}}/requests/send" hx-post="/inbox/{{$t.Peer}}/requests/send">Send answer</button><button class="btn btn-ghost" type="submit" name="do" value="change">Change</button></div>
+  </form>
+  {{else}}
+  <form class="ask-form" method="post" action="/inbox/{{$t.Peer}}/requests/{{$m.ID}}" hx-post="/inbox/{{$t.Peer}}/requests/{{$m.ID}}" hx-target="#msgs" hx-disabled-elt="find button" autocomplete="off"{{if or $r.File (and (eq $k "task") (not $r.FileOff))}} enctype="multipart/form-data" hx-encoding="multipart/form-data"{{end}} data-ask-form>
+    <input type="hidden" name="send" value="1">
+    {{if eq $k "options"}}
+    <div class="ask-opts" role="radiogroup" aria-label="{{or (subject $m.Mail) "Choices"}}">
+      {{range $i, $o := $m.Chat.Options}}<label class="opt"><input type="radio" name="option" value="{{$o}}" data-ask-pick><span class="opt-r" aria-hidden="true"></span><span class="opt-text"><b>{{optLabel $o}}</b>{{with optNote $o}}<small>{{.}}</small>{{end}}</span></label>{{end}}
+      <label class="opt is-alt"><input type="radio" name="option" value="" data-ask-pick data-ask-other{{if $r.Text}} checked{{end}}><span class="opt-r" aria-hidden="true"></span><span class="opt-text">Something else…</span></label>
+      <div class="ask-other"><label class="label" for="w-{{short $m.ID}}">Your answer</label><textarea id="w-{{short $m.ID}}" name="text" rows="2" placeholder="Say it in your own words…" data-req-input data-key="{{$key}}.text">{{$r.Text}}</textarea></div>
+    </div>
+    {{else if eq $k "form"}}
     <div class="req-fields">{{range $r.Fields}}{{template "req-field" (dict "F" . "K" $key "R" $r "T" $t)}}{{end}}</div>
-    {{else}}
-    <label class="sr-only" for="w-{{short $m.ID}}">Your answer</label><textarea id="w-{{short $m.ID}}" name="text" rows="2" placeholder="Your answer…" data-req-input data-key="{{$key}}.text">{{$r.Text}}</textarea>
+    {{else if eq $k "words"}}
+    <div class="field"><label class="label" for="w-{{short $m.ID}}">Your answer</label><textarea id="w-{{short $m.ID}}" name="text" rows="3" placeholder="Type your answer…" data-req-input data-key="{{$key}}.text">{{$r.Text}}</textarea></div>
     {{end}}
     {{with $r.Error}}<p class="req-error" role="alert">{{template "icon" "alert"}}<span>{{.}}</span></p>{{end}}
-    <div class="req-actions">
-      {{if ne $r.Kind "task"}}<button class="btn btn-sm" type="submit" name="do" value="save">{{if eq $r.Kind "options"}}Use my words{{else}}Done{{end}}</button>{{end}}
-      <button class="btn btn-ghost btn-sm" type="submit" name="do" value="skip">Skip it</button>
-      <span class="req-hint">Saved here until you send</span>
+    {{if eq $k "task"}}{{$opts := $m.Chat.Options}}{{$n := len $opts}}
+    <div class="ask-actions ask-done-row">
+      <button class="btn btn-primary" type="submit" name="option" value="{{index $opts 0}}">{{template "icon" "check"}}{{optLabel (index $opts 0)}}</button>
+      {{range $i, $o := $opts}}{{if and (gt $i 0) (lt $i (add $n -1))}}<button class="btn" type="submit" name="option" value="{{$o}}">{{optLabel $o}}</button>{{end}}{{end}}
+      <button class="btn btn-ghost" type="button" data-ask-couldnt aria-expanded="{{if $r.Error}}true{{else}}false{{end}}" aria-controls="cd-{{short $m.ID}}">{{if gt $n 1}}{{optLabel (index $opts (add $n -1))}}{{else}}I couldn’t do it{{end}}</button>
     </div>
+    <div class="ask-couldnt" id="cd-{{short $m.ID}}"{{if not $r.Error}} hidden{{end}}>
+      <div class="field"><label class="label" for="w-{{short $m.ID}}">What went wrong?</label><textarea id="w-{{short $m.ID}}" name="text" rows="3" placeholder="What you saw, where it stopped…" data-req-input data-key="{{$key}}.text">{{$r.Text}}</textarea></div>
+      {{if $r.FileOff}}<p class="req-note">{{template "icon" "shield"}}<span>{{$r.FileOff}}</span></p>{{else}}
+      <label class="drop-zone" data-drop-zone><input type="file" name="files" multiple data-req-file><span class="drop-zone-text">{{template "icon" "paperclip"}}<span data-drop-label>Add a screenshot or log <span class="muted">· optional</span></span></span></label>{{end}}
+      <div class="ask-actions">
+        <button class="btn btn-primary" type="submit" name="option" value="{{if gt $n 1}}{{index $opts (add $n -1)}}{{end}}">Send to {{$t.Display}}</button>
+        <button class="btn btn-ghost" type="button" data-ask-back>Back to the steps</button>
+      </div>
+    </div>
+    {{else}}
+    <div class="ask-actions">
+      <button class="btn btn-primary" type="submit" name="do" value="send"{{if eq $k "options"}} data-ask-send{{end}}>{{if eq $k "form"}}Send{{else}}Send answer{{end}}</button>
+      <button class="btn btn-ghost" type="submit" name="do" value="skip" formnovalidate>{{if eq $k "options"}}Skip, carry on without me{{else}}Skip{{end}}</button>
+      <span class="ask-when">Asked <time datetime="{{stamp $m.CreatedAt}}" title="{{long $m.CreatedAt}}">{{clock $m.CreatedAt}}</time></span>
+    </div>
+    {{end}}
   </form>
-</details>
-{{end}}{{end}}
+  {{end}}
+</div>{{end}}
 
-{{/* home-asks: one quiet row per assistant, opening the conversation at the question. */}}
-{{define "home-asks"}}{{if .}}<ul class="home-rows hm-asks" role="list">{{range .}}{{$first := index .Reqs 0}}<li><a href="/inbox/{{.Peer}}{{with .FirstWaiting}}#m-{{short .}}{{end}}">
-{{template "avatar" (dict "Display" .Display "State" .State "Size" "")}}
-<span class="home-row-content"><span class="home-row-top"><strong>{{.Display}}</strong><span class="hm-ask-what"><span class="req-dot" aria-hidden="true"></span>{{if eq (len .Reqs) 1}}asked you something{{else}}asked you {{len .Reqs}} things{{end}}{{if .Ready}} · {{.Ready}} ready to send{{end}}</span><time datetime="{{stamp $first.Ask.CreatedAt}}" data-when>{{when $first.Ask.CreatedAt}}</time></span>
-<span class="home-row-preview">{{$first.Line}}</span></span>{{template "icon" "next"}}</a></li>{{end}}</ul>{{end}}{{end}}
+{{/* ask-receipt: an answered request, folded to one line. The question is
+one click away. */}}
+{{define "ask-receipt"}}{{$m := .M}}<details class="ask-receipt">
+  <summary><span class="ask-receipt-q">{{or (subject $m.Mail) (excerpt $m.Body 80)}}</span>
+  {{if $m.Skipped}}<span class="ask-receipt-a is-skip">Skipped. {{.Who}} carried on without you.</span>{{else if $m.Reply}}<strong class="ask-receipt-a">{{receipt $m.Reply $m.Chat}}</strong>{{else if $m.Answer}}<strong class="ask-receipt-a">You chose: {{optLabel $m.Answer}}</strong>{{else}}<span class="ask-receipt-a">Answered in the chat</span>{{end}}
+  {{if not $m.AnsweredAt.IsZero}}<time datetime="{{stamp $m.AnsweredAt}}" title="{{long $m.AnsweredAt}}">{{clock $m.AnsweredAt}}</time>{{end}}</summary>
+  <div class="ask-receipt-body">{{template "ask-body" $m}}{{template "atts" $m.Files}}</div>
+</details>{{end}}
+
+{{/* home-asks: one card per assistant on Home, its oldest open request.
+Choices answer in one tap; anything longer opens the conversation. */}}
+{{define "home-asks"}}{{range .}}{{$t := .}}{{$r := index .Reqs 0}}{{$m := $r.Ask}}
+<article class="hm-ask" data-ask="{{short $m.ID}}">
+  <p class="hm-ask-who">{{template "avatar" (dict "Display" .Display "State" .State "Size" "sm")}}<strong>{{.Display}}</strong><span class="muted">asked <time datetime="{{stamp $m.CreatedAt}}" data-when>{{when $m.CreatedAt}}</time>{{if gt (len .Reqs) 1}} · {{add (len .Reqs) -1}} more waiting{{end}}</span></p>
+  <h3 class="hm-ask-title">{{$r.Line}}</h3>
+  {{if $r.Title}}<p class="hm-ask-text">{{excerpt $m.Body 220}}</p>{{end}}
+  {{if eq $r.Kind "options"}}<form class="hm-ask-opts" method="post" action="/inbox/{{.Peer}}/requests/{{$m.ID}}"><input type="hidden" name="send" value="1"><input type="hidden" name="back" value="home">
+    {{range $m.Chat.Options}}<button class="chip" type="submit" name="option" value="{{.}}" title="{{optNote .}}">{{optLabel .}}</button>{{end}}
+    <a class="btn btn-ghost" href="/inbox/{{.Peer}}#m-{{short $m.ID}}">Reply…</a>
+  </form>
+  {{else}}<p class="hm-ask-go"><a class="btn btn-you" href="/inbox/{{.Peer}}#m-{{short $m.ID}}">{{if eq $r.Kind "task"}}Open the steps{{else if $r.Secret}}Add the key{{else}}Answer {{.Display}}{{end}}</a></p>{{end}}
+</article>{{end}}{{end}}
 
 {{define "req-field"}}{{$f := .F}}{{$id := printf "f-%s-%s" (short .R.Ask.ID) $f.Name}}{{$k := printf "%s.%s" .K $f.Name}}
-<div class="field req-field{{if or (eq $f.Type "longtext") (eq $f.Type "secret") (eq $f.Type "logs") (eq $f.Type "file")}} is-wide{{end}}">
-  <label class="label" for="{{$id}}">{{or $f.Label $f.Name}}{{if $f.Optional}} <span class="opt">optional</span>{{end}}</label>
+<div class="field req-field is-{{$f.Type}}{{if or (eq $f.Type "longtext") (eq $f.Type "secret") (eq $f.Type "logs") (eq $f.Type "file")}} is-wide{{end}}">
+  <label class="label" for="{{$id}}">{{if eq $f.Type "secret"}}{{template "icon" "lock"}}{{end}}{{or $f.Label $f.Name}}{{if $f.Optional}} <span class="opt-note">· optional</span>{{end}}</label>
   {{if eq $f.Type "secret"}}{{if .R.SecretOff}}<p class="req-note">{{template "icon" "shield"}}<span>{{.R.SecretOff}}</span></p>{{else}}
-  <input id="{{$id}}" type="password" name="f.{{$f.Name}}" autocomplete="new-password" spellcheck="false" placeholder="{{if $f.Saved}}Already saved · leave empty to keep it{{else}}Paste it here{{end}}" data-req-input data-key="{{$k}}">
-  <p class="req-note">{{template "icon" "lock"}}<span>Saved as <code>{{$f.Name}}</code> in {{.T.Display}}’s keys{{if $f.Saved}}, replacing the one there now{{end}}. It never appears in the chat.</span></p>{{end}}
+  <input id="{{$id}}" class="is-mono" type="password" name="f.{{$f.Name}}" autocomplete="new-password" spellcheck="false" placeholder="{{if $f.Saved}}Already saved · leave empty to keep it{{else}}Paste it here{{end}}">
+  <p class="help">Saved straight to {{.T.Display}}’s private keys{{if $f.Saved}}, replacing the one there now{{end}}. It never appears in this conversation.</p>{{end}}
   {{else if eq $f.Type "logs"}}<textarea id="{{$id}}" class="is-mono" name="f.{{$f.Name}}" rows="5" spellcheck="false" autocapitalize="off" wrap="off" placeholder="Paste it here, exactly as it appears" data-req-input data-key="{{$k}}">{{$f.Value}}</textarea>
   {{else if eq $f.Type "file"}}{{if .R.FileOff}}<p class="req-note">{{template "icon" "shield"}}<span>{{.R.FileOff}}</span></p>{{else}}
-  <input id="{{$id}}" class="req-file" type="file" name="f.{{$f.Name}}" multiple data-req-file>
-  <p class="req-note">{{template "icon" "paperclip"}}<span>{{with $f.Value}}Chosen before: {{.}}. Choose again to send them.{{else}}Screenshots, logs, documents; up to 10 files.{{end}}</span></p>{{end}}
+  <label class="drop-zone" data-drop-zone><input id="{{$id}}" type="file" name="f.{{$f.Name}}" multiple data-req-file><span class="drop-zone-text">{{template "icon" "paperclip"}}<span data-drop-label>{{with $f.Value}}Chosen before: {{.}}. Choose again to send them.{{else}}Drop a file here, or choose one{{end}}</span></span></label>{{end}}
   {{else if eq $f.Type "longtext"}}<textarea id="{{$id}}" name="f.{{$f.Name}}" rows="3" data-req-input data-key="{{$k}}">{{$f.Value}}</textarea>
   {{else if eq $f.Type "choice"}}<select id="{{$id}}" name="f.{{$f.Name}}" data-req-input data-key="{{$k}}"><option value="">Choose…</option>{{range $f.Options}}<option{{if eq . $f.Value}} selected{{end}}>{{.}}</option>{{end}}</select>
-  {{else if eq $f.Type "number"}}<input id="{{$id}}" type="text" inputmode="decimal" name="f.{{$f.Name}}" value="{{$f.Value}}" data-req-input data-key="{{$k}}">
+  {{else if eq $f.Type "number"}}<input id="{{$id}}" type="text" inputmode="decimal" name="f.{{$f.Name}}" value="{{$f.Value}}" data-req-input data-key="{{$k}}"><p class="help">A number</p>
   {{else if eq $f.Type "date"}}<input id="{{$id}}" type="date" name="f.{{$f.Name}}" value="{{$f.Value}}" data-req-input data-key="{{$k}}">
   {{else}}<input id="{{$id}}" type="text" name="f.{{$f.Name}}" value="{{$f.Value}}" data-req-input data-key="{{$k}}">{{end}}
 </div>{{end}}

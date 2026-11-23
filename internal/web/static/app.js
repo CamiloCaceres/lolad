@@ -142,7 +142,7 @@
       // Your own message or a batch of answers lands at the bottom; staging an
       // answer to an older question stays where you are.
       const elt = e.detail.requestConfig && e.detail.requestConfig.elt;
-      const mine = e.detail.requestConfig && e.detail.requestConfig.verb === "post" && elt && elt.closest && !!elt.closest("[data-composer], [data-req-send]");
+      const mine = e.detail.requestConfig && e.detail.requestConfig.verb === "post" && elt && elt.closest && !!elt.closest("[data-composer], [data-req-send], [data-ask-form]");
       if (stick || mine) toBottom(true);
     }
   });
@@ -729,38 +729,39 @@
   window.addEventListener("beforeunload", (e) => { if (dirty()) { e.preventDefault(); e.returnValue = ""; } });
 
   // ------------------------------------------------------------ requests
-  // Questions are answered in place. What was typed, and which "Answer"
-  // sections were open, survive live refreshes (htmx re-renders the thread
-  // whenever mail arrives), and so does focus.
+  // Requests are open cards in the thread (requests.html). What was typed,
+  // which choice was picked and whether "I couldn't do it" was open survive
+  // live refreshes (htmx re-renders the thread whenever mail arrives), and
+  // so does focus. Secrets are never kept here.
   const typed = new Map();
   const chosen = new Map(); // file inputs with files: moved into the new page as they are
-  let opened = new Set();
+  const picked = new Map(); // card → chosen option value
+  let opened = new Set(); // cards with "I couldn't do it" open
   let typing = null;
   function keepTyped() {
     document.querySelectorAll("[data-req-input]").forEach((el) => { if (el.value) typed.set(el.dataset.key, el.value); });
-    document.querySelectorAll("input[data-req-file]").forEach((el) => { if (el.files && el.files.length) chosen.set(el.id, el); });
-    document.querySelectorAll("details[data-ask][open]").forEach((d) => opened.add(d.dataset.ask));
+    document.querySelectorAll("input[data-req-file]").forEach((el) => { if (el.files && el.files.length) chosen.set(fileKey(el), el); });
+    document.querySelectorAll("[data-ask] input[data-ask-pick]:checked").forEach((el) => picked.set(el.closest("[data-ask]").dataset.ask, el.value));
+    document.querySelectorAll("[data-ask] .ask-couldnt:not([hidden])").forEach((el) => opened.add(el.closest("[data-ask]").dataset.ask));
     const a = document.activeElement;
     if (a && a.matches && a.matches("[data-req-input]")) typing = { key: a.dataset.key, start: a.selectionStart, end: a.selectionEnd };
   }
+  function fileKey(el) { return el.id || (el.closest("[data-ask]") ? el.closest("[data-ask]").dataset.ask + ":" + el.name : ""); }
   function restoreTyped() {
-    document.querySelectorAll("details[data-ask]").forEach((d) => { if (opened.has(d.dataset.ask)) d.open = true; });
-    chosen.forEach((el, id) => {
-      const fresh = document.getElementById(id);
-      if (fresh && fresh !== el && fresh.matches("input[data-req-file]")) {
-        fresh.replaceWith(el);
-        const d = el.closest("details");
-        if (d) d.open = true;
-      }
+    document.querySelectorAll("[data-ask]").forEach((card) => {
+      const v = picked.get(card.dataset.ask);
+      if (v !== undefined) card.querySelectorAll("input[data-ask-pick]").forEach((r) => { if (r.value === v) r.checked = true; });
+      if (opened.has(card.dataset.ask)) couldnt(card, true, false);
+    });
+    document.querySelectorAll("input[data-req-file]").forEach((fresh) => {
+      const el = chosen.get(fileKey(fresh));
+      if (el && fresh !== el) { fresh.replaceWith(el); dropLabel(el); }
     });
     chosen.clear();
+    picked.clear();
     document.querySelectorAll("[data-req-input]").forEach((el) => {
       const v = typed.get(el.dataset.key);
-      if (v && !el.value) {
-        el.value = v;
-        const d = el.closest("details");
-        if (d) d.open = true;
-      }
+      if (v && !el.value) el.value = v;
     });
     if (typing) {
       const el = [...document.querySelectorAll("[data-req-input]")].find((x) => x.dataset.key === typing.key);
@@ -772,31 +773,100 @@
     typed.clear();
     opened = new Set();
     typing = null;
+    document.querySelectorAll("form[data-ask-form]").forEach(syncSend);
+    watchWaiting();
   }
   document.addEventListener("htmx:beforeSwap", keepTyped);
   document.addEventListener("htmx:oobBeforeSwap", keepTyped);
-  // An answer that was accepted closes its section: don't reopen it, and
-  // its files were sent with it.
+  // An answer that was accepted is sent: forget what it held.
   document.addEventListener("htmx:beforeSwap", (e) => {
-    const d = e.detail.requestConfig && e.detail.requestConfig.elt.closest && e.detail.requestConfig.elt.closest("details[data-ask]");
-    if (d && e.detail.xhr.status < 400) {
-      opened.delete(d.dataset.ask);
-      d.querySelectorAll("input[data-req-file]").forEach((el) => chosen.delete(el.id));
+    const card = e.detail.requestConfig && e.detail.requestConfig.elt.closest && e.detail.requestConfig.elt.closest("[data-ask]");
+    if (card && e.detail.xhr.status < 400) {
+      const id = card.dataset.ask;
+      opened.delete(id);
+      picked.delete(id);
+      card.querySelectorAll("[data-req-input]").forEach((el) => typed.delete(el.dataset.key));
+      card.querySelectorAll("input[data-req-file]").forEach((el) => chosen.delete(fileKey(el)));
     }
   });
 
-  // Jump to a question (the bar's "Show", Home's rows): scroll it into view,
-  // mark it briefly and open its answer.
+  // A choice card's Send answer waits for a choice; "Something else" brings
+  // its box into focus.
+  function syncSend(form) {
+    const send = form.querySelector("[data-ask-send]");
+    if (!send) return;
+    const pick = form.querySelector("input[data-ask-pick]:checked");
+    send.disabled = !pick;
+  }
+  document.addEventListener("change", (e) => {
+    const r = e.target;
+    if (r.matches && r.matches("input[data-ask-pick]")) {
+      syncSend(r.form);
+      if (r.matches("[data-ask-other]")) { const t = r.form.querySelector(".ask-other textarea"); if (t) t.focus(); }
+    }
+    if (r.matches && r.matches("input[data-req-file]")) dropLabel(r);
+  });
+
+  // A task's "I couldn't do it" swaps its buttons for a box and a drop zone.
+  function couldnt(card, open, focus) {
+    const box = card.querySelector(".ask-couldnt");
+    const row = card.querySelector(".ask-done-row");
+    const btn = card.querySelector("[data-ask-couldnt]");
+    if (!box) return;
+    box.hidden = !open;
+    if (row) row.hidden = open;
+    if (btn) btn.setAttribute("aria-expanded", String(open));
+    if (open && focus) { const t = box.querySelector("textarea"); if (t) t.focus(); }
+    if (!open && focus && btn) btn.focus();
+  }
+  document.addEventListener("click", (e) => {
+    const t = e.target.closest && e.target.closest("[data-ask-couldnt], [data-ask-back]");
+    if (!t) return;
+    couldnt(t.closest("[data-ask]"), t.matches("[data-ask-couldnt]"), true);
+  });
+
+  // Drop zones: a label around a file input; show what was chosen.
+  function dropLabel(input) {
+    const zone = input.closest("[data-drop-zone]");
+    const label = zone && zone.querySelector("[data-drop-label]");
+    if (!label) return;
+    const names = [...(input.files || [])].map((f) => f.name);
+    if (names.length) { label.textContent = names.join(", "); zone.classList.add("has-files"); }
+  }
+  ["dragenter", "dragover"].forEach((t) => document.addEventListener(t, (e) => {
+    const z = e.target.closest && e.target.closest("[data-drop-zone]");
+    if (z) z.classList.add("is-over");
+  }));
+  ["dragleave", "drop"].forEach((t) => document.addEventListener(t, (e) => {
+    const z = e.target.closest && e.target.closest("[data-drop-zone]");
+    if (z) z.classList.remove("is-over");
+  }));
+
+  // The waiting bar shows only while the card it points at is out of view.
+  let waitObs = null;
+  function watchWaiting() {
+    if (waitObs) { waitObs.disconnect(); waitObs = null; }
+    const bar = document.querySelector("[data-req-bar]");
+    const id = bar && bar.dataset.reqTarget;
+    const card = id && document.getElementById(id);
+    if (!bar) return;
+    bar.classList.remove("is-onscreen");
+    if (!card || !("IntersectionObserver" in window)) return;
+    waitObs = new IntersectionObserver((es) => es.forEach((en) => bar.classList.toggle("is-onscreen", en.isIntersecting)), { threshold: 0.35 });
+    waitObs.observe(card);
+  }
+
+  // Jump to a question (the waiting bar, Home's cards): scroll it into
+  // view, mark it briefly and focus its first choice or field.
   function showQuestion(short, focus) {
     const msg = document.getElementById("m-" + short);
     if (!msg) return false;
     msg.scrollIntoView({ block: "center", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
     msg.classList.add("is-flash");
     setTimeout(() => msg.classList.remove("is-flash"), 1600);
-    const d = msg.querySelector("details[data-ask]");
-    if (d) {
-      d.open = true;
-      if (focus) { const f = d.querySelector("button.req-option, [data-req-input], button"); if (f) f.focus({ preventScroll: true }); }
+    if (focus) {
+      const f = msg.querySelector("[data-ask] input[data-ask-pick], [data-ask] [data-req-input], [data-ask] input, [data-ask] button");
+      if (f) f.focus({ preventScroll: true });
     }
     return true;
   }
@@ -804,13 +874,6 @@
     const jump = e.target.closest && e.target.closest("[data-req-jump]");
     if (jump && showQuestion(jump.dataset.reqJump, true)) e.preventDefault();
   });
-  // Opening "Answer" brings the choices into view.
-  document.addEventListener("toggle", (e) => {
-    const d = e.target;
-    if (!d.matches || !d.matches("details[data-ask]") || !d.open || restoring) return;
-    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    requestAnimationFrame(() => d.scrollIntoView({ block: "nearest", behavior: reduce ? "auto" : "smooth" }));
-  }, true);
   let restoring = false;
   function settleRequests() { restoring = true; restoreTyped(); restoreSteps(); setTimeout(() => { restoring = false; }, 0); }
 

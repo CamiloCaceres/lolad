@@ -87,21 +87,12 @@
 .decision .i { width: 15px; height: 15px; }
 
 /* deliverables: a document, not a chat line */
-.k-deliver .bubble { background: var(--bg); border: 1px solid var(--line-2); box-shadow: 0 1px 0 var(--line); }
-.k-deliver .bubble-kind { color: var(--ink-2); }
 
 /* asks: answered in the requests panel; the bubble is the record */
 .k-ask .bubble { background: var(--bg-3); }
-.k-ask.is-open .bubble-kind { color: var(--ink-2); }
-.k-ask.is-open .bubble-kind::after { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--you); margin-left: 2px; }
-.ask-state { display: flex; align-items: center; gap: 6px; margin-top: 4px; padding: 0 var(--s2); font-size: var(--t-xs); color: var(--muted); }
-.ask-state .i { width: 12px; height: 12px; flex: none; color: var(--ink-2); }
-.ask-state span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 52ch; color: var(--ink-2); }
-.ask-state a { color: var(--ink-2); }
 .receipt { margin-top: 4px; padding: 0 var(--s2); font-size: var(--t-xs); color: var(--muted); }
 
 /* updates: progress notes, quieter than speech */
-.msg.is-update { max-width: min(86%, 680px); margin-top: var(--s3); }
 .note { padding: 2px var(--s2); color: var(--ink-2); font-size: var(--t-md); }
 .note-head { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: var(--t-xs); }
 .note-head .i { width: 13px; height: 13px; }
@@ -199,10 +190,6 @@
 .is-inbox .rich table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; }
 .is-inbox .rich th, .is-inbox .rich td { padding: 6px 10px; border: 1px solid var(--line); }
 .is-inbox .rich a { overflow-wrap: anywhere; }
-.deliver-copy { margin-top: 12px; font-size: 12px; border: 1px solid var(--line-2); }
-.k-deliver { max-width: min(95%, 700px); }
-.k-deliver .bubble { width: 100%; border-radius: 12px; box-shadow: none; padding: 16px 20px; }
-.k-deliver .bubble-subj { font-size: 17px; margin: 8px 0; }
 .note-body { color: var(--muted); }
 .thread-settings { color: var(--ink-2); }
 .thread-head { padding: 16px 24px; }
@@ -219,8 +206,7 @@
   .msgs { padding: 12px 16px 24px; }
   .msg { max-width: 94%; }
   .k-deliver { max-width: 100%; }
-  .k-deliver .bubble { padding: 14px; }
-  .composer-wrap { padding: 10px 12px max(12px, env(safe-area-inset-bottom)); }
+    .composer-wrap { padding: 10px 12px max(12px, env(safe-area-inset-bottom)); }
   .composer textarea { font-size: 16px; min-width: 0; min-height: 40px; }
   .send { width: 40px; height: 40px; }
 }
@@ -405,70 +391,123 @@
 @media (max-width: 760px) { .thread-head .orb { display: none; } }
 
 /* ---------------------------------------------------------------- requests
-   Answered in place: a small "Answer" under the question opens the choices;
-   one quiet line above the composer counts what is waiting and sends what is
-   ready. Amber is only the small "your turn" dot. */
+   Agent-UI and Thread-Asks boards. An open request is a card with a
+   periwinkle edge and everything needed to answer it; once answered it folds
+   into a one-line receipt. Periwinkle means only "this is waiting on you". */
+.pulse { flex: none; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--you); box-shadow: 0 0 0 0 rgba(122, 162, 255, 0.6); animation: pulse 2s ease-out infinite; }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(122, 162, 255, 0.6); } 70%, 100% { box-shadow: 0 0 0 8px rgba(122, 162, 255, 0); } }
 .req-dot { flex: none; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--you); }
-.ask-link {
-  display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 0 10px; margin-left: -2px;
-  border: 0; border-radius: 8px; background: none; color: var(--ink-2);
-  font: 600 var(--t-xs)/1 var(--font); cursor: pointer; list-style: none;
-}
-.ask-link::-webkit-details-marker { display: none; }
-.ask-link:hover { background: rgba(255, 255, 255, 0.06); color: var(--ink); }
-.ask-link .i { width: 13px; height: 13px; }
-.ask-answer { margin-top: 4px; width: 100%; }
-.ask-answer > summary::after { content: "›"; font-size: 14px; line-height: 1; transform: rotate(90deg); color: var(--muted); }
-.ask-answer[open] > summary::after { transform: rotate(-90deg); }
-.ask-answer .req-form { margin-top: 6px; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--bg-2); display: grid; gap: 10px; }
-.req-options { display: flex; flex-wrap: wrap; gap: 6px; }
-.req-option {
-  min-height: 34px; padding: 6px 12px; border-radius: 10px;
-  border: 1px solid var(--line-2); background: rgba(255, 255, 255, 0.04); color: var(--ink);
-  font: 500 var(--t-sm)/1.3 var(--font); text-align: left; cursor: pointer;
-  transition: background-color 120ms var(--ease), border-color 120ms var(--ease);
-}
-.req-option:hover { background: rgba(255, 255, 255, 0.09); border-color: rgba(255, 255, 255, 0.24); }
-.req-option:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-.ask-answer textarea { min-height: 40px; font-size: var(--t-sm); padding: 8px 12px; border-radius: 10px; }
-.req-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+
+.msg.k-ask { max-width: min(94%, 660px); width: 100%; }
+.msg.k-ask > .ask-card, .msg.k-ask > .ask-receipt, .msg.k-deliver > .deliver-card { align-self: stretch; }
+.msg.is-flash .ask-card { box-shadow: 0 0 0 4px rgba(122, 162, 255, 0.18); transition: box-shadow 600ms var(--ease); }
+.ask-card { display: grid; gap: 16px; padding: 22px 24px; border-radius: 20px; border: 1px solid var(--you-line); background: linear-gradient(180deg, rgba(122, 162, 255, 0.07), rgba(122, 162, 255, 0.015) 60%); min-width: 0; }
+.ask-card.is-closed { border-color: var(--line); background: var(--card); }
+.ask-tag { display: inline-flex; align-items: center; gap: 10px; font: 600 var(--t-xs)/1.3 var(--font); letter-spacing: 0.1em; text-transform: uppercase; color: var(--you-text); }
+.ask-title { font: 300 1.5rem/1.2 var(--display); letter-spacing: -0.02em; }
+.ask-text { color: var(--ink-2); font-size: var(--t-msg); }
+.ask-card .blocks { gap: 12px; }
+.ask-form { display: grid; gap: 14px; min-width: 0; }
+.ask-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ask-actions .btn-primary .i { width: 16px; height: 16px; }
+.ask-when { margin-left: auto; font-size: var(--t-sm); color: var(--muted); }
+
+.ask-opts { display: grid; gap: 8px; }
+.opt { position: relative; display: flex; gap: 14px; align-items: flex-start; min-height: 56px; padding: 14px 16px; border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.12); background: rgba(255, 255, 255, 0.03); cursor: pointer; color: var(--ink); font-weight: 400; transition: border-color 120ms var(--ease), background-color 120ms var(--ease); }
+.opt:hover { background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.2); }
+.opt input { position: absolute; opacity: 0; pointer-events: none; }
+.opt-r { flex: none; width: 20px; height: 20px; margin-top: 2px; border-radius: 50%; border: 2px solid var(--muted); display: grid; place-items: center; }
+.opt-text { display: grid; gap: 2px; min-width: 0; }
+.opt-text b { font-weight: 600; font-size: 1rem; }
+.opt-text small { color: var(--ink-2); font-size: var(--t-sm); }
+.opt:has(input:checked) { border-color: var(--you); background: rgba(122, 162, 255, 0.10); box-shadow: 0 0 0 1px var(--you); }
+.opt:has(input:checked) .opt-r { border-color: var(--you); }
+.opt:has(input:checked) .opt-r::after { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--you); }
+.opt:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+.opt.is-alt { border-style: dashed; min-height: 48px; color: var(--ink-2); align-items: center; }
+.opt.is-alt .opt-r { margin-top: 0; }
+.ask-other { display: none; gap: 6px; padding: 2px 2px 0; }
+.ask-opts:has(input[data-ask-other]:checked) .ask-other { display: grid; }
+
+.req-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
 .req-field.is-wide { grid-column: 1 / -1; }
-.req-field .label { font-size: var(--t-xs); }
-.req-field .opt { font-weight: 400; color: var(--muted); }
-.req-field input, .req-field select { min-height: 38px; padding: 7px 12px; border-radius: 10px; font-size: var(--t-sm); }
+.req-field .label { display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-sm); color: var(--ink); }
+.req-field .label .i { width: 14px; height: 14px; color: var(--ink-2); }
+.opt-note { font-weight: 400; color: var(--muted); }
 .req-field input[type="date"] { color-scheme: dark; }
-.req-note { display: flex; align-items: flex-start; gap: 6px; font-size: var(--t-xs); color: var(--muted); line-height: 1.45; }
-.req-note .i { flex: none; width: 12px; height: 12px; margin-top: 2px; }
+.is-mono { font-family: var(--mono); font-size: var(--t-sm); }
+.req-field.is-secret input { letter-spacing: 0.08em; }
+.req-note { display: flex; align-items: flex-start; gap: 6px; font-size: var(--t-sm); color: var(--muted); line-height: 1.45; }
+.req-note .i { flex: none; width: 13px; height: 13px; margin-top: 3px; }
 .req-note code { font: 0.92em var(--mono); color: var(--ink-2); }
-.req-actions { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
-.req-actions .btn-sm { min-height: 32px; padding: 0 12px; }
-.req-hint { margin-left: auto; font-size: var(--t-xs); color: var(--faint); }
-.req-error { display: inline-flex; align-items: center; gap: 6px; color: var(--st-failed-text); font-size: var(--t-sm); }
-.req-error .i { width: 14px; height: 14px; flex: none; }
-.ask-staged { display: flex; align-items: center; gap: 6px; margin-top: 4px; padding-left: var(--s2); font-size: var(--t-xs); color: var(--ink-2); max-width: 100%; }
-.ask-staged > .i { flex: none; width: 13px; height: 13px; color: var(--action); }
-.ask-staged > span:first-of-type { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.ask-staged .is-skip { color: var(--muted); }
-.ask-staged-note { flex: none; color: var(--faint); }
-.ask-staged .ask-link { min-height: 24px; padding: 0 8px; }
-/* the bar: one line, only while something is open */
-.req-bar { display: flex; align-items: center; gap: 8px; min-height: 30px; margin-bottom: 6px; padding: 0 var(--s2); font-size: var(--t-xs); color: var(--ink-2); }
-.req-bar[hidden] { display: none; }
-.req-bar a { color: var(--ink); font-weight: 600; text-decoration: none; }
-.req-bar a:hover { text-decoration: underline; }
-.req-sep { color: var(--faint); }
-.req-bar form { margin-left: auto; }
-.req-send-btn {
-  display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 0 12px;
-  border: 0; border-radius: 999px; background: var(--btn-primary); color: var(--btn-primary-ink);
-  font: 650 var(--t-xs)/1 var(--font); cursor: pointer;
-}
-.req-send-btn:hover { background: #8FB2FF; }
-.req-send-btn .i { width: 12px; height: 12px; }
-.req-bar .req-error { margin-left: 8px; font-size: var(--t-xs); }
-/* Home: one quiet row per assistant */
-.hm-ask-what { display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-sm); color: var(--ink-2); }
-.hm-asks { margin-bottom: 8px; }
+.req-error { display: flex; align-items: center; gap: 8px; color: var(--st-failed-text); font-size: var(--t-sm); }
+.req-error .i { width: 15px; height: 15px; flex: none; }
+
+.drop-zone { position: relative; display: flex; align-items: center; justify-content: center; min-height: 88px; padding: 12px 16px; border: 1.5px dashed rgba(255, 255, 255, 0.22); border-radius: 14px; color: var(--ink-2); font-size: var(--t-sm); text-align: center; cursor: pointer; transition: border-color 120ms var(--ease), background-color 120ms var(--ease); }
+.drop-zone:hover, .drop-zone.is-over { border-color: var(--you); background: rgba(122, 162, 255, 0.06); }
+.drop-zone.has-files { border-style: solid; color: var(--ink); }
+.drop-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.drop-zone:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+.drop-zone-text { display: inline-flex; align-items: center; gap: 8px; overflow-wrap: anywhere; }
+.drop-zone-text .i { width: 16px; height: 16px; flex: none; }
+.ask-couldnt { display: grid; gap: 12px; }
+.ask-couldnt[hidden], .ask-done-row[hidden] { display: none; }
+
+.ask-staged { display: grid; gap: 12px; color: var(--ink-2); }
+
+/* answered: one calm line, the question one click away */
+.ask-receipt { border-radius: 16px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.025); }
+.ask-receipt > summary { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; padding: 12px 18px; cursor: pointer; list-style: none; font-size: var(--t-md); color: var(--ink-2); }
+.ask-receipt > summary::-webkit-details-marker { display: none; }
+.ask-receipt-q { min-width: 0; overflow-wrap: anywhere; }
+.ask-receipt-a { color: var(--ink); font-weight: 600; overflow-wrap: anywhere; }
+.ask-receipt-a.is-skip { color: var(--muted); font-weight: 400; }
+.ask-receipt > summary time { margin-left: auto; font-size: var(--t-sm); color: var(--muted); font-variant-numeric: tabular-nums; }
+.ask-receipt[open] > summary { border-bottom: 1px solid var(--line); }
+.ask-receipt-body { display: grid; gap: 12px; padding: 14px 18px 16px; }
+.ask-receipt-body .ask-title { font-size: 1.15rem; }
+
+/* the waiting bar: only while the card is out of view */
+.req-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; padding: 10px 10px 10px 16px; border-radius: 16px; border: 1px solid var(--you-line); background: rgba(16, 20, 40, 0.92); font-size: var(--t-md); color: var(--ink-2); }
+.req-bar[hidden], .req-bar.is-onscreen { display: none; }
+.req-bar-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.req-bar-text strong { color: var(--ink); }
+.req-bar .req-error { font-size: var(--t-sm); }
+
+/* Home: the oldest request of each assistant, answerable in one tap */
+.hm-ask { display: grid; gap: 12px; padding: 22px 24px; border-radius: 22px; border: 1px solid var(--you-line); background: linear-gradient(180deg, rgba(122, 162, 255, 0.07), rgba(122, 162, 255, 0.015) 60%); }
+.hm-ask-who { display: flex; align-items: center; gap: 10px; font-size: var(--t-md); }
+.hm-ask-who .muted { font-size: var(--t-sm); }
+.hm-ask-title { font: 300 1.5rem/1.2 var(--display); letter-spacing: -0.02em; }
+.hm-ask-text { color: var(--ink-2); max-width: 70ch; }
+.hm-ask-opts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.hm-ask-opts .chip { display: inline-flex; cursor: pointer; }
+.hm-ask-opts .chip:hover { border-color: var(--you); background: rgba(122, 162, 255, 0.10); }
+
+/* updates: one quiet line; the next update replaces it */
+.msg.is-update { max-width: min(94%, 680px); margin-top: var(--s2); }
+.upd > summary { display: flex; align-items: center; gap: 10px; padding: 4px 8px; list-style: none; color: var(--ink-2); font-size: var(--t-md); cursor: pointer; border-radius: 10px; }
+.upd[data-flat] > summary { cursor: default; }
+.upd > summary::-webkit-details-marker { display: none; }
+.upd:not([data-flat]) > summary:hover { background: rgba(255, 255, 255, 0.03); }
+.upd-line { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.upd[open] .upd-line { white-space: normal; }
+.upd > summary time { flex: none; font-size: var(--t-sm); color: var(--muted); font-variant-numeric: tabular-nums; }
+.upd-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--faint); margin: 0 5px; }
+.upd-ring { flex: none; width: 16px; height: 16px; border-radius: 50%; background: conic-gradient(from 0deg, transparent 0 55%, var(--action) 100%); -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px)); mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px)); animation: orb-spin 1.4s linear infinite; }
+.msg.is-update:not(.is-live) .upd-line { color: var(--muted); }
+.upd-body { display: grid; gap: 10px; padding: 6px 8px 4px 30px; color: var(--ink-2); }
+
+/* deliver: the result, as a card with its files */
+.msg.k-deliver { max-width: min(94%, 660px); width: 100%; }
+.deliver-card { display: grid; gap: 12px; padding: 22px 24px; border-radius: 20px; border: 1px solid var(--line); background: var(--card); min-width: 0; }
+.deliver-tag { display: inline-flex; align-items: center; gap: 8px; font: 600 var(--t-xs)/1.3 var(--font); letter-spacing: 0.1em; text-transform: uppercase; color: var(--aqua); }
+.deliver-tag .i { width: 14px; height: 14px; }
+.deliver-title { font: 300 1.5rem/1.2 var(--display); letter-spacing: -0.02em; }
+.deliver-card .rich { color: var(--ink-2); }
+.deliver-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.deliver-actions .i { width: 14px; height: 14px; }
+
 .msg.is-flash .bubble { box-shadow: 0 0 0 1px var(--line-2), 0 0 0 4px rgba(255, 255, 255, 0.04); transition: box-shadow 600ms var(--ease); }
 @media (max-width: 760px) {
   .req-fields { grid-template-columns: minmax(0, 1fr); }
@@ -552,3 +591,9 @@
 .req-file { max-width: 100%; font-size: var(--t-sm); color: var(--ink-2); }
 .req-file::file-selector-button { margin-right: 10px; height: 30px; padding: 0 12px; border: 1px solid var(--line-2); border-radius: 999px; background: transparent; color: var(--ink); font: 600 var(--t-xs) var(--font); cursor: pointer; }
 .req-file::file-selector-button:hover { background: var(--card); }
+@media (max-width: 560px) {
+  .ask-card, .deliver-card, .hm-ask { padding: 18px 16px; border-radius: 18px; }
+  .ask-title, .deliver-title, .hm-ask-title { font-size: 1.3rem; }
+  .msg.k-ask, .msg.k-deliver { max-width: 100%; }
+  .ask-when { width: 100%; margin-left: 0; }
+}

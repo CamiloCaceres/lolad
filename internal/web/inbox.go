@@ -26,22 +26,27 @@ type convView struct {
 
 type msgView struct {
 	core.Mail
-	Mine     bool
-	Chat     core.UserChat
-	Kind     string       // say | update | deliver | ask | decision | reply | system
-	Day      string       // set on the first message of a day
-	ShowSubj bool         // show the subject line
-	Cont     bool         // continues a run from the same sender
-	New      bool         // first message that was unread when the thread was opened
-	Answered bool         // ask: the user has answered (by decision or text); no longer waiting
-	Answer   string       // ask: what the user answered (the option, or a summary of their answers)
-	Skipped  bool         // ask: the user chose not to answer
-	Lines    []answerLine // answers: each request and what the user said
-	Req      *reqView     // open ask: how to answer it, and the staged answer
-	Receipt  string       // last message from the user: Sent | Delivered | Read
-	Files    []attView
-	HideBody bool // the body only lists the files (a message sent with no text)
-	Bare     bool // nothing to show in a bubble: just the files
+	Mine       bool
+	Chat       core.UserChat
+	Kind       string          // say | update | deliver | ask | decision | reply | system
+	Day        string          // set on the first message of a day
+	ShowSubj   bool            // show the subject line
+	Cont       bool            // continues a run from the same sender
+	New        bool            // first message that was unread when the thread was opened
+	Answered   bool            // ask: the user has answered (by decision or text); no longer waiting
+	Answer     string          // ask: what the user answered (the option, or a summary of their answers)
+	Skipped    bool            // ask: the user chose not to answer
+	Reply      *core.AskAnswer // ask: the answer, when it came as a decision or an answers mail
+	AnsweredAt time.Time       // ask: when it was answered
+	Folded     bool            // answers or decision mail shown as its cards' receipts instead
+	Superseded bool            // update replaced by the next update from the same sender
+	Live       bool            // update that is the newest message in the conversation
+	Lines      []answerLine    // answers: each request and what the user said
+	Req        *reqView        // open ask: how to answer it, and the staged answer
+	Receipt    string          // last message from the user: Sent | Delivered | Read
+	Files      []attView
+	HideBody   bool // the body only lists the files (a message sent with no text)
+	Bare       bool // nothing to show in a bubble: just the files
 }
 
 type threadView struct {
@@ -434,6 +439,35 @@ func shape(msgs []msgView, me string) {
 	}
 	closeAsks(msgs)
 	answerLines(msgs)
+	foldAnswers(msgs)
+	foldUpdates(msgs)
+}
+
+// updMore reports whether an update has more than its one line (the start
+// of its body): blocks, files, or a body longer than the line shows.
+func updMore(m msgView) bool {
+	if len(m.Chat.Blocks) > 0 || len(m.Files) > 0 {
+		return true
+	}
+	return !m.HideBody && len([]rune(strings.Join(strings.Fields(m.Body), " "))) > 140
+}
+
+// foldUpdates keeps one line per run of updates: each update from a sender
+// that is followed directly by another update from the same sender is
+// superseded by it. The newest message, if it's an update, is Live.
+func foldUpdates(msgs []msgView) {
+	for i := range msgs {
+		m := &msgs[i]
+		if m.Mine || m.Kind != "update" {
+			continue
+		}
+		if i+1 < len(msgs) {
+			n := msgs[i+1]
+			m.Superseded = !n.Mine && n.Kind == "update" && n.FromName == m.FromName && n.Day == ""
+		} else {
+			m.Live = true
+		}
+	}
 }
 
 func dayLabel(t time.Time) string {
