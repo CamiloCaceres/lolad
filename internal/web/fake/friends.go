@@ -72,6 +72,12 @@ func (r refusal) Error() string       { return "invalid request: " + string(r) }
 func (r refusal) Unwrap() error       { return core.ErrInvalid }
 func (r refusal) UserMessage() string { return string(r) }
 
+// renameRefusal is the same-name refusal; Fix names the action the dashboard
+// offers ("Rename yours?"), as fed's does.
+type renameRefusal struct{ refusal }
+
+func (renameRefusal) Fix() string { return "rename_lolad" }
+
 const notALink = "That doesn’t look like a Lolad invite link. Copy the whole link your friend sent and paste it again."
 
 func parseLink(in string) (linkPayload, bool, error) {
@@ -178,7 +184,7 @@ func (s *Service) AcceptFriendInvite(ctx context.Context, link string, r web.Acc
 	case s.now().After(time.Unix(p.E, 0)):
 		return web.AcceptResult{}, refusal("This invite has expired. Ask " + who + " for a new link.")
 	case p.T == s.org.Tenant:
-		return web.AcceptResult{}, refusal("Your Lolad and " + who + "’s have the same name, so they can’t connect. Rename yours under Settings, then paste the link again.")
+		return web.AcceptResult{}, renameRefusal{refusal("Your Lolad and " + who + "’s have the same name, so they can’t connect. Rename yours under Settings, then paste the link again.")}
 	case s.friends.used[p.S]:
 		return web.AcceptResult{}, refusal("This invite was already used. If that wasn’t you, tell " + who + ".")
 	}

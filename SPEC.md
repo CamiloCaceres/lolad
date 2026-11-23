@@ -572,9 +572,10 @@ an instruction to lolad: it is mail, delivered to a mailbox, marked external.
 - Provider name stays `<tenant>.lolad.local`. Pairing refuses a peer with our
   own provider name, on accept and on `pair`, with a message safe to show
   as is: "Both lolads are called "home", and two connected lolads need
-  different names. One of you renames theirs (the tenant in org.yaml, then
-  restart lolad), then makes a new invite." The accept error is
-  `core.ErrInvalid` and also has `UserMessage() string` carrying that text.
+  different names. Rename yours under Settings, then make a new invite." The
+  accept error is `core.ErrInvalid` and also has `UserMessage() string`
+  carrying that text, and `Fix() string` = `rename_lolad`, which the API
+  returns as `fix` (see Rename).
 - A remote participant's name inside lolad is its full address
   (`ana@jugui.lolad.local`); `core.IsRemoteName`. It is what `Mail.FromName` /
   `ToName`, `Conversation.Peer`, `Outgoing.To` and policy checks carry. Mail
@@ -986,6 +987,59 @@ joins the hub when needed, and pre-approves each side.
 
   Links go in POST bodies only. Refusals carry `UserMessage()`, which the API
   returns as `message`.
+
+## Rename (beta.3)
+
+Renames this lolad: its tenant, so `you@home.lolad.local` becomes
+`you@milo-pc.lolad.local`. It exists for installs that kept `home` from
+before v0.2 and so cannot connect with another `home`.
+
+- **Name rules** (`policy.CheckRename`): what the user typed is slugged
+  (`policy.TenantSlug`: "Milo PC" -> `milo-pc`), then must be 2 to 32 of
+  a-z, 0-9 and `-`. Empty, unchanged, and `home` are refused. Refusals are
+  `policy.RenameError` (`ErrInvalid` plus `UserMessage`).
+- **What changes:** `org.yaml` `tenant` (comments kept; written last);
+  `amp_identities.address`; the `from`/`to` of stored mail JSON under our old
+  domain; `identities/*/identity.json` `address` and `provider`; agents'
+  CLAUDE.md (regenerated at the start that applies it).
+- **What stays:** the `wire` column (the signed record), bare names
+  (`from_name`, `to_name`, policy, teams, `LOLAD_AGENT`), keys and API keys,
+  the federation key, devices, and the hub account and handle.
+- **Connections are redone** (v1): every peer gets a best-effort signed
+  `unpair` at request time (their card shows "removed by them"), and the
+  rename empties `connections.yaml`. Open invite links and codes are
+  cancelled (they carry the old name). Queued remote mail leaves the outbox
+  and is marked `failed`, "not sent: this lolad was renamed" (its wire was
+  signed under the old name). A renamed-announce that keeps connections is
+  in the backlog.
+- **Request** (running daemon): validate; refuse with `409` and `outbox: n`
+  while remote mail is queued, unless `anyway`; refuse a second request
+  while one waits; notify peers; write `<state>/rename.json`
+  `{from, to, at, anyway}`; answer `202`; then serve exits with
+  `app.ErrRestart` (exit code 1). launchd, systemd, the Windows watchdog and
+  the desktop app start lolad again; under `lolad serve` in a terminal the
+  user does (`restart: "manual"`).
+- **Apply** (next start, in `app.New` before the database opens), steps in
+  order: `backup` (`<state>/rename-backup-<ts>-*/`: the DB by `VACUUM INTO`,
+  `org.yaml`, `connections.yaml`, every `identity.json`, absent files noted,
+  a `complete` marker last; its path goes into the plan), `database` (one
+  transaction; the WAL is checkpointed after), `identities`, `connections`,
+  `org` (the commit point), `finish` (`rename-last.json`, plan removed).
+  Each step is idempotent, so a crash anywhere is finished by the next
+  start. An error before `org` restores the backup and starts under the old
+  name, with the reason in `rename-last.json`; once `org.yaml` has the new
+  name, a rename only rolls forward. A plan whose `from` no longer matches
+  `org.yaml` is dropped. Backups are deleted after 7 days.
+- **API** (`core.LoladRenamer`):
+  - `GET /api/lolad/name` -> `{name, provider, restart: auto|manual,
+    connections, open_links, outbox, pending?, last?}` (`pending`/`last`:
+    `{from, to, at, error?}`).
+  - `GET /api/lolad/name/check?name=` -> `{ok, name, message}`.
+  - `POST /api/lolad/name {name, anyway?}` -> `202 {name, restarting}`;
+    `422 {message}` for a name; `409 {message, outbox?}` for queued mail or a
+    rename already waiting.
+  - Refusals with a `Fix()` (same name) carry `fix: "rename_lolad"` on
+    `/api/friends/*` and `POST /api/connections`.
 
 ## Windows (v4)
 

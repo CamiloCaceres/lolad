@@ -24,6 +24,10 @@ func TestSameNameRefusal(t *testing.T) {
 	if !errors.As(e, &um) {
 		t.Fatal("no user message:", e)
 	}
+	var fix interface{ Fix() string }
+	if !errors.As(e, &fix) || fix.Fix() != "rename_lolad" {
+		t.Fatal("no rename fix:", e)
+	}
 	msg := um.UserMessage()
 	if !strings.Contains(msg, `"home"`) || !strings.Contains(msg, "new invite") || strings.Contains(msg, strings.TrimPrefix(inv.Code, "lolad-invite:")[:12]) {
 		t.Fatal(msg)

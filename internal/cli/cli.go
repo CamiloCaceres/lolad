@@ -440,6 +440,9 @@ func serve(parent context.Context, log io.Writer) error {
 		return e
 	}
 	defer a.Close()
+	if isTerminal(os.Stdin) {
+		a.RestartMode = "manual" // nothing starts lolad again after a rename
+	}
 	if e = app.ValidateListeners(a.Config.Listen, a.Config.Remote.Listen, a.Config.Remote.PublicURL); e != nil {
 		if local != nil {
 			local.Close()
@@ -483,6 +486,10 @@ func serve(parent context.Context, log io.Writer) error {
 	case e = <-runDone:
 		cancel()
 		runDone <- e
+	case <-a.RestartRequested():
+		// A rename finishes at the next start; the non-zero exit makes the
+		// service manager (or the desktop app) start lolad again.
+		e = app.ErrRestart
 	}
 	cancel()
 	shutdown, stop := context.WithTimeout(context.Background(), 10*time.Second)

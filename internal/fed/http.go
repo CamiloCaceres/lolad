@@ -472,5 +472,9 @@ func (e sameNameError) Unwrap() error { return core.ErrInvalid }
 // UserMessage says what happened and what to do, in plain words.
 func (e sameNameError) UserMessage() string {
 	name := strings.TrimSuffix(e.provider, ".lolad.local")
-	return fmt.Sprintf("Both lolads are called %q, and two connected lolads need different names. One of you renames theirs (the tenant in org.yaml, then restart lolad), then makes a new invite.", name)
+	return fmt.Sprintf("Both lolads are called %q, and two connected lolads need different names. Rename yours under Settings, then make a new invite.", name)
 }
+
+// Fix names the action that resolves the refusal; the dashboard shows it as
+// a button ("Rename yours?").
+func (e sameNameError) Fix() string { return "rename_lolad" }

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"github.com/CamiloCaceres/lolad/internal/core"
 	"net/http"
@@ -18,6 +19,11 @@ func federationRoutes(m *http.ServeMux, s core.Federator) {
 			return
 		}
 		v, e := s.AcceptInvite(r.Context(), b.Code)
+		var fix interface{ Fix() string }
+		if errors.As(e, &fix) {
+			friendWrite(w, nil, e) // a refusal written for people, with a fix
+			return
+		}
 		if e != nil {
 			// Pairing errors can originate at the invited server. Never reflect a
 			// remote response that could contain the submitted invite secret.

@@ -74,7 +74,13 @@ func friendWrite(w http.ResponseWriter, v any, e error) {
 	case errors.Is(e, core.ErrDenied):
 		status = 403
 	}
+	body := map[string]string{"error": http.StatusText(status), "message": um.UserMessage()}
+	// fix names an action the dashboard can offer, e.g. "rename_lolad".
+	var fix interface{ Fix() string }
+	if errors.As(e, &fix) {
+		body["fix"] = fix.Fix()
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]string{"error": http.StatusText(status), "message": um.UserMessage()})
+	_ = json.NewEncoder(w).Encode(body)
 }

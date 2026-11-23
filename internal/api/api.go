@@ -87,6 +87,9 @@ func New(s core.Service, o Options) http.Handler {
 	attachments := attachmentRoutes(m, s)
 	settingsRoutes(m, s)
 	federationRoutes(m, s)
+	if rn, ok := s.(core.LoladRenamer); ok {
+		renameRoutes(m, rn)
+	}
 	// Creation metadata stays behind the same authentication boundary as the service.
 	m.HandleFunc("GET /api/create/options", func(w http.ResponseWriter, r *http.Request) { v, e := s.CreateOptions(r.Context()); write(w, v, e) })
 	remoteRoutes(m, s, o)

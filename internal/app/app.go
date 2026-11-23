@@ -46,6 +46,11 @@ type App struct {
 	sessions   *tmux.Sessions
 	mutate     sync.Mutex
 	hub        *hubRuntime
+	// RestartMode is "auto" when something starts lolad again after it
+	// exits (a service manager or the desktop app), "manual" in a terminal.
+	RestartMode string
+	restart     restarter
+	renamed     *core.RenameStep // the rename applied at this start, if any
 }
 
 var _ core.Service = (*App)(nil)
@@ -66,7 +71,11 @@ func New(ctx context.Context, configPath string) (_ *App, err error) {
 	if err != nil {
 		return nil, err
 	}
-	a := &App{Registry: r, Config: r.Config(), configPath: configPath}
+	a := &App{Registry: r, Config: r.Config(), configPath: configPath, restart: restarter{ch: make(chan struct{})}}
+	// A rename requested before the restart is applied before anything opens.
+	if a.renamed, err = applyPendingRename(ctx, a.renamePaths(), time.Now(), nil); err != nil {
+		return nil, err
+	}
 	a.DB, err = store.Open(filepath.Join(a.Config.StateDir, "lolad.db"))
 	if err != nil {
 		return nil, err
@@ -135,6 +144,16 @@ func New(ctx context.Context, configPath string) (_ *App, err error) {
 	a.Creator = create.New(create.Deps{Template: a.createTemplate, AgentsDir: a.Config.NewAgentsDir, Runtime: runtimeWriter{a}, Identity: a.Provider, Org: a, Contacts: a.Policy, Mail: a.Provider, Starter: deferredStarter{}, Registrar: registrar{a}})
 	for _, e := range r.Diagnostics() {
 		a.RecordEvent(e)
+	}
+	if v := a.renamed; v != nil {
+		if v.Error != "" {
+			a.RecordEvent(core.Event{Kind: "error", Detail: "Rename to " + v.To + " was undone: " + v.Error})
+		} else {
+			a.RecordEvent(core.Event{Kind: "rename", Detail: "This lolad is now called " + v.To + " (was " + v.From + ")"})
+			if e := a.regenerate(); e != nil {
+				a.RecordEvent(core.Event{Kind: "error", Detail: "rename: " + e.Error()})
+			}
+		}
 	}
 	a.Provider.OnMail(func(m core.Mail) {
 		if m.ToName == a.Me().Name {
