@@ -103,11 +103,9 @@ func New(o Options) *Manager {
 // pre-filling "your name".
 func (m *Manager) OSUserName() string {
 	if u, err := user.Current(); err == nil {
-		if n := strings.TrimSpace(u.Name); n != "" {
+		// Not u.Name as is: on Windows it is "DOMAIN\user" for a local account.
+		if n := policy.AccountDisplay(u.Username, u.Name); n != "" {
 			return n
-		}
-		if u.Username != "" {
-			return u.Username[strings.LastIndexAny(u.Username, `\/`)+1:]
 		}
 	}
 	if n := m.getenv("USER"); n != "" {

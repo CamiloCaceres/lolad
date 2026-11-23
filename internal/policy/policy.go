@@ -40,8 +40,8 @@ func localUser() (string, string) {
 	if name == "" || name == "lolad" {
 		name = "user"
 	}
-	if u.Name != "" {
-		return name, u.Name
+	if d := AccountDisplay(u.Username, u.Name); d != "" {
+		return name, d
 	}
 	return name, name
 }

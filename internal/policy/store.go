@@ -32,6 +32,7 @@ func Load(path string) (core.Org, error) {
 	if e = yaml.Unmarshal(b, &o); e != nil {
 		return o, yamlError(path, e)
 	}
+	o.User.Display = fixStoredDisplay(o.User.Display)
 	_, e = Validate(o)
 	return o, e
 }
