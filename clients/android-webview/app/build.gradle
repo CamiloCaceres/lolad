@@ -2,7 +2,11 @@ plugins { id 'com.android.application' }
 android {
  namespace 'dev.caceres.lolad.web'
  compileSdk 36
- defaultConfig { applicationId 'dev.caceres.lolad.web'; minSdk 26; targetSdk 36; versionCode 1; versionName '0.1' }
+ // scripts/build-apk.sh passes the release version (-Plolad.versionName,
+ // -Plolad.versionCode); a plain gradle build keeps the dev defaults.
+ defaultConfig { applicationId 'dev.caceres.lolad.web'; minSdk 26; targetSdk 36
+  versionCode((project.findProperty('lolad.versionCode') ?: '1').toString().toInteger())
+  versionName((project.findProperty('lolad.versionName') ?: '0.1').toString()) }
  compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
  buildTypes { release { minifyEnabled true; shrinkResources true; proguardFiles getDefaultProguardFile('proguard-android-optimize.txt') } }
  lint { abortOnError true }

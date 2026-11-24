@@ -87,12 +87,15 @@ if [ "$android" = 1 ]; then
   sdk=${ANDROID_HOME:-$HOME/android/sdk}
   jdk=${JAVA_HOME:-$HOME/android/jdk/Contents/Home}
   sign_dir=${LOLAD_ANDROID_SIGNING_DIR:-$HOME/.local/share/lolad-android}
-  no_android() { die "$1. Install it, or pass --no-android to release without the Android app."; }
+  no_android() { die "$1. Fix that, or pass --no-android to release without the Android app."; }
   [ -x "$apk_script" ] || no_android "$apk_script is missing"
   command -v zsh >/dev/null || no_android "zsh is not installed (build-apk.sh needs it)"
   [ -x "$sdk/build-tools/35.0.0/apksigner" ] || no_android "no Android SDK build-tools 35.0.0 in $sdk (set ANDROID_HOME)"
   [ -x "$jdk/bin/java" ] || no_android "no JDK in $jdk (set JAVA_HOME)"
   [ -f "$sign_dir/release.p12" ] || no_android "no Android signing key in $sign_dir (set LOLAD_ANDROID_SIGNING_DIR)"
+  # build-apk.sh turns the version into an Android versionCode, which needs this shape.
+  echo "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)\.[0-9]+)?$' ||
+    no_android "the Android app needs a version like 0.2.0 or 0.2.0-beta.6, not '$version'"
 fi
 
 # ------------------------------------------------------------- update key
@@ -159,7 +162,7 @@ cp desktop/dist/windows/Lolad-Setup.exe "$out/Lolad-Setup.exe"
 if [ "$android" = 1 ]; then
   step "Android app (clients/android-webview)"
   rm -f clients/android-webview/dist/lolad-web.apk
-  "$apk_script" # lint, build, zipalign, sign with the release key, apksigner verify
+  LOLAD_VERSION="$version" "$apk_script" # versioned; lint, build, zipalign, sign, verify
   [ -f clients/android-webview/dist/lolad-web.apk ] || die "build-apk.sh did not produce dist/lolad-web.apk"
   cp clients/android-webview/dist/lolad-web.apk "$out/Lolad-Android.apk"
 else
