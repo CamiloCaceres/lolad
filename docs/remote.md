@@ -50,12 +50,35 @@ out or use a new pairing code to sign back in.
 
 ## Pair an Android phone
 
-Install the Android APK the operator placed at `/download/lolad.apk` (or the
-published filename). Open the Android app's pairing scanner and scan the QR on
-**Devices**, or enter the HTTPS URL and code manually. The QR encodes
+The Android app, **Lolad-Android.apk**, shows the same dashboard as a paired
+browser, in an app. It is a companion: lolad keeps running on your computer, and
+the phone reaches it through Tailscale, so set up remote access (above) first.
+
+1. On the phone, download
+   [Lolad-Android.apk](https://github.com/CamiloCaceres/lolad/releases/latest/download/Lolad-Android.apk)
+   from the latest release. It isn't on Google Play, so Android asks you to
+   allow your browser to **install unknown apps**. Allow it, open the file and
+   tap **Install**.
+2. Turn on Tailscale on the phone, open Lolad and enter your `public_url`, for
+   example `my-mac.my-tailnet.ts.net:4100`. The app accepts only an HTTPS
+   address and adds `https://` if you leave it out.
+3. On the computer, open **Devices**, and under **Connect a phone** choose
+   **Make a code** (or run `lolad pair --name "Phone"`). Type the code on the
+   app's **Sign in** page.
+   As with a PC browser, the code works once, for ten minutes, and the session
+   cookie lasts 30 days after its last use.
+
+The app stays on your server's HTTPS address; other links open in the phone's
+browser. To point it at another server, long-press the app icon and choose
+**Change server**. For now it has no notifications: it updates while it is open.
+Building it yourself: [clients/android-webview](../clients/android-webview/README.md).
+
+**Native Android client.** The separate native app (`clients/android`) pairs
+with a QR code instead: open its pairing scanner and scan the QR on **Devices**,
+or enter the HTTPS URL and code manually. The QR encodes
 `lolad://pair?u=<URL>&c=<CODE>` and is generated locally; no QR service sees it.
-The app exchanges the code at `/api/pair` for a permanent device token and stores
-it privately. For API details see [client-api.md](client-api.md).
+That app exchanges the code at `/api/pair` for a permanent device token and
+stores it privately. For API details see [client-api.md](client-api.md).
 
 `lolad pair` also prints the phone pairing URI. It never prints an existing
 device token. A newly exchanged token is shown only once in the pairing response.
