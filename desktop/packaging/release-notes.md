@@ -10,6 +10,7 @@ https://github.com/CamiloCaceres/lolad/blob/main/docs/install.md
 |---|---|
 | Mac (macOS 13 or newer, Apple silicon or Intel) | **Lolad.dmg** |
 | Windows 11 (64-bit) | **Lolad-Setup.exe** |
+| Android phone, to use your Lolad away from your computer ([remote access](https://github.com/CamiloCaceres/lolad/blob/main/docs/remote.md) first) | **Lolad-Android.apk** |
 | Terminal only (macOS, Windows, Linux) | the `lolad-<system>-<chip>` files |
 
 ## The first time you open it
