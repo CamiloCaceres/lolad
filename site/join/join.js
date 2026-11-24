@@ -80,6 +80,8 @@
     for (const el of document.querySelectorAll("[data-for]")) el.hidden = el.dataset.for !== os;
   } else if (mobile) {
     $("[data-mobile]").hidden = false;
+    // The phone app is only a companion to Lolad on a computer: offer it second.
+    if (/Android/i.test(ua)) $("[data-android]").hidden = false;
   }
 
   // ---- copy the link, to paste into Lolad (or send to your own computer)
