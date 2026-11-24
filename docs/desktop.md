@@ -398,7 +398,7 @@ These are owned by the agents listed in `CLAUDE.md`. The coordinator updates
 
 | Change | Package |
 |---|---|
-| `GET /api/health` → `{product:"lolad", version, pid, started_at, exe, install:"app"\|"cli", state_dir}`, cheap and no auth on loopback | api |
+| `GET /api/health` → `{product:"lolad", version, pid, started_at, exe, install:"app"\|"cli", state_dir, state, waiting_for, drive}`, cheap and no auth on loopback. It answers from the moment the port opens: `state` is `starting` while the daemon reads its agent folders, `waiting_for_macos_permission` (with the folder and its `drive`) when a read has been held for 5 s by a macOS privacy dialog, then `ready`. Until ready, other `/api/` paths answer 503 and the dashboard shows a page that says what to click and reloads itself. A missing `state` (older daemons) means ready. The tray shows the state, and sends one notification while macOS is asking; for older daemons it does the same after 30 s of silence on the port. | api, cli |
 | Single-instance lock on `serve` | app / cli |
 | `lolad service install\|uninstall\|status\|start\|stop` | cli (+ small per-OS file) |
 | `serve --supervised` watchdog (Windows) | cli |

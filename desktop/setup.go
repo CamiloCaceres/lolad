@@ -21,7 +21,16 @@ type Health struct {
 	Install   string `json:"install"` // "app" | "cli"
 	StateDir  string `json:"state_dir"`
 	StartedAt string `json:"started_at"`
+	// State is "ready", "starting" or "waiting_for_macos_permission" (then
+	// Drive names the volume macOS is asking about). Older daemons leave it
+	// out, which means ready.
+	State      string `json:"state"`
+	WaitingFor string `json:"waiting_for"`
+	Drive      string `json:"drive"`
 }
+
+// Starting reports a daemon that answers but is not serving yet.
+func (h *Health) Starting() bool { return h != nil && h.State != "" && h.State != "ready" }
 
 // SetupState is GET /api/setup. Known is false when the daemon has no such
 // endpoint (404) or it could not be read.

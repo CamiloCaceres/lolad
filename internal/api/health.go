@@ -19,6 +19,36 @@ type Health struct {
 	Exe       string `json:"exe"`
 	Install   string `json:"install"`
 	StateDir  string `json:"state_dir"`
+	// State is "ready" once the daemon serves everything. While it starts it
+	// is "starting", or "waiting_for_macos_permission" when reading the agent
+	// folders has blocked for a while: macOS holds the read until the user
+	// answers a privacy dialog (removable volumes, Documents, ...). Older
+	// daemons leave it out; read a missing state as "ready".
+	State string `json:"state,omitempty"`
+	// WaitingFor is the folder the daemon is stuck reading, and Drive the
+	// name of its volume ("DevSSD" for /Volumes/DevSSD/...), while State is
+	// waiting_for_macos_permission.
+	WaitingFor string `json:"waiting_for,omitempty"`
+	Drive      string `json:"drive,omitempty"`
+}
+
+// Health states.
+const (
+	StateReady      = "ready"
+	StateStarting   = "starting"
+	StateMacOSAllow = "waiting_for_macos_permission"
+)
+
+// NewHealth is this process's health body in the ready state.
+func NewHealth(version, stateDir string, started time.Time) Health {
+	if started.IsZero() {
+		started = time.Now()
+	}
+	exe, _ := os.Executable()
+	if exe != "" {
+		exe = filepath.Clean(exe)
+	}
+	return Health{Product: "lolad", Version: version, PID: os.Getpid(), StartedAt: started.UTC().Format(time.RFC3339), Exe: exe, Install: InstallKind(exe, os.Getenv("LOLAD_INSTALL")), StateDir: stateDir, State: StateReady}
 }
 
 // InstallKind reports "app" when forced by LOLAD_INSTALL=app or when exe lives
@@ -40,15 +70,7 @@ func InstallKind(exe, forced string) string {
 }
 
 func healthRoute(m *http.ServeMux, o Options) {
-	started := o.StartedAt
-	if started.IsZero() {
-		started = time.Now()
-	}
-	exe, _ := os.Executable()
-	if exe != "" {
-		exe = filepath.Clean(exe)
-	}
-	h := Health{Product: "lolad", Version: o.Version, PID: os.Getpid(), StartedAt: started.UTC().Format(time.RFC3339), Exe: exe, Install: InstallKind(exe, os.Getenv("LOLAD_INSTALL")), StateDir: o.StateDir}
+	h := NewHealth(o.Version, o.StateDir, o.StartedAt)
 	m.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
 		write(w, h, nil)
 	})

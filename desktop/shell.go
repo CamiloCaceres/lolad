@@ -60,6 +60,8 @@ type shell struct {
 	// movePending: the "Move to Applications" question is open; don't start a
 	// daemon from the temporary location meanwhile.
 	movePending bool
+	silentSince time.Time // first silent read of this silence, or zero
+	permNoted   bool      // the macOS permission note is out for this wait
 }
 
 func newShell(app *application.App, win *application.WebviewWindow, base string, notif *notifications.NotificationService, background bool) *shell {
@@ -266,7 +268,11 @@ func (s *shell) onData(d Data) {
 	if changedIcon {
 		s.applyIcon(icon)
 	}
-	s.tray.SetTooltip(d.Snap.Tooltip())
+	if d.Snap.Up {
+		s.tray.SetTooltip(d.Snap.Tooltip())
+	} else {
+		s.tray.SetTooltip("Lolad: " + downLabel(d))
+	}
 
 	if d.Snap.Up != wasUp || !seen {
 		if d.Snap.Up {
@@ -274,9 +280,12 @@ func (s *shell) onData(d Data) {
 		} else {
 			s.nav.Navigate("/")
 		}
-		if !seen && !d.Snap.Up {
+		if !seen && !d.Snap.Up && d.Starting == nil && !d.Silent {
 			go s.firstLaunchStart()
 		}
+	}
+	if n := s.notePermission(d); n != nil {
+		s.deliver(*n)
 	}
 
 	if d.Snap.Up {
@@ -287,6 +296,33 @@ func (s *shell) onData(d Data) {
 		}
 	}
 	s.refreshMenu(d, health)
+}
+
+// notePermission returns the macOS permission note once per wait.
+func (s *shell) notePermission(d Data) *Note {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !d.Silent {
+		s.silentSince = time.Time{}
+	} else if s.silentSince.IsZero() {
+		s.silentSince = time.Now()
+	}
+	var silentFor time.Duration
+	if !s.silentSince.IsZero() {
+		silentFor = time.Since(s.silentSince)
+	}
+	n := permissionNote(d, silentFor, runtime.GOOS)
+	if n == nil {
+		if d.Snap.Up {
+			s.permNoted = false
+		}
+		return nil
+	}
+	if s.permNoted {
+		return nil
+	}
+	s.permNoted = true
+	return n
 }
 
 // readyLocked: onboarding is finished, so notifications may appear and the
@@ -325,11 +361,45 @@ func (s *shell) refreshMenu(d Data, health *Health) {
 
 // downLabel is the tray status line while the daemon does not answer.
 func downLabel(d Data) string {
-	if d.PortConflict != "" {
+	switch {
+	case d.PortConflict != "":
 		return "Another program is using port " + d.PortConflict
+	case d.Starting != nil && d.Starting.State == "waiting_for_macos_permission":
+		return "macOS is asking to use " + quoteDrive(d.Starting) + ": click Allow"
+	case d.Starting != nil:
+		return "lolad is starting…"
+	case d.Silent:
+		return "lolad is not answering"
 	}
 	return "lolad is not running"
 }
+
+func quoteDrive(h *Health) string {
+	if h.Drive != "" {
+		return "“" + h.Drive + "”"
+	}
+	return "a folder"
+}
+
+// permissionNote is the notification for a daemon held by a macOS privacy
+// dialog: the daemon says so (starting), or, for daemons older than that
+// state, it has been silent on its port for a while on macOS. nil: no note.
+func permissionNote(d Data, silentFor time.Duration, goos string) *Note {
+	switch {
+	case d.Starting != nil && d.Starting.State == "waiting_for_macos_permission":
+		return &Note{Kind: "system", ID: "macos-permission", Link: "/",
+			Title: "macOS is asking about " + quoteDrive(d.Starting),
+			Body:  "macOS is asking whether Lolad may use the drive " + quoteDrive(d.Starting) + ". Click Allow in the dialog. Your assistants start as soon as you do."}
+	case d.Silent && goos == "darwin" && silentFor >= silentNoteAfter:
+		return &Note{Kind: "system", ID: "macos-permission", Link: "/",
+			Title: "Lolad is not answering",
+			Body:  "If macOS is showing a dialog asking whether Lolad may use a drive or folder, click Allow. Lolad continues as soon as you do."}
+	}
+	return nil
+}
+
+// silentNoteAfter is how long a silent port waits before the notification.
+const silentNoteAfter = 30 * time.Second
 
 // onDaemonUp runs each time the daemon comes up: load the window, read its
 // identity, handle first run and migration.

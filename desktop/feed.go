@@ -3,7 +3,9 @@ package main
 import (
 	"bufio"
 	"context"
+	"errors"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -35,6 +37,12 @@ type Data struct {
 	// PortConflict is the port number when the daemon is down and another
 	// program answers on its port, else "".
 	PortConflict string
+	// Starting is the daemon's health while it answers but is still starting
+	// (for example waiting on a macOS permission dialog).
+	Starting *Health
+	// Silent: the port took the connection but nothing answered in time. An
+	// older lolad blocked on a macOS permission dialog looks like this.
+	Silent bool
 }
 
 // feed keeps Data fresh: it subscribes to the loopback /api/stream, and on any
@@ -172,8 +180,22 @@ func (f *feed) refresh(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
+		var se *statusError
+		var ne net.Error
+		switch {
+		case errors.As(err, &se):
+			// It answered, but not with agents: a lolad still starting
+			// says so in /api/health.
+			if h := fetchHealth(f.Base()); h.Starting() {
+				d.Starting = h
+				f.onData(d)
+				return
+			}
+		case errors.As(err, &ne) && ne.Timeout():
+			d.Silent = true
+		}
 		if base := f.relocate(); foreignOnPort(base) {
-			d.PortConflict = portOf(base)
+			d.PortConflict, d.Silent = portOf(base), false
 		}
 		f.onData(d)
 		return

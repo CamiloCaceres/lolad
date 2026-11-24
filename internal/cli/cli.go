@@ -432,10 +432,24 @@ func serve(parent context.Context, log io.Writer) error {
 			return e
 		}
 	}
+	// The dashboard port answers while the app is built (startup.go): reading
+	// the agent folders can wait on a macOS permission dialog for as long as
+	// nobody answers it.
+	gate := newStartup(Version, c.StateDir, time.Now())
+	gate.probe(startupFolders(c), nil)
+	built := make(chan struct{})
+	go gate.watch(log, built)
+	serveDone := make(chan error, 2)
+	var early *http.Server
+	if local != nil {
+		early = &http.Server{Handler: gate, BaseContext: func(net.Listener) context.Context { return ctx }, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, IdleTimeout: 90 * time.Second, MaxHeaderBytes: 64 << 10}
+		go func() { serveDone <- early.Serve(local) }()
+	}
 	a, e := app.New(ctx, cfgPath)
+	close(built)
 	if e != nil {
-		if local != nil {
-			local.Close()
+		if early != nil {
+			early.Close()
 		}
 		return e
 	}
@@ -444,8 +458,8 @@ func serve(parent context.Context, log io.Writer) error {
 		a.RestartMode = "manual" // nothing starts lolad again after a rename
 	}
 	if e = app.ValidateListeners(a.Config.Listen, a.Config.Remote.Listen, a.Config.Remote.PublicURL); e != nil {
-		if local != nil {
-			local.Close()
+		if early != nil {
+			early.Close()
 		}
 		return e
 	}
@@ -456,27 +470,33 @@ func serve(parent context.Context, log io.Writer) error {
 		if addr == "" {
 			continue
 		}
-		listener := local
-		if i == 1 {
-			var err error
-			if listener, err = net.Listen("tcp", addr); err != nil {
-				for _, l := range listeners {
-					l.Close()
-				}
-				return err
+		remote := len(servers) > 0
+		if i == 0 {
+			// Already serving (the startup gate): from now on it hands
+			// every request to the dashboard.
+			gate.Ready(a.Handler(remote, Version, logger))
+			listeners = append(listeners, local)
+			servers = append(servers, early)
+			continue
+		}
+		listener, err := net.Listen("tcp", addr)
+		if err != nil {
+			for _, srv := range servers {
+				srv.Close()
 			}
+			return err
 		}
 		listeners = append(listeners, listener)
-		remote := len(servers) > 0
 		servers = append(servers, &http.Server{Handler: a.Handler(remote, Version, logger), BaseContext: func(net.Listener) context.Context { return ctx }, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, IdleTimeout: 90 * time.Second, MaxHeaderBytes: 64 << 10})
 	}
 	runDone := make(chan error, 1)
 	go func() { runDone <- a.Run(ctx) }()
 	backupDone := make(chan struct{})
 	go func() { defer close(backupDone); a.Backups(ctx, logger) }()
-	serveDone := make(chan error, len(servers))
 	for i, srv := range servers {
-		go func() { serveDone <- srv.Serve(listeners[i]) }()
+		if srv != early {
+			go func() { serveDone <- srv.Serve(listeners[i]) }()
+		}
 		fmt.Fprintln(log, "lolad listening on", listeners[i].Addr())
 	}
 	select {
