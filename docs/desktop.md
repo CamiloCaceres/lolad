@@ -462,6 +462,44 @@ Distribution:
   (`brew install --cask lolad`) points at the same DMG.
 - **Windows:** `Lolad-Setup.exe`. The winget manifest points at the same file.
 
+### Mac signing without an Apple Developer account
+
+Until there is a Developer ID, releases built on the release Mac
+(`bin/release-local.sh`) are signed with a self-signed certificate,
+**Lolad Local Signing**, instead of ad hoc.
+
+- **What it fixes.** An ad-hoc signature is a hash of the binary, so to macOS
+  privacy controls (TCC) every build is a new program, and each update asked
+  again whether Lolad may use the drive or folder the agents live in. The
+  daemon waited on that dialog until someone answered (§8, health state
+  `waiting_for_macos_permission`). A certificate signature with a fixed
+  identifier has the same designated requirement in every build:
+  `identifier "dev.caceres.lolad" and certificate root = H"cc19…ef85"` for the
+  daemon (`Helpers/lolad`), `dev.caceres.lolad.desktop` for the app,
+  `dev.caceres.lolad.tmux` for tmux. A permission given once survives updates.
+  The first install signed this way still asks once, since its identity
+  differs from the ad-hoc builds before it.
+- **What it does not fix.** Gatekeeper trusts only Apple-issued certificates,
+  so on a new Mac a downloaded Lolad still needs System Settings ▸ Privacy &
+  Security ▸ "Open Anyway" (or `xattr -dr com.apple.quarantine`). That needs a
+  Developer ID and notarization (the `APPLE_*` variables of `bundle.sh`).
+  The DMG is not signed with it.
+- **Where it lives.** A dedicated keychain,
+  `~/Library/Keychains/lolad-signing.keychain-db`, unlocked from
+  `~/.local/share/lolad-macos-signing/keychain.password`, so a build never shows
+  a keychain prompt. `desktop/packaging/macos/local-signing.sh` finds it,
+  unlocks it and adds it to the keychain search list. The `.p12` backup and its
+  password are kept with the release keys, outside the repo; use that same
+  certificate on any other build machine, since a new certificate changes the
+  requirement and macOS asks for every permission once more.
+- **Fallback.** `bundle.sh` without the identity (CI, other machines) signs ad
+  hoc and warns. `bin/release-local.sh` stops before building unless the
+  identity is there, `APPLE_SIGN_IDENTITY` is set, or `--adhoc` is passed.
+  Every binary carries its fixed identifier in all three modes.
+- **Updates.** The updater treats a signature without a Team ID like an ad-hoc
+  one (§9): it accepts any intact bundle, so ad-hoc installs update to locally
+  signed builds, and those can update to a later Developer ID release.
+
 Secrets (Apple ID notarization key, Developer ID certificate, Trusted Signing
 credentials, Ed25519 update key) live only in GitHub Actions secrets, scoped
 to the release workflow. The update key's offline backup procedure is

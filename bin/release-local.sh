@@ -3,7 +3,7 @@
 # It never tags, pushes or publishes: a person uploads the folder afterwards
 # (docs/desktop.md section 10).
 #
-#   bin/release-local.sh <version> [--throwaway-key | --dry-run-key <pem>] [--no-android]
+#   bin/release-local.sh <version> [--throwaway-key | --dry-run-key <pem>] [--no-android] [--adhoc]
 #
 #   <version>        e.g. 0.2.0-beta.1 (a leading v is dropped)
 #   --throwaway-key  a dry run: make a one-off update key in the work dir and
@@ -17,6 +17,11 @@
 #                    section 17). Also marked DRY-RUN.
 #   --no-android     leave out the Android app. Without it, a machine with no
 #                    Android SDK or signing key stops before building anything.
+#   --adhoc          sign the Mac app ad-hoc. Without it, a Mac with neither
+#                    APPLE_SIGN_IDENTITY nor the "Lolad Local Signing" identity
+#                    (desktop/packaging/macos/local-signing.sh) stops before
+#                    building anything: an ad-hoc update makes macOS ask again
+#                    for every drive and folder permission.
 #
 # Environment:
 #   UPDATE_SIGNING_KEY_FILE  the Ed25519 private key (PEM) that signs update.json.
@@ -27,7 +32,13 @@
 #                            from versions.env into the work dir.
 #   REPO                     GitHub owner/name for download URLs (CamiloCaceres/lolad)
 #   APPLE_* / SIGN_PS1       optional code signing, passed through to the macOS and
-#                            Windows build scripts. Unset: ad-hoc / unsigned (the beta).
+#                            Windows build scripts. Unset: the Mac app is signed with
+#                            "Lolad Local Signing" (stable, not notarized) and the
+#                            Windows installer is unsigned.
+#   LOLAD_SIGN_KEYCHAIN, LOLAD_SIGN_DIR
+#                            where that identity and its keychain password live;
+#                            defaults ~/Library/Keychains/lolad-signing.keychain-db
+#                            and ~/.local/share/lolad-macos-signing.
 #   ANDROID_HOME, JAVA_HOME, LOLAD_ANDROID_SIGNING_DIR
 #                            the Android SDK, JDK and APK signing key used by
 #                            clients/android-webview/scripts/build-apk.sh; defaults
@@ -46,18 +57,20 @@ set -eu
 cd "$(dirname "$0")/.."
 root=$PWD
 
-usage() { sed -n '2,44p' "$0"; exit 1; }
+usage() { sed -n '2,55p' "$0"; exit 1; }
 [ $# -ge 1 ] || usage
 version=${1#v}
 shift
 throwaway=0
 testkey=""
 android=1
+adhoc=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --throwaway-key) throwaway=1 ;;
     --dry-run-key) [ $# -ge 2 ] || usage; throwaway=1; testkey=$2; shift ;;
     --no-android) android=0 ;;
+    --adhoc) adhoc=1 ;;
     *) usage ;;
   esac
   shift
@@ -79,6 +92,16 @@ trap 'rm -rf "$work"' EXIT INT TERM
 for t in go git codesign hdiutil makensis shasum; do
   command -v "$t" >/dev/null || die "$t is not installed (macOS with Go, Xcode tools and NSIS is required)"
 done
+
+# The Mac signing identity is checked up front too.
+if [ "$adhoc" = 1 ]; then
+  export LOLAD_ADHOC=1
+elif [ -z "${APPLE_SIGN_IDENTITY:-}" ]; then
+  # shellcheck source=../desktop/packaging/macos/local-signing.sh disable=SC1091
+  . desktop/packaging/macos/local-signing.sh
+  [ -n "$(lolad_local_identity)" ] ||
+    die "no \"Lolad Local Signing\" identity on this Mac (docs/desktop.md section 4, Signing). Set it up, or pass --adhoc to sign ad-hoc (macOS then asks again for drive and folder permissions after the update)."
+fi
 
 # The Android app is checked up front, so a missing SDK stops the run before
 # twenty minutes of building rather than after. Same defaults as build-apk.sh.

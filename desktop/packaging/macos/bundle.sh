@@ -23,8 +23,12 @@
 #                         Contents/Frameworks (fallback, host arch only).
 #   RELEASE=1             refuse a partial bundle (missing arch or lolabot).
 #   APPLE_SIGN_IDENTITY   "Developer ID Application: Name (TEAMID)": real signing
-#                         with hardened runtime. Unset: ad-hoc signature.
+#                         with hardened runtime.
 #   APPLE_KEYCHAIN        optional keychain file that holds the identity.
+#   Without APPLE_SIGN_IDENTITY: the self-signed "Lolad Local Signing" identity
+#                         when this Mac has it (local-signing.sh: stable, so macOS
+#                         keeps privacy permissions across updates), else ad-hoc
+#                         with a warning. LOLAD_ADHOC=1 forces ad-hoc.
 #   Notarization (only with APPLE_SIGN_IDENTITY), one of:
 #     NOTARY_PROFILE                            a notarytool keychain profile
 #     APPLE_API_KEY_PATH, APPLE_API_KEY_ID, APPLE_API_ISSUER   App Store Connect key
@@ -46,7 +50,7 @@ for a in "$@"; do
   case "$a" in
     --dev) dev=1; dmg=0 ;;
     --no-dmg) dmg=0 ;;
-    -h|--help) sed -n '2,32p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,36p' "$0"; exit 0 ;;
     *) echo "bundle.sh: unknown option $a" >&2; exit 1 ;;
   esac
 done
@@ -78,6 +82,24 @@ die() { echo "bundle.sh: $*" >&2; exit 1; }
 step() { echo "==> $*"; }
 
 command -v go >/dev/null || die "go is not installed"
+
+# Signing mode: developer (Developer ID), local (stable self-signed) or adhoc.
+# shellcheck source=local-signing.sh disable=SC1091
+. "$here/local-signing.sh"
+local_identity=""
+if [ -n "${APPLE_SIGN_IDENTITY:-}" ]; then
+  sign_mode=developer
+elif [ "${LOLAD_ADHOC:-0}" != 1 ] && local_identity=$(lolad_local_identity) && [ -n "$local_identity" ]; then
+  sign_mode=local
+else
+  sign_mode=adhoc
+  if [ "${LOLAD_ADHOC:-0}" = 1 ]; then
+    echo "bundle.sh: WARNING: LOLAD_ADHOC=1: signing ad-hoc." >&2
+  else
+    echo "bundle.sh: WARNING: no \"Lolad Local Signing\" identity on this Mac; signing ad-hoc." >&2
+  fi
+  echo "bundle.sh: WARNING: macOS will ask again for folder and drive permissions after an update to this build." >&2
+fi
 command -v codesign >/dev/null || die "this script needs macOS (codesign not found)"
 export MACOSX_DEPLOYMENT_TARGET=13.0
 
@@ -293,16 +315,23 @@ fi
 echo "   Helpers/lolad version: $dv"
 
 # ------------------------------------------------------------------ signing
+bundle_id=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$c/Info.plist")
 sign_one() { # path
-  if [ -n "${APPLE_SIGN_IDENTITY:-}" ]; then
-    codesign --force --timestamp --options runtime --entitlements "$here/entitlements.plist" \
-      ${APPLE_KEYCHAIN:+--keychain "$APPLE_KEYCHAIN"} --sign "$APPLE_SIGN_IDENTITY" "$1"
-  else
-    codesign --force --sign - "$1"
-  fi
+  id=$(lolad_sign_identifier "$1" "$app" "$bundle_id")
+  case "$sign_mode" in
+    developer)
+      codesign --force --timestamp --options runtime --entitlements "$here/entitlements.plist" \
+        ${APPLE_KEYCHAIN:+--keychain "$APPLE_KEYCHAIN"} --identifier "$id" --sign "$APPLE_SIGN_IDENTITY" "$1" ;;
+    local)
+      # No hardened runtime or timestamp: neither is needed off the App Store
+      # and notarization, and the timestamp server only serves Apple certificates.
+      codesign --force --identifier "$id" --sign "$local_identity" "$1" ;;
+    *)
+      codesign --force --identifier "$id" --sign - "$1" ;;
+  esac
 }
 sign_app() {
-  step "signing every Mach-O inside-out (${APPLE_SIGN_IDENTITY:-ad-hoc})"
+  step "signing every Mach-O inside-out ($sign_mode${APPLE_SIGN_IDENTITY:+: $APPLE_SIGN_IDENTITY}${local_identity:+: Lolad Local Signing $local_identity})"
   # Deepest paths first; the main executable and the bundle last.
   find "$c" -type f ! -path "$c/MacOS/Lolad" -print | awk '{print length, $0}' | sort -rn | cut -d' ' -f2- |
     while read -r f; do
@@ -314,6 +343,14 @@ sign_app() {
 sign_app
 codesign --verify --deep --strict --verbose=2 "$app"
 echo "   codesign --verify --deep --strict: OK"
+if [ "$sign_mode" != adhoc ]; then
+  # A requirement that names a cdhash changes with every build: TCC would ask again.
+  for f in "$app" "$c/Helpers/lolad"; do
+    dr=$(codesign -dr - "$f" 2>&1 | sed -n 's/^.*designated => //p')
+    case "$dr" in *cdhash*|"") die "$f has no stable designated requirement: $dr" ;; esac
+    echo "   designated requirement of ${f#"$dist/"}: $dr"
+  done
+fi
 
 notarize() { # file-to-submit
   if [ -n "${NOTARY_PROFILE:-}" ]; then
@@ -372,7 +409,16 @@ echo
 echo "built:   $app  (version $VERSION, archs:$(for a in $built; do printf ' %s' "$(macho_arch "$a")"; done), $tmux_ver)"
 echo "         $dist/Lolad.app.zip"
 [ "$dmg" = 1 ] && echo "         $dist/Lolad.dmg"
-if [ -z "${APPLE_SIGN_IDENTITY:-}" ]; then
+if [ "$sign_mode" = local ]; then
+  cat <<'MSG'
+
+This build is signed with the self-signed "Lolad Local Signing" certificate:
+macOS keeps the permissions Lolad was given (drives, folders) across updates.
+It is not notarized. On another Mac, Gatekeeper will refuse the first open.
+Use System Settings > Privacy & Security > "Open Anyway", or run:
+    xattr -dr com.apple.quarantine /Applications/Lolad.app
+MSG
+elif [ "$sign_mode" = adhoc ]; then
   cat <<'MSG'
 
 This build is ad-hoc signed, not notarized. On another Mac, Gatekeeper will
