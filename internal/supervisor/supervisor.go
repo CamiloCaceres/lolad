@@ -320,12 +320,16 @@ func (s *Supervisor) reconcileAgent(ctx context.Context, r *record, now time.Tim
 			if e = s.opts.Sessions.Kill(name); e != nil {
 				return e
 			}
+			if p, ok := classifyPermission(nil, detail, now); ok {
+				s.blockPermission(r, now, p)
+				return nil
+			}
 			s.crash(r, now, detail)
 			return nil
 		}
 	}
 	if !exists {
-		if r.EverStarted && r.Status.State != core.StateCrashed && r.Status.State != core.StateStopped && !r.Restarting {
+		if r.EverStarted && r.Status.State != core.StateCrashed && r.Status.State != core.StateStopped && !r.Restarting && !blockedByMacOS(r) {
 			s.crash(r, now, "session disappeared")
 			return nil
 		}
@@ -451,13 +455,22 @@ func (s *Supervisor) launch(r *record) error {
 	} else {
 		spec, e = l.Prepare(r.Status.Agent, opts)
 	}
+	if e == nil {
+		e = s.opts.Sessions.Start(r.Status.Name, spec.Dir, spec.Env, spec.Argv, 220, 50)
+	}
 	if e != nil {
-		s.crash(r, s.opts.Clock.Now(), e.Error())
+		now := s.opts.Clock.Now()
+		if p, ok := classifyPermission(e, "", now); ok {
+			// Not a crash: macOS keeps the folder from lolad until the
+			// user allows it. Try again shortly, with no backoff.
+			s.blockPermission(r, now, p)
+			return nil
+		}
+		s.crash(r, now, e.Error())
 		return e
 	}
-	if e = s.opts.Sessions.Start(r.Status.Name, spec.Dir, spec.Env, spec.Argv, 220, 50); e != nil {
-		s.crash(r, s.opts.Clock.Now(), e.Error())
-		return e
+	if blockedByMacOS(r) {
+		s.event(r.Status.Name, "problem-cleared", "macOS allowed access")
 	}
 	r.LaunchFingerprint = launchFingerprint
 	r.LaunchRuntime = r.Status.Runtime

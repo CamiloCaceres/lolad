@@ -119,3 +119,37 @@ func TestHealthStarting(t *testing.T) {
 		}
 	}
 }
+
+// Agents blocked by macOS after a reboot: one note for all of them.
+func TestPermissionNoteForBlockedAgents(t *testing.T) {
+	blocked := func(name string) Agent {
+		a := Agent{Name: name, State: "waiting"}
+		a.Problem = &struct {
+			Kind  string `json:"kind"`
+			Title string `json:"title"`
+			Hint  string `json:"hint"`
+		}{"macos_permission", "macOS is blocking access to “DevSSD”", "If macOS is asking whether Lolad may use “DevSSD”, click Allow."}
+		return a
+	}
+	d := Data{Snap: Snapshot{Up: true}, Agents: []Agent{{Name: "ok", State: "idle"}, blocked("iris"), blocked("quill"), blocked("ledger")}}
+	n := permissionNote(d, 0, "darwin")
+	if n == nil || n.ID != "macos-permission" || n.Title != "macOS is blocking access to “DevSSD”" ||
+		!strings.HasPrefix(n.Body, "3 assistants are waiting. ") || !strings.Contains(n.Body, "click Allow") {
+		t.Fatalf("%+v", n)
+	}
+	one := Data{Snap: Snapshot{Up: true}, Agents: []Agent{blocked("iris")}}
+	if n := permissionNote(one, 0, "darwin"); n == nil || !strings.HasPrefix(n.Body, "iris is waiting. ") {
+		t.Fatalf("one: %+v", n)
+	}
+	if n := permissionNote(Data{Snap: Snapshot{Up: true}, Agents: []Agent{{Name: "ok", State: "idle"}}}, 0, "darwin"); n != nil {
+		t.Fatalf("none blocked: %+v", n)
+	}
+}
+
+// The daemon's JSON carries the problem through to the tray.
+func TestAgentProblemDecodes(t *testing.T) {
+	as, err := decodeList[Agent]([]byte(`[{"name":"iris","state":"waiting","problem":{"kind":"macos_permission","title":"T","hint":"H","needs_you":true}}]`))
+	if err != nil || len(as) != 1 || as[0].Problem == nil || as[0].Problem.Kind != "macos_permission" || as[0].Problem.Hint != "H" {
+		t.Fatalf("%v %+v", err, as)
+	}
+}

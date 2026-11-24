@@ -376,6 +376,14 @@ nobody is there to answer for an unattended agent. Therefore:
 - Choosing a protected location shows a warning and offers to open
   Privacy ▸ Files and Folders / Full Disk Access.
 - `lolad doctor` reports agent directories under protected locations.
+- When macOS refuses an agent's folder, `.env` or settings ("operation not
+  permitted", as after a reboot or an update took the permission away), the
+  supervisor does not count a crash. The agent shows the problem
+  `macos_permission` ("macOS is blocking access to “DevSSD”", needs you, with
+  the Files & Folders switch to turn on) and is tried again every 15 s, with no
+  backoff and no crash budget, so it is back within seconds of Allow. The app
+  sends one notification for all blocked agents (the same one as the startup
+  notice, §8).
 
 ### 7.4 lolabot without git or Bash
 

@@ -12,6 +12,11 @@ type Agent struct {
 	State   string `json:"state"`
 	Desired string `json:"desired"`
 	Unread  int    `json:"unread"`
+	Problem *struct {
+		Kind  string `json:"kind"`
+		Title string `json:"title"`
+		Hint  string `json:"hint"`
+	} `json:"problem"`
 }
 
 // Conversation is the part of GET /api/mail/conversations the tray needs.

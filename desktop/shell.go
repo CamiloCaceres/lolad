@@ -383,9 +383,26 @@ func quoteDrive(h *Health) string {
 
 // permissionNote is the notification for a daemon held by a macOS privacy
 // dialog: the daemon says so (starting), or, for daemons older than that
-// state, it has been silent on its port for a while on macOS. nil: no note.
+// state, it has been silent on its port for a while on macOS. Agents the
+// daemon reports as blocked by macOS (problem kind macos_permission, as
+// after a reboot took the drive away) get one note for all of them, not one
+// each. nil: no note.
 func permissionNote(d Data, silentFor time.Duration, goos string) *Note {
+	var blocked []Agent
+	for _, a := range d.Agents {
+		if a.Problem != nil && a.Problem.Kind == "macos_permission" {
+			blocked = append(blocked, a)
+		}
+	}
 	switch {
+	case d.Snap.Up && len(blocked) > 0:
+		p := blocked[0].Problem
+		who := firstNonEmpty(blocked[0].Display, blocked[0].Name) + " is waiting."
+		if len(blocked) > 1 {
+			who = plural(len(blocked), "assistant is", "assistants are") + " waiting."
+		}
+		return &Note{Kind: "system", ID: "macos-permission", Link: "/agents",
+			Title: p.Title, Body: who + " " + p.Hint}
 	case d.Starting != nil && d.Starting.State == "waiting_for_macos_permission":
 		return &Note{Kind: "system", ID: "macos-permission", Link: "/",
 			Title: "macOS is asking about " + quoteDrive(d.Starting),
