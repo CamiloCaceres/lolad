@@ -137,7 +137,11 @@ agents.** They keep working in the background.
    file there.
 2. If the window says Lolad is not running, press **Start**.
 3. If that does not work: quit Lolad from the icon's menu and open it again.
-4. To reconnect or reinstall Claude Code, open **Settings**, then **AI tools**.
+4. To reconnect or reinstall Claude Code, open **Settings**, then **Claude**.
+   If an agent says **"Claude Code isn't installed"**, install it there (on
+   Windows you can also run `irm https://claude.ai/install.ps1 | iex` in
+   PowerShell). The agent starts by itself within half a minute of Claude Code
+   being found. You do not need to restart Lolad or sign out of Windows.
 5. As a last step, restart your computer. Lolad starts again by itself.
 
 Your agents and messages are stored on your computer and are not lost when you

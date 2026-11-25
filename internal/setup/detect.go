@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/CamiloCaceres/lolad/internal/binpath"
 )
 
 // harnessSpec describes one supported runtime.
@@ -62,33 +64,17 @@ func (m *Manager) searchDirs(captured string, npmPrefix string) []string {
 	for _, d := range filepath.SplitList(m.getenv("PATH")) {
 		add(d)
 	}
-	h := m.home
-	add(filepath.Join(h, ".local", "bin"))
-	add(filepath.Join(h, ".claude", "local"))
-	add(filepath.Join(h, ".npm-global", "bin"))
-	add(filepath.Join(h, ".bun", "bin"))
-	add(filepath.Join(h, ".volta", "bin"))
-	add(filepath.Join(h, ".cargo", "bin"))
+	for _, d := range binpath.WellKnown(m.goos, m.home, m.getenv) {
+		add(d)
+	}
 	switch m.goos {
 	case "windows":
-		local := m.getenv("LOCALAPPDATA")
-		if local == "" {
-			local = filepath.Join(h, "AppData", "Local")
-		}
-		add(filepath.Join(local, "Programs"))
-		for _, s := range harnessSpecs {
-			add(filepath.Join(local, "Programs", s.name))
-			add(filepath.Join(local, "Programs", s.id))
-		}
-		if a := m.getenv("APPDATA"); a != "" {
-			add(filepath.Join(a, "npm"))
-		}
 		add(npmPrefix)
 	default:
 		if !m.noSystemDirs {
-			add("/opt/homebrew/bin")
-			add("/usr/local/bin")
-			add("/usr/bin")
+			for _, d := range binpath.System(m.goos) {
+				add(d)
+			}
 		}
 		if npmPrefix != "" {
 			add(filepath.Join(npmPrefix, "bin"))
@@ -110,29 +96,9 @@ func uniq(in []string) []string {
 }
 
 // find returns the first executable called bin in dirs.
-func (m *Manager) find(dirs []string, bin string) string {
-	names := []string{bin}
-	if m.goos == "windows" {
-		names = []string{bin + ".exe", bin + ".cmd", bin + ".bat", bin}
-	}
-	for _, d := range dirs {
-		for _, n := range names {
-			p := filepath.Join(d, n)
-			if executable(p, m.goos) {
-				return p
-			}
-		}
-	}
-	return ""
-}
+func (m *Manager) find(dirs []string, bin string) string { return binpath.Find(dirs, bin, m.goos) }
 
-func executable(p, goos string) bool {
-	fi, err := os.Stat(p)
-	if err != nil || !fi.Mode().IsRegular() {
-		return false
-	}
-	return goos == "windows" || fi.Mode().Perm()&0o111 != 0
-}
+func executable(p, goos string) bool { return binpath.Executable(p, goos) }
 
 var versionRe = regexp.MustCompile(`\d+\.\d+(?:\.\d+)?(?:[-+][0-9A-Za-z.-]+)?`)
 

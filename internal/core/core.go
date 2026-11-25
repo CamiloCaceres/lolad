@@ -480,4 +480,7 @@ var (
 	ErrDenied     = errors.New("denied by policy")
 	ErrConflict   = errors.New("changed since it was loaded")
 	ErrTooLarge   = errors.New("too large")
+	// ErrHarnessMissing: the agent's harness (Claude Code, Codewhale) is not
+	// installed, or lolad cannot find it.
+	ErrHarnessMissing = errors.New("harness not installed")
 )

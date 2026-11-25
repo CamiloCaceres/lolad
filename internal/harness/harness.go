@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -13,13 +12,20 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/CamiloCaceres/lolad/internal/binpath"
 	"github.com/CamiloCaceres/lolad/internal/core"
 )
 
 type Adapter struct {
-	Kind   core.Harness
+	Kind core.Harness
+	// Binary is the harness executable lolad was configured with. It is used
+	// while it exists; otherwise the harness is looked for again on every
+	// launch (see resolve), so installing it later needs no restart.
 	Binary string
 	Path   string
+	// Configured, when set, returns the path config.yaml names now (for
+	// example claude_bin, which onboarding writes once it finds Claude).
+	Configured func() string
 }
 
 // GlobalEnvFile is the shared env file's name inside lolad's state dir.
@@ -85,6 +91,10 @@ func (a *Adapter) prepare(agent core.Agent, o core.LaunchOpts, sessionID string)
 	if a.Path != "" {
 		env["PATH"] = a.Path
 	}
+	// On Windows a tool installed after lolad started (claude's installer
+	// adds ~/.local/bin to the user Path) is only in the registry until the
+	// user signs out again: add what the registry says now.
+	env["PATH"] = binpath.Merge(runtime.GOOS, string(os.PathListSeparator), env["PATH"], registryPATH())
 	// <state>/global.env holds settings shared by every agent (typically a
 	// provider key such as DEEPSEEK_API_KEY). The agent's own env file and
 	// runtime.env override it. Its keys stay out of LOLAD_ENV_KEYS: live
@@ -129,20 +139,13 @@ func (a *Adapter) prepare(agent core.Agent, o core.LaunchOpts, sessionID string)
 	env["LOLAD_BIN"] = o.LoladBin
 	env["LOLAD_STATE"] = o.StateDir
 	env["LOLAD_HARNESS"] = string(a.Kind)
-	env["PATH"] = filepath.Dir(o.LoladBin) + string(os.PathListSeparator) + env["PATH"]
-	bin := a.Binary
-	if bin == "" {
-		for _, dir := range filepath.SplitList(env["PATH"]) {
-			candidate := filepath.Join(dir, string(a.Kind))
-			if resolved, err := exec.LookPath(candidate); err == nil {
-				bin = resolved
-				break
-			}
-		}
-		if bin == "" {
-			return spec, fmt.Errorf("%s: %w", a.Kind, exec.ErrNotFound)
-		}
+	bin, err := a.resolve(env["PATH"])
+	if err != nil {
+		return spec, err
 	}
+	// lolad's own directory first (agents run `lolad msg`), then the
+	// harness's, so its child processes find it and its siblings (node).
+	env["PATH"] = binpath.Merge(runtime.GOOS, string(os.PathListSeparator), filepath.Dir(o.LoladBin), filepath.Dir(bin), env["PATH"])
 	args := []string{bin}
 	// Codewhale hooks report a runtime id (CODEWHALE_SESSION_ID, "sess_…") that
 	// its --resume rejects ("No session found"); saved sessions are keyed by a

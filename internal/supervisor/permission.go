@@ -112,17 +112,23 @@ func protectedPlace(path string) (place, setting string) {
 	return "“" + filepath.Base(path) + "”", "the folder or drive it lives on"
 }
 
-// blockedByMacOS reports an agent waiting for a macOS permission. It has no
-// session on purpose, so its vanished session is not a crash.
+// blockedByMacOS reports an agent waiting for a macOS permission.
 func blockedByMacOS(r *record) bool {
 	return r.Status.Problem != nil && r.Status.Problem.Kind == ProblemMacOSPermission
 }
 
-// blockPermission records p instead of a crash: the agent waits for the
-// user (needs_you), and launches again every permissionRetry. Crashes and
-// restarts are not counted.
-func (s *Supervisor) blockPermission(r *record, now time.Time, p core.AgentProblem) {
+// blockedOnUser reports an agent that cannot launch until the user does
+// something (allow a folder, install its harness). It has no session on
+// purpose, so its vanished session is not a crash.
+func blockedOnUser(r *record) bool {
+	return r.Status.Problem != nil && (r.Status.Problem.Kind == ProblemMacOSPermission || r.Status.Problem.Kind == ProblemHarnessMissing)
+}
+
+// block records p instead of a crash: the agent waits for the user
+// (needs_you) and launches again at p.Until. Crashes and restarts are not
+// counted.
+func (s *Supervisor) block(r *record, now time.Time, p core.AgentProblem) {
 	r.Status.LastError = p.Detail
-	r.Status.NextRestart = now.Add(permissionRetry)
+	r.Status.NextRestart = p.Until
 	s.setProblem(r, p)
 }

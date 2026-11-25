@@ -113,15 +113,22 @@ func New(ctx context.Context, configPath string) (_ *App, err error) {
 	} else if p := bundledMultiplexer(); p != "" {
 		sessions.Binary = p
 	}
-	claudeBin := a.Config.ClaudeBin
-	if claudeBin == "" {
-		home, _ := os.UserHomeDir()
-		p := filepath.Join(home, ".local/bin/claude")
-		if _, e := os.Stat(p); e == nil {
-			claudeBin = p
+	// The harness paths config.yaml names now: onboarding writes claude_bin
+	// once it finds Claude, which may be after the daemon started.
+	configured := func(pick func(registry.Config) string) func() string {
+		return func() string {
+			c, err := registry.LoadConfig(a.configPath)
+			if err != nil {
+				return ""
+			}
+			return pick(c)
 		}
 	}
-	launchers := map[core.Harness]core.Launcher{core.HarnessClaude: harness.New(core.HarnessClaude, claudeBin), core.HarnessCodewhale: harness.New(core.HarnessCodewhale, "")}
+	claude := harness.New(core.HarnessClaude, a.Config.ClaudeBin)
+	claude.Configured = configured(func(c registry.Config) string { return c.ClaudeBin })
+	codewhale := harness.New(core.HarnessCodewhale, a.Config.CodewhaleBin)
+	codewhale.Configured = configured(func(c registry.Config) string { return c.CodewhaleBin })
+	launchers := map[core.Harness]core.Launcher{core.HarnessClaude: claude, core.HarnessCodewhale: codewhale}
 	a.Tracker = deliver.NewTracker(nil)
 	bin, err := os.Executable()
 	if err != nil {

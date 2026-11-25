@@ -321,7 +321,7 @@ func (s *Supervisor) reconcileAgent(ctx context.Context, r *record, now time.Tim
 				return e
 			}
 			if p, ok := classifyPermission(nil, detail, now); ok {
-				s.blockPermission(r, now, p)
+				s.block(r, now, p)
 				return nil
 			}
 			s.crash(r, now, detail)
@@ -329,7 +329,7 @@ func (s *Supervisor) reconcileAgent(ctx context.Context, r *record, now time.Tim
 		}
 	}
 	if !exists {
-		if r.EverStarted && r.Status.State != core.StateCrashed && r.Status.State != core.StateStopped && !r.Restarting && !blockedByMacOS(r) {
+		if r.EverStarted && r.Status.State != core.StateCrashed && r.Status.State != core.StateStopped && !r.Restarting && !blockedOnUser(r) {
 			s.crash(r, now, "session disappeared")
 			return nil
 		}
@@ -463,7 +463,12 @@ func (s *Supervisor) launch(r *record) error {
 		if p, ok := classifyPermission(e, "", now); ok {
 			// Not a crash: macOS keeps the folder from lolad until the
 			// user allows it. Try again shortly, with no backoff.
-			s.blockPermission(r, now, p)
+			s.block(r, now, p)
+			return nil
+		}
+		if p, ok := classifyHarnessMissing(e, r.Status.Runtime.Harness, now); ok {
+			// Not a crash either: nothing to run until it is installed.
+			s.block(r, now, p)
 			return nil
 		}
 		s.crash(r, now, e.Error())
@@ -471,6 +476,8 @@ func (s *Supervisor) launch(r *record) error {
 	}
 	if blockedByMacOS(r) {
 		s.event(r.Status.Name, "problem-cleared", "macOS allowed access")
+	} else if r.Status.Problem != nil && r.Status.Problem.Kind == ProblemHarnessMissing {
+		s.event(r.Status.Name, "problem-cleared", "found "+harnessName(r.Status.Runtime.Harness))
 	}
 	r.LaunchFingerprint = launchFingerprint
 	r.LaunchRuntime = r.Status.Runtime

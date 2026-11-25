@@ -61,3 +61,11 @@ func TestWindowsJSONLockSerializesWriters(t *testing.T) {
 		t.Fatal("writer did not acquire released lock")
 	}
 }
+
+func TestWindowsLaunchEnvironmentMergesPathSpellings(t *testing.T) {
+	env := map[string]string{"Path": `C:\a`, "PATH": `C:\b`, "HOME": "h"}
+	normalizeLaunchEnv(env)
+	if env["PATH"] != `C:\b;C:\a` || len(env) != 2 {
+		t.Fatalf("%v", env)
+	}
+}
