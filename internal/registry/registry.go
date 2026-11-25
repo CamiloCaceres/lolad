@@ -3,6 +3,7 @@ package registry
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
@@ -10,9 +11,11 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/CamiloCaceres/lolad/internal/core"
@@ -259,6 +262,7 @@ type Registry struct {
 	agents      []core.Agent
 	diagnostics []core.Event
 	onEvent     func(core.Event)
+	blocked     []string
 }
 
 func New(path string, options ...Option) (*Registry, error) {
@@ -269,6 +273,27 @@ func New(path string, options ...Option) (*Registry, error) {
 	_, e := r.Reload()
 	return r, e
 }
+
+// Blocked lists the agent folders the operating system refused to lolad at
+// the last Reload ("operation not permitted": on macOS, privacy controls such
+// as Removable Volumes or Documents). Their agents are kept as they were
+// until the folder can be read again.
+func (r *Registry) Blocked() []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return append([]string(nil), r.blocked...)
+}
+
+// Test hooks: a real "operation not permitted" needs macOS privacy controls.
+var (
+	readDir   = os.ReadDir
+	readAgent = ReadAgent
+)
+
+// notPermitted is EPERM: the OS refuses the folder outright (macOS privacy
+// controls), as opposed to a folder that is missing or misconfigured.
+func notPermitted(e error) bool { return errors.Is(e, syscall.EPERM) }
+
 func (r *Registry) Diagnostics() []core.Event {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -294,9 +319,14 @@ func (r *Registry) Reload() (Diff, error) {
 		return Diff{}, e
 	}
 	dirs := append([]string(nil), c.Agents...)
+	var blocked []string
 	for _, root := range c.AgentsDirs {
-		entries, e := os.ReadDir(root)
+		entries, e := readDir(root)
 		if os.IsNotExist(e) {
+			continue
+		}
+		if notPermitted(e) {
+			blocked = append(blocked, root)
 			continue
 		}
 		if e != nil {
@@ -320,8 +350,12 @@ func (r *Registry) Reload() (Diff, error) {
 			continue
 		}
 		seen[abs] = true
-		a, e := ReadAgent(abs)
+		a, e := readAgent(abs)
 		if os.IsNotExist(e) || e == core.ErrNotFound {
+			continue
+		}
+		if notPermitted(e) {
+			blocked = append(blocked, abs)
 			continue
 		}
 		if e != nil {
@@ -337,13 +371,29 @@ func (r *Registry) Reload() (Diff, error) {
 		}
 		found[a.Name] = a
 	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	// An agent in a folder the OS refuses is unknown, not gone: keep it as
+	// it was instead of removing (and stopping) it.
+	for _, a := range r.agents {
+		if _, ok := found[a.Name]; !ok && under(a.Dir, blocked) {
+			found[a.Name] = a
+		}
+	}
+	for _, b := range blocked {
+		if !slices.Contains(r.blocked, b) {
+			ev := core.Event{At: time.Now(), Kind: "error", Detail: "The operating system is blocking access to " + b + " (operation not permitted). Its assistants are skipped until lolad may read it again."}
+			rejected = append(rejected, ev)
+			if r.onEvent != nil {
+				r.onEvent(ev)
+			}
+		}
+	}
 	agents := make([]core.Agent, 0, len(found))
 	for _, a := range found {
 		agents = append(agents, a)
 	}
 	sort.Slice(agents, func(i, j int) bool { return agents[i].Name < agents[j].Name })
-	r.mu.Lock()
-	defer r.mu.Unlock()
 	old := map[string]core.Agent{}
 	for _, a := range r.agents {
 		old[a.Name] = a
@@ -365,7 +415,18 @@ func (r *Registry) Reload() (Diff, error) {
 	r.config = c
 	r.agents = agents
 	r.diagnostics = rejected
+	r.blocked = blocked
 	return d, nil
+}
+
+// under reports dir equal to or inside one of roots.
+func under(dir string, roots []string) bool {
+	for _, root := range roots {
+		if rel, e := filepath.Rel(root, dir); e == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return true
+		}
+	}
+	return false
 }
 
 // WriteRuntime replaces only the byte span occupied by the top-level runtime mapping.

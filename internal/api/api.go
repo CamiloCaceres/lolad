@@ -28,6 +28,9 @@ type Options struct {
 	StateDir  string
 	Trigger   func(*http.Request, string, string, string) error
 	StartedAt time.Time // zero: the time New was called
+	// Blocked lists agent folders the OS refuses to lolad (registry.Blocked);
+	// on macOS /api/health then reports waiting_for_macos_permission.
+	Blocked func() []string
 }
 
 func write(w http.ResponseWriter, v any, e error) {

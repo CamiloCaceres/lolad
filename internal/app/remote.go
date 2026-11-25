@@ -58,7 +58,7 @@ func (a *App) Handler(remote bool, version string, logger *slog.Logger) http.Han
 	if remote {
 		public = strings.TrimRight(a.Config.Remote.PublicURL, "/")
 	}
-	rest := api.New(a, api.Options{Auth: a.Auth, Remote: remote, Version: version, PublicURL: public, HookSink: a.Tracker, StateDir: a.Config.StateDir, Trigger: func(r *http.Request, ag, n, b string) error { return a.Trigger(r.Context(), ag, n, b) }})
+	rest := api.New(a, api.Options{Auth: a.Auth, Remote: remote, Version: version, PublicURL: public, HookSink: a.Tracker, StateDir: a.Config.StateDir, Blocked: a.Registry.Blocked, Trigger: func(r *http.Request, ag, n, b string) error { return a.Trigger(r.Context(), ag, n, b) }})
 	var onboarding *setup.Manager
 	if !remote {
 		onboarding = a.setupManager()

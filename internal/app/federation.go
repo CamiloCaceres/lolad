@@ -40,9 +40,12 @@ func (a *App) Run(ctx context.Context) error {
 	go func() { defer close(done); a.Engine.Run(ctx) }()
 	hubDone := make(chan struct{})
 	go func() { defer close(hubDone); a.runHub(ctx) }()
+	blockedDone := make(chan struct{})
+	go func() { defer close(blockedDone); a.retryBlocked(ctx, blockedRetry) }()
 	err := a.Supervisor.Run(ctx)
 	cancel()
 	<-hubDone
+	<-blockedDone
 	<-done
 	return err
 }

@@ -134,14 +134,7 @@ func startupState(now, began time.Time, pending map[string]time.Time, goos strin
 
 // driveName is the volume a macOS path lives on: "DevSSD" for
 // /Volumes/DevSSD/x, else the folder's own name ("Documents").
-func driveName(p string) string {
-	if rest, ok := strings.CutPrefix(filepath.ToSlash(p), "/Volumes/"); ok {
-		if v, _, _ := strings.Cut(rest, "/"); v != "" {
-			return v
-		}
-	}
-	return filepath.Base(p)
-}
+func driveName(p string) string { return api.DriveName(p) }
 
 // Notice is the sentence people see while the daemon waits.
 func (h startupNotice) String() string {

@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -27,7 +28,9 @@ type Health struct {
 	State string `json:"state,omitempty"`
 	// WaitingFor is the folder the daemon is stuck reading, and Drive the
 	// name of its volume ("DevSSD" for /Volumes/DevSSD/...), while State is
-	// waiting_for_macos_permission.
+	// waiting_for_macos_permission. A daemon that is up and serving reports
+	// the same state when macOS refused an agent folder outright: its agents
+	// are skipped until the user allows access (registry.Blocked).
 	WaitingFor string `json:"waiting_for,omitempty"`
 	Drive      string `json:"drive,omitempty"`
 }
@@ -69,9 +72,38 @@ func InstallKind(exe, forced string) string {
 	return "cli"
 }
 
+// DriveName is what people call the place holding p: the volume name for
+// /Volumes/<name>/..., otherwise the folder's own name.
+func DriveName(p string) string {
+	if rest, ok := strings.CutPrefix(filepath.ToSlash(p), "/Volumes/"); ok {
+		if v, _, _ := strings.Cut(rest, "/"); v != "" {
+			return v
+		}
+	}
+	return filepath.Base(p)
+}
+
+// WithBlocked is h for a running daemon that macOS keeps from some agent
+// folders (it said "operation not permitted"): everything else works, but
+// the agents there are skipped until the user allows access, so the state
+// says what the user has to do.
+func WithBlocked(h Health, blocked []string, goos string) Health {
+	if goos != "darwin" || len(blocked) == 0 {
+		return h
+	}
+	h.State, h.WaitingFor, h.Drive = StateMacOSAllow, blocked[0], DriveName(blocked[0])
+	return h
+}
+
+var healthGOOS = runtime.GOOS
+
 func healthRoute(m *http.ServeMux, o Options) {
 	h := NewHealth(o.Version, o.StateDir, o.StartedAt)
 	m.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
-		write(w, h, nil)
+		cur := h
+		if o.Blocked != nil {
+			cur = WithBlocked(h, o.Blocked(), healthGOOS)
+		}
+		write(w, cur, nil)
 	})
 }
