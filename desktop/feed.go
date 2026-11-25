@@ -43,6 +43,11 @@ type Data struct {
 	// Silent: the port took the connection but nothing answered in time. An
 	// older lolad blocked on a macOS permission dialog looks like this.
 	Silent bool
+	// Blocked is the health of a daemon that is up but that macOS refuses
+	// some agent folder outright: the agents there are skipped until the
+	// user allows access (state waiting_for_macos_permission while ready).
+	// nil otherwise, and always nil for daemons older than that report.
+	Blocked *Health
 }
 
 // feed keeps Data fresh: it subscribes to the loopback /api/stream, and on any
@@ -207,6 +212,9 @@ func (f *feed) refresh(ctx context.Context) {
 	// Federation endpoints may not exist on older daemons: ignore any error.
 	if b, err := f.get(ctx, "/api/connections"); err == nil {
 		d.Conns, _ = decodeList[Connection](b)
+	}
+	if h := fetchHealth(f.Base()); h != nil && h.State == "waiting_for_macos_permission" {
+		d.Blocked = h
 	}
 	d.Snap = Compute(d.Agents, d.Convs, d.Conns)
 	f.onData(d)

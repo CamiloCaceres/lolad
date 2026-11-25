@@ -343,7 +343,7 @@ func (s *shell) refreshMenu(d Data, health *Health) {
 			s.it.inbox.SetHidden(false).SetLabel(d.Snap.InboxLabel())
 			s.it.agents.SetHidden(false).SetLabel(d.Snap.AgentsLabel())
 			s.it.fed.SetHidden(d.Snap.Pending == 0).SetLabel(plural(d.Snap.Pending, "person waiting for your OK", "people waiting for your OK"))
-			s.it.status.SetLabel(connectedBanner(health))
+			s.it.status.SetLabel(upLabel(d, health))
 		}
 		s.it.switchTo.SetHidden(!(d.Snap.Up && health != nil && health.Install == "cli"))
 		s.it.start.SetHidden(d.Snap.Up)
@@ -374,6 +374,14 @@ func downLabel(d Data) string {
 	return "lolad is not running"
 }
 
+// upLabel is the tray status line while the daemon answers.
+func upLabel(d Data, health *Health) string {
+	if d.Blocked != nil {
+		return "macOS is blocking " + quoteDrive(d.Blocked) + ": some assistants are paused"
+	}
+	return connectedBanner(health)
+}
+
 func quoteDrive(h *Health) string {
 	if h.Drive != "" {
 		return "“" + h.Drive + "”"
@@ -386,7 +394,9 @@ func quoteDrive(h *Health) string {
 // state, it has been silent on its port for a while on macOS. Agents the
 // daemon reports as blocked by macOS (problem kind macos_permission, as
 // after a reboot took the drive away) get one note for all of them, not one
-// each. nil: no note.
+// each. A running daemon that macOS refuses a whole agent folder (so those
+// agents are skipped, not listed) gets the same note, naming the drive.
+// nil: no note.
 func permissionNote(d Data, silentFor time.Duration, goos string) *Note {
 	var blocked []Agent
 	for _, a := range d.Agents {
@@ -403,6 +413,13 @@ func permissionNote(d Data, silentFor time.Duration, goos string) *Note {
 		}
 		return &Note{Kind: "system", ID: "macos-permission", Link: "/agents",
 			Title: p.Title, Body: who + " " + p.Hint}
+	case d.Snap.Up && d.Blocked != nil:
+		drive := quoteDrive(d.Blocked)
+		return &Note{Kind: "system", ID: "macos-permission", Link: "/agents",
+			Title: "macOS is blocking access to " + drive,
+			Body: "The assistants kept on " + drive + " are paused. If macOS is asking whether Lolad may use " + drive +
+				", click Allow. Otherwise open System Settings → Privacy & Security → Files & Folders, find lolad and turn on access to " + drive +
+				" (or add lolad under Full Disk Access). They come back by themselves within seconds."}
 	case d.Starting != nil && d.Starting.State == "waiting_for_macos_permission":
 		return &Note{Kind: "system", ID: "macos-permission", Link: "/",
 			Title: "macOS is asking about " + quoteDrive(d.Starting),
