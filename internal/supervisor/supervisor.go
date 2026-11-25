@@ -70,6 +70,10 @@ type record struct {
 	ResumeFailures int
 	// ModeKeys counts mode-switch keys sent since launch; see checkStartup.
 	ModeKeys int
+	// StallRetryAt, StallCheckAt: see checkStalled.
+	StallRetryAt time.Time `json:",omitzero"`
+	StallCheckAt time.Time `json:",omitzero"`
+	StallPane    string    `json:"-"` // the screen when the problem was raised
 }
 
 // resumeFailLimit is how many resumes in a row may die before their first
@@ -376,6 +380,9 @@ func (s *Supervisor) reconcileAgent(ctx context.Context, r *record, now time.Tim
 				return s.beginStop(r)
 			}
 		}
+	}
+	if !startupFallback {
+		s.checkStalled(r, now)
 	}
 	s.deliver(ctx, r, now)
 	s.hotReload(ctx, r, now)

@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/CamiloCaceres/lolad/internal/binpath"
 	"github.com/CamiloCaceres/lolad/internal/core"
@@ -315,23 +316,52 @@ func InputLine(pane string) int {
 	}
 	return -1
 }
+
+// notReady are words that only a dialog, a permission prompt or a running turn
+// puts on the screen.
+var notReady = []string{"working agreement", "choose your model provider", "enter to confirm", "do you trust", "yes, i trust", "allow once", "allow this", "esc to cancel", "waiting for approval", "approve this", "esc to interrupt", "escape to interrupt"}
+
+// spinnerGlyphs start Claude Code's "working" line ("✻ Brewing… (esc to
+// interrupt)").
+const spinnerGlyphs = "·✢✳✶✻✽✺✹✸✷*"
+
 func (a *Adapter) PromptReady(pane string) bool {
 	p := Plain(pane)
-	lower := strings.ToLower(p)
-	for _, bad := range []string{"working agreement", "choose your model provider", "enter to confirm", "do you trust", "yes, i trust", "allow once", "allow this", "esc to cancel", "waiting for approval", "approve this", "esc to interrupt", "escape to interrupt"} {
-		if strings.Contains(lower, bad) {
-			return false
-		}
-	}
 	lines := strings.Split(p, "\n")
 	i := InputLine(p)
-	if i < 0 {
+	has := func(text string) bool {
+		lower := strings.ToLower(text)
+		for _, bad := range notReady {
+			if strings.Contains(lower, bad) {
+				return true
+			}
+		}
 		return false
 	}
 	if a.Kind == core.HarnessCodewhale {
+		if has(p) || i < 0 {
+			return false
+		}
 		return strings.HasPrefix(strings.TrimSpace(lines[i]), "│❯") && strings.Contains(strings.Join(lines[i:], "\n"), "╰")
 	}
-	return i > 0 && strings.Contains(lines[i-1], "──") && i+1 < len(lines) && strings.Contains(strings.Join(lines[i+1:], "\n"), "──")
+	if i <= 0 || !strings.Contains(lines[i-1], "──") || i+1 >= len(lines) || !strings.Contains(strings.Join(lines[i+1:], "\n"), "──") {
+		return false
+	}
+	// A dialog replaces the composer and draws its words around the ❯ of its
+	// choices, so they count from the composer's top border down. Above it is
+	// the transcript, where the same words are only text: an agent that talked
+	// about "Allow once" must still get its mail. There only a spinner line
+	// counts.
+	if has(strings.Join(lines[i-1:], "\n")) {
+		return false
+	}
+	for _, l := range lines[:i-1] {
+		t := strings.TrimSpace(l)
+		if r, _ := utf8.DecodeRuneInString(t); r != utf8.RuneError && strings.ContainsRune(spinnerGlyphs, r) && has(t) {
+			return false
+		}
+	}
+	return true
 }
 
 // codewhaleMode reads the permission mode from the status bar under the

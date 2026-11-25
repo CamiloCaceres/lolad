@@ -277,3 +277,29 @@ func TestUserToolsMCP(t *testing.T) {
 		t.Fatal(string(b))
 	}
 }
+
+// Dialog words in the transcript above the composer are text, not a dialog:
+// an agent that wrote about "Allow once" was never told about its mail
+// again until the words scrolled away. A spinner line there still means
+// busy, and dialog words in or under the composer still mean a dialog.
+func TestPromptReadyIgnoresTranscriptWords(t *testing.T) {
+	b, e := os.ReadFile("testdata/claude-idle.txt")
+	if e != nil {
+		t.Fatal(e)
+	}
+	idle := string(b)
+	at := strings.Index(idle, "────")
+	l := New(core.HarnessClaude, "")
+	with := func(above string) string { return idle[:at] + above + "\n" + idle[at:] }
+	if !l.PromptReady(with("⏺ When the dialog shows, pick \"Allow once\", or press Esc to cancel.\n  Do you trust this folder? Enter to confirm. esc to interrupt")) {
+		t.Fatal("transcript words blocked the prompt")
+	}
+	for _, spin := range []string{"✻ Brewing… (12s · esc to interrupt)", "· Thinking… (esc to interrupt)", "✶ Running… (3s · ↓ 1.2k tokens · Esc to interrupt)"} {
+		if l.PromptReady(with(spin)) {
+			t.Fatalf("spinner %q read as ready", spin)
+		}
+	}
+	if l.PromptReady(idle + "\nEnter to confirm · Esc to cancel") {
+		t.Fatal("dialog words under the composer read as ready")
+	}
+}

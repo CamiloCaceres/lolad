@@ -23,7 +23,7 @@ func TestRealDelivery(t *testing.T) {
 		t.Skip(e)
 	}
 	script, _ := filepath.Abs("testdata/tui.py")
-	for _, mode := range []string{"confirmed", "retry", "staged", "failed"} {
+	for _, mode := range []string{"confirmed", "retry", "staged", "failed", "talked", "working"} {
 		t.Run(mode, func(t *testing.T) {
 			s, e := tm.New(t.TempDir(), fmt.Sprintf("lolad-test-%d", time.Now().UnixNano()))
 			if e != nil {
@@ -37,7 +37,7 @@ func TestRealDelivery(t *testing.T) {
 			deadline := time.Now().Add(3 * time.Second)
 			for {
 				p, _ := s.Capture("a", 40, true)
-				if l.PromptReady(p) {
+				if l.PromptReady(p) || (mode == "working" && strings.Contains(p, "esc to interrupt")) {
 					break
 				}
 				if time.Now().After(deadline) {
@@ -53,6 +53,9 @@ func TestRealDelivery(t *testing.T) {
 			}
 			if mode == "failed" {
 				want = core.NotifyFailed
+			}
+			if mode == "working" {
+				want = core.NotifyBusy // a running turn's spinner
 			}
 			result, e := n.Notify(context.Background(), core.Agent{Name: "a"}, m)
 			if e != nil || result != want {

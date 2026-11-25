@@ -1,4 +1,6 @@
 # A raw-mode composer: confirmed submits, staged swallows Enter, failed drops input.
+# talked is confirmed with dialog words in the transcript above the composer;
+# working shows a spinner line there.
 import os, sys, termios, tty
 mode = sys.argv[1]
 original = termios.tcgetattr(0)
@@ -6,6 +8,10 @@ tty.setraw(0)
 os.write(1, b'\x1b[?1049h')
 text = ''
 history = []
+if mode == 'talked':
+    history = ['⏺ When the dialog shows, pick "Allow once", or press Esc to cancel.', '  Do you trust this folder? Enter to confirm.']
+if mode == 'working':
+    history = ['⏺ Reading the logs.', '', '✻ Brewing… (12s · esc to interrupt)']
 submits = 0
 def render():
     os.write(1, ('\x1b[2J\x1b[H' + '\r\n'.join(history) + '\r\n' + '─'*210 + '\r\n❯ ' + text + '\r\n' + '─'*210 + '\r\n').encode())
@@ -16,7 +22,7 @@ try:
         if not c: break
         if c in (b'\r', b'\n'):
             submits += 1
-            if mode == 'confirmed' or (mode == 'retry' and submits > 1):
+            if mode in ('confirmed', 'talked') or (mode == 'retry' and submits > 1):
                 history.append(text)
                 text = ''
             if mode == 'failed': text = ''
