@@ -99,6 +99,9 @@ func (d *Demo) Save(ctx context.Context, req SaveRequest) (Status, error) {
 		if req.Dismiss != nil {
 			s.Dismissed = *req.Dismiss
 		}
+		if req.FriendOnly != nil {
+			s.FriendOnly = *req.FriendOnly
+		}
 	})
 	return d.Status(ctx)
 }

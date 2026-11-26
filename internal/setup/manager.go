@@ -221,6 +221,7 @@ func (m *Manager) Status(ctx context.Context) (Status, error) {
 		SkippedAgent:     st.SkippedAgent,
 		FolderSet:        st.FolderSet,
 		NameSet:          st.NameSet,
+		FriendOnly:       st.FriendOnly,
 		ServiceDone:      st.ServiceDone,
 		Platform:         m.goos,
 		ConfigPath:       m.cfg,
@@ -321,6 +322,9 @@ func (m *Manager) Save(ctx context.Context, req SaveRequest) (Status, error) {
 		}
 		if req.Dismiss != nil {
 			s.Dismissed = *req.Dismiss
+		}
+		if req.FriendOnly != nil {
+			s.FriendOnly = *req.FriendOnly
 		}
 	}); err != nil {
 		return Status{}, err

@@ -195,6 +195,8 @@ func (s *server) welcomeView(r *http.Request) (welcomeView, error) {
 		shown = want
 	case (want == "waking" || want == "ready") && q.Get("agent") != "":
 		shown = want
+	case want == fromInvite: // the friend path, open from any screen
+		shown = want
 	}
 	switch shown {
 	case setup.StepLogin:
@@ -716,6 +718,8 @@ func welcomeDot(step string) int {
 // welcomeBack is where the header's Back goes, "" for none.
 func welcomeBack(v welcomeView) string {
 	switch v.Step {
+	case fromInvite:
+		return "/welcome?step=" + setup.StepLogin
 	case setup.StepFolder:
 		return "/welcome?step=" + setup.StepHarnesses
 	case setup.StepName:

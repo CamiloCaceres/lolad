@@ -43,6 +43,7 @@
       {{else if eq .Step "shape"}}{{template "welcome-shape" .}}
       {{else if eq .Step "waking"}}{{template "welcome-waking" .}}
       {{else if eq .Step "ready"}}{{template "welcome-ready" .}}
+      {{else if eq .Step "invite"}}{{template "welcome-invite" .}}
       {{else if eq .Step "friend"}}{{template "welcome-friend" .}}
       {{else if eq .Step "friend-done"}}{{template "welcome-friend-done" .}}
       {{else}}{{template "welcome-done" .}}{{end}}
@@ -64,6 +65,7 @@
   <h1 class="welcome-title is-hero" id="welcome-title">Let’s wake up your first assistant.</h1>
   <p class="welcome-lede">It takes about three minutes. You’ll need a Claude account. Everything runs on this computer, and your assistants’ memory stays here.</p>
   <form method="post" action="/welcome/service" class="welcome-actions is-center"><input type="hidden" name="op" value="skip"><button class="btn btn-primary btn-wide" type="submit" autofocus>Get started</button></form>
+  {{if .Friend.On}}<p class="welcome-friend-path"><a href="/welcome?step=invite">{{template "icon" "message"}}<span>I just want to chat with a friend’s assistant</span></a><span class="help">No Claude account needed. Use the invite link they sent you.</span></p>{{end}}
   <ul class="welcome-ready-list" aria-label="This computer">
     <li>{{template "icon" "check"}}lolad is running</li>
     <li>{{if .AnyReady}}{{template "icon" "check"}}Claude is ready{{else}}{{template "icon" "pulse"}}Claude comes next{{end}}</li>
@@ -240,6 +242,26 @@
   <form method="post" action="/welcome/friend" hx-boost="false" autocomplete="off" class="welcome-friend-paste"><label for="welcome-friend-link" class="sr-only">Invite link</label><input id="welcome-friend-link" name="link" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" required placeholder="https://lolad.caceresdev.com/join#…"><button class="btn" type="submit">Continue</button></form>
 </div>{{end}}{{end}}
 
+{{define "welcome-invite"}}
+<div class="welcome-narrow">
+<p class="welcome-kicker">No Claude account needed</p>
+<h1 class="welcome-title" id="welcome-title">Chat with a friend’s assistant</h1>
+<p class="welcome-lede">Paste the invite link your friend sent you. Their assistant runs on their computer; you just chat with it here.</p>
+{{with .Friend.Error}}<div class="flash is-error" role="alert">{{template "icon" "alert"}}<div>{{.}}</div></div>{{end}}
+<form method="post" action="/welcome/friend" hx-boost="false" autocomplete="off" class="welcome-form"><input type="hidden" name="from" value="invite">
+  <label class="field"><span class="label">Invite link</span>
+    <input name="link" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" required autofocus placeholder="https://lolad.caceresdev.com/join#…">
+  </label>
+  <label class="field"><span class="label">Your name</span>
+    <input name="name" value="{{firstName .Name}}" maxlength="100" autocomplete="given-name" aria-describedby="invite-name-help">
+  </label>
+  <span class="help" id="invite-name-help">Your friend and their assistant see this on your messages.</span>
+  <div class="welcome-actions"><button class="btn btn-primary btn-wide" type="submit">Continue</button></div>
+</form>
+<p class="help">Want assistants of your own too? You can add Claude and make them later, from Settings.</p>
+</div>
+{{end}}
+
 {{define "welcome-done"}}
 <div class="welcome-hero">
 <h1 class="welcome-title is-hero" id="welcome-title">You’re all set</h1>
@@ -260,6 +282,10 @@
 {{if .Expired}}<p class="welcome-lede">This invite has expired. Ask {{$who}} for a new link, then paste it under <strong>Sharing</strong>.</p><div class="welcome-actions"><a class="btn btn-primary" href="/" hx-boost="false">Go to Home</a></div>
 {{else if .SameName}}<p class="welcome-lede">Your Lolad and {{$who}}’s have the same name, so they can’t connect yet. Rename yours under Settings, then paste the link again under <strong>Sharing</strong>.</p><div class="welcome-actions"><a class="btn btn-primary" href="/" hx-boost="false">Go to Home</a></div>
 {{else if .AlreadyConnected}}<p class="welcome-lede">You’re already connected with {{$who}}.</p><div class="welcome-actions"><a class="btn btn-primary" href="/connections" hx-boost="false">See your friends</a></div>
+{{else if $.Friend.From}}<p class="welcome-lede">Connect, and you can chat with {{if .Agents}}the assistants {{$who}} is sharing, and with {{$who}}{{else}}{{$who}}{{end}}, right here.</p>
+<div class="friend-offer"><p class="label">{{$who}} is sharing</p>{{if .Agents}}<ul class="friend-chips">{{range .Agents}}<li><span class="orb {{hue .Display}} avatar-sm" aria-hidden="true"><span class="c"><i></i><i></i><i></i><i></i></span></span>{{.Display}}</li>{{end}}</ul>{{else}}<p class="welcome-meta">No assistants yet. You’ll be able to message {{$who}}.</p>{{end}}</div>
+<form method="post" action="/welcome/friend/accept" hx-boost="false" class="welcome-form friend-form"><input type="hidden" name="token" value="{{$.Friend.Token}}"><input type="hidden" name="from" value="{{$.Friend.From}}">
+<div class="welcome-actions"><button class="btn btn-primary" type="submit">Connect with {{$who}}</button><a class="btn btn-ghost" href="/welcome?step=invite">Not now</a></div></form>
 {{else}}<p class="welcome-lede">Connect, and you and {{$who}} can message each other{{if .Agents}} and the assistants you each choose{{end}}.</p>
 <div class="friend-offer"><p class="label">{{$who}} is sharing</p>{{if .Agents}}<ul class="friend-chips">{{range .Agents}}<li><span class="orb {{hue .Display}} avatar-sm" aria-hidden="true"><span class="c"><i></i><i></i><i></i><i></i></span></span>{{.Display}}</li>{{end}}</ul>{{else}}<p class="welcome-meta">No assistants yet. You’ll be able to message {{$who}}.</p>{{end}}</div>
 <form method="post" action="/welcome/friend/accept" hx-boost="false" class="welcome-form friend-form" data-friend-form><input type="hidden" name="token" value="{{$.Friend.Token}}">
@@ -277,5 +303,5 @@
 <div class="welcome-actions"><a class="btn btn-primary" href="/" hx-boost="false">Go to Home</a></div>
 {{else}}<h1 class="welcome-title" id="welcome-title">You’re connected with {{.Display}}</h1>
 <p class="welcome-lede">You can message {{.Display}} now. See who can reach whom, or change it, under <strong>Sharing</strong>.</p>
-<div class="welcome-actions">{{with $.Friend.Human}}<a class="btn btn-primary" href="/inbox/{{.Address}}" hx-boost="false">{{template "icon" "message"}}<span>Send {{.Display}} a message</span></a>{{end}}<a class="btn" href="/" hx-boost="false">Go to Home</a></div>
+<div class="welcome-actions">{{range $.Friend.Theirs}}<a class="btn btn-primary" href="/inbox/{{.Address}}" hx-boost="false">{{template "icon" "message"}}<span>Chat with {{or .Display .Name}}</span></a>{{end}}{{with $.Friend.Human}}<a class="btn{{if not $.Friend.Theirs}} btn-primary{{end}}" href="/inbox/{{.Address}}" hx-boost="false">{{template "icon" "message"}}<span>Send {{.Display}} a message</span></a>{{end}}<a class="btn" href="/" hx-boost="false">Go to Home</a></div>
 {{end}}{{end}}{{end}}{{end}}

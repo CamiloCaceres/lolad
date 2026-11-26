@@ -81,15 +81,19 @@ type Status struct {
 	Service   ServiceStatus `json:"service"`
 
 	// Extras.
-	CapturePath  bool           `json:"capture_path"` // keep the login shell's PATH in config.yaml
-	Dismissed    bool           `json:"dismissed"`    // the user left setup for later
-	SkippedAgent bool           `json:"skipped_agent"`
-	ServiceDone  bool           `json:"service_done"` // step 1 finished or skipped
-	FolderSet    bool           `json:"folder_set"`
-	NameSet      bool           `json:"name_set"`
-	Platform     string         `json:"platform"`
-	ConfigPath   string         `json:"config_path"`
-	Terminals    []TerminalInfo `json:"terminals,omitempty"` // sessions still running
+	CapturePath  bool `json:"capture_path"` // keep the login shell's PATH in config.yaml
+	Dismissed    bool `json:"dismissed"`    // the user left setup for later
+	SkippedAgent bool `json:"skipped_agent"`
+	ServiceDone  bool `json:"service_done"` // step 1 finished or skipped
+	FolderSet    bool `json:"folder_set"`
+	NameSet      bool `json:"name_set"`
+	// FriendOnly: the user chose "I just want to chat with a friend's
+	// assistant" and connected with that friend. Such an install is set up
+	// without a harness, a folder or agents of its own.
+	FriendOnly bool           `json:"friend_only,omitempty"`
+	Platform   string         `json:"platform"`
+	ConfigPath string         `json:"config_path"`
+	Terminals  []TerminalInfo `json:"terminals,omitempty"` // sessions still running
 }
 
 // FirstReady returns the first harness that is ready, in claude, codex,
@@ -126,6 +130,7 @@ type SaveRequest struct {
 	ServiceDone *bool `json:"service_done,omitempty"` // step 1 finished or skipped
 	SkipAgent   *bool `json:"skip_agent,omitempty"`   // "I'll add an agent later"
 	Dismiss     *bool `json:"dismiss,omitempty"`      // leave setup; stop redirecting to it
+	FriendOnly  *bool `json:"friend_only,omitempty"`  // connected with a friend from the friend path
 }
 
 // Service is what the dashboard and the API need from onboarding.
@@ -174,6 +179,8 @@ var ErrUnavailable = errors.New("setup: not available")
 func (s *Status) Settle() {
 	_, ready := s.FirstReady()
 	switch {
+	case s.FriendOnly && !ready && !s.HasAgents:
+		s.Step = StepDone
 	case !s.ServiceDone && !s.Service.Installed:
 		s.Step = StepLogin
 	case !ready:
@@ -191,5 +198,7 @@ func (s *Status) Settle() {
 	// chose to add them later. The login and name steps are friendly, not required.
 	// An install that already has agents is set up, whether or not a folder was
 	// ever chosen in this flow (existing users must never be sent to /welcome).
-	s.Done = ready && (s.HasAgents || (s.FolderSet && s.SkippedAgent))
+	// Someone who only came to chat with a friend's assistant is set up once
+	// connected: nothing here needs a harness until they add assistants.
+	s.Done = ready && (s.HasAgents || (s.FolderSet && s.SkippedAgent)) || s.FriendOnly
 }

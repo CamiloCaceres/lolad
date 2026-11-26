@@ -187,3 +187,8 @@
 .welcome-card .friend-consequence span { color: var(--ink); font-weight: 600; }
 .welcome-thing [data-notify-state]:empty { display: none; }
 .welcome-term-links { margin: -8px 0 0; }
+
+/* "I just want to chat with a friend's assistant" on the first screen */
+.welcome-friend-path { display: grid; justify-items: center; gap: 4px; margin: 2px 0 0; text-align: center; }
+.welcome-friend-path a { display: inline-flex; align-items: center; gap: 8px; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--faint); }
+.welcome-friend-path a:hover { text-decoration-color: currentColor; }

@@ -21,6 +21,7 @@ type state struct {
 	AgentsDir    string    `json:"agents_dir,omitempty"`
 	SkippedAgent bool      `json:"skipped_agent"`
 	Dismissed    bool      `json:"dismissed"`
+	FriendOnly   bool      `json:"friend_only,omitempty"`
 	Completed    bool      `json:"completed"`
 	CapturePath  *bool     `json:"capture_path,omitempty"` // nil: on
 	UpdatedAt    time.Time `json:"updated_at"`

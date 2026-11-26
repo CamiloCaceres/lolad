@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"testing"
 
 	"github.com/CamiloCaceres/lolad/internal/create"
 	"github.com/CamiloCaceres/lolad/internal/registry"
@@ -42,6 +43,11 @@ func (a *App) createTemplate() (create.Template, error) {
 type execService struct{}
 
 func (execService) run(ctx context.Context, args ...string) ([]byte, error) {
+	// In a test binary os.Executable is the test itself, which would run
+	// the whole suite again (and again) instead of `lolad service`.
+	if testing.Testing() {
+		return nil, setup.ErrUnavailable
+	}
 	exe, err := os.Executable()
 	if err != nil {
 		return nil, err
