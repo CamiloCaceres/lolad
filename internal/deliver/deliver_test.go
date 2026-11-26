@@ -62,7 +62,10 @@ func TestRealDelivery(t *testing.T) {
 				p, _ := s.Capture("a", 40, false)
 				t.Fatalf("got %s want %s err %v pane %q", result, want, e, p)
 			}
-			p, _ := s.Capture("a", 40, false)
+			// The composer may still be redrawing from the first call's keys
+			// (staged sends a row of BSpace and returns): compare from a
+			// settled screen, so only typing by the second call shows.
+			p := settled(t, s)
 			result, e = n.Notify(context.Background(), core.Agent{Name: "a"}, m)
 			q, _ := s.Capture("a", 40, false)
 			if e != nil || result != want || p != q {
@@ -71,6 +74,23 @@ func TestRealDelivery(t *testing.T) {
 		})
 	}
 }
+
+// settled returns the pane once two captures 100 ms apart agree (at most 3 s).
+func settled(t *testing.T, s *tm.Sessions) string {
+	t.Helper()
+	prev, _ := s.Capture("a", 40, false)
+	for deadline := time.Now().Add(3 * time.Second); time.Now().Before(deadline); {
+		time.Sleep(100 * time.Millisecond)
+		cur, _ := s.Capture("a", 40, false)
+		if cur == prev {
+			return cur
+		}
+		prev = cur
+	}
+	t.Fatal("the pane never settled")
+	return ""
+}
+
 func TestNoticeCountsFiles(t *testing.T) {
 	m := core.Mail{ID: "msg_1_abcdef12", FromName: "milo", Subject: "Assets", Body: "here", Attachments: []core.Attachment{{ID: "att_1"}, {ID: "att_2"}}}
 	if n := Notice(m); !strings.Contains(n, "here (2 files attached). Read: lolad msg read msg_1_abcdef12") {
