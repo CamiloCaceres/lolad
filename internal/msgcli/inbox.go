@@ -30,6 +30,12 @@ type umAttachment struct {
 	Path        string `json:"path"`
 }
 
+// umUnavailable is a file the user sent that the agent did not get, and why.
+type umUnavailable struct {
+	Name   string `json:"name"`
+	Reason string `json:"reason"`
+}
+
 type umAnswer struct {
 	Ask         string              `json:"ask"`
 	Question    string              `json:"question"`
@@ -41,16 +47,18 @@ type umAnswer struct {
 	Secrets     []string            `json:"secrets,omitempty"`
 	Files       map[string][]string `json:"files,omitempty"`
 	Attachments []umAttachment      `json:"attachments,omitempty"`
+	Unavailable []umUnavailable     `json:"unavailable,omitempty"`
 	AnsweredAt  string              `json:"answered_at"`
 }
 
 type umMessage struct {
-	Spec        string         `json:"spec"`
-	ID          string         `json:"id"`
-	From        string         `json:"from,omitempty"`
-	Text        string         `json:"text"`
-	Attachments []umAttachment `json:"attachments,omitempty"`
-	CreatedAt   string         `json:"created_at"`
+	Spec        string          `json:"spec"`
+	ID          string          `json:"id"`
+	From        string          `json:"from,omitempty"`
+	Text        string          `json:"text"`
+	Attachments []umAttachment  `json:"attachments,omitempty"`
+	Unavailable []umUnavailable `json:"unavailable,omitempty"`
+	CreatedAt   string          `json:"created_at"`
 }
 
 // umRequest is what the text form needs of a request.
@@ -157,6 +165,7 @@ func assemble(reqs map[string]umRequest, items []umItem, open int, mode string) 
 				}
 				lines = append(lines, l)
 			}
+			lines = append(lines, unavailableLines(m.Unavailable)...)
 		} else {
 			lines = answerLines(*k.it.answer, reqs[k.it.answer.Ask], mode)
 		}
@@ -233,6 +242,16 @@ func answerLines(a umAnswer, r umRequest, mode string) []string {
 			lines = append(lines, "   Files: "+paths(ids))
 		}
 	}
+	return append(lines, unavailableLines(a.Unavailable)...)
+}
+
+// unavailableLines tells the agent about files it did not get, so it can ask
+// the user to send them again.
+func unavailableLines(us []umUnavailable) []string {
+	var lines []string
+	for _, u := range us {
+		lines = append(lines, "   File not received: "+u.Name+" ("+u.Reason+")")
+	}
 	return lines
 }
 
@@ -305,7 +324,29 @@ func safeName(name string) string {
 	if s == "" {
 		return "file"
 	}
+	if windowsReserved(s) {
+		s = "_" + s
+	}
 	return s
+}
+
+// windowsReserved reports a name Windows refuses as a file whatever its
+// extension: CON, PRN, AUX, NUL, COM1-9 and LPT1-9 ("nul.log", "CON.txt").
+// Every system gets the same safe name, so paths match across machines.
+func windowsReserved(name string) bool {
+	base, _, _ := strings.Cut(name, ".")
+	base = strings.ToUpper(strings.TrimRightFunc(base, isSpace))
+	switch base {
+	case "CON", "PRN", "AUX", "NUL":
+		return true
+	}
+	if len(base) == 4 && (strings.HasPrefix(base, "COM") || strings.HasPrefix(base, "LPT")) {
+		switch base[3] {
+		case '1', '2', '3', '4', '5', '6', '7', '8', '9':
+			return true
+		}
+	}
+	return false
 }
 
 func isSpace(r rune) bool { return core.Blank(string(r)) }
@@ -406,18 +447,19 @@ func (c *client) getUserMessages() (umResult, error) {
 		if err != nil {
 			continue
 		}
-		next, err := c.prepare(m, p, asks, home)
-		if err == nil {
-			var claimed bool
-			if claimed, err = c.claim(m.ID); err == nil && claimed {
-				items = append(items, next...)
-			}
-		}
+		// A file that can't be fetched never fails the mail: it is reported
+		// in the item, and the mail is claimed like any other, so it can't
+		// hold back everything sent after it.
+		next := c.prepare(m, p, asks, home)
+		claimed, err := c.claim(m.ID)
 		if err != nil {
 			if len(items) > 0 {
 				break // what is left waits for the next call
 			}
 			return umResult{}, err
+		}
+		if claimed {
+			items = append(items, next...)
 		}
 	}
 	mode := secretsMode()
@@ -451,15 +493,17 @@ func (c *client) claim(id string) (bool, error) {
 
 // prepare turns one mail from the user into answers or a user message, with
 // its files saved under .user-channel/files/.
-func (c *client) prepare(m amp.Message, p amp.Payload, asks map[string]askInfo, home string) ([]umItem, error) {
+// A file that can't be saved is listed as unavailable with the reason.
+func (c *client) prepare(m amp.Message, p amp.Payload, asks map[string]askInfo, home string) []umItem {
 	at := m.Envelope.Timestamp.UTC().Format(time.RFC3339Nano)
 	byID := map[string]core.Attachment{}
 	for _, a := range p.Attachments {
 		byID[a.ID] = a
 	}
-	save := func(ids []string) ([]umAttachment, []string, error) {
+	save := func(ids []string) ([]umAttachment, []string, []umUnavailable) {
 		var out []umAttachment
 		var kept []string
+		var missing []umUnavailable
 		for _, id := range ids {
 			a, ok := byID[id]
 			if !ok || a.ScanStatus == "rejected" {
@@ -467,11 +511,12 @@ func (c *client) prepare(m amp.Message, p amp.Payload, asks map[string]askInfo, 
 			}
 			s, err := c.saveUserFile(a, home)
 			if err != nil {
-				return nil, nil, err
+				missing = append(missing, umUnavailable{Name: a.Filename, Reason: fetchReason(err)})
+				continue
 			}
 			out, kept = append(out, s), append(kept, id)
 		}
-		return out, kept, nil
+		return out, kept, missing
 	}
 	uc, ok := userChatOf(p)
 	switch {
@@ -495,11 +540,9 @@ func (c *client) prepare(m amp.Message, p amp.Payload, asks map[string]askInfo, 
 					order = append(order, "note")
 				}
 				for _, k := range order {
-					atts, kept, err := save(ans.Files[k])
-					if err != nil {
-						return nil, err
-					}
+					atts, kept, missing := save(ans.Files[k])
 					ans.Attachments = append(ans.Attachments, atts...)
+					ans.Unavailable = append(ans.Unavailable, missing...)
 					if len(kept) == 0 {
 						delete(ans.Files, k)
 					} else {
@@ -517,7 +560,7 @@ func (c *client) prepare(m amp.Message, p amp.Payload, asks map[string]askInfo, 
 			}
 			items = append(items, umItem{answer: &ans})
 		}
-		return items, nil
+		return items
 	case ok && uc.Kind == "decision" && m.Envelope.InReplyTo != "":
 		info := asks[m.Envelope.InReplyTo]
 		ans := answerRecord(core.AskAnswer{Ask: m.Envelope.InReplyTo, Decision: uc.Decision}, info.chat, at)
@@ -525,21 +568,30 @@ func (c *client) prepare(m amp.Message, p amp.Payload, asks map[string]askInfo, 
 		if ans.Question == "" {
 			ans.Question = "Request " + m.Envelope.InReplyTo
 		}
-		return []umItem{{answer: &ans}}, nil
+		return []umItem{{answer: &ans}}
 	}
 	ids := make([]string, 0, len(p.Attachments))
 	for _, a := range p.Attachments {
 		ids = append(ids, a.ID)
 	}
-	atts, _, err := save(ids)
-	if err != nil {
-		return nil, err
-	}
+	atts, _, missing := save(ids)
 	text := p.Message
 	if len(p.Attachments) > 0 && derivedFilesBody(text, p.Attachments) {
 		text = "" // the dashboard's "Sent 2 files: …" body for a message that is only files
 	}
-	return []umItem{{message: &umMessage{Spec: "0.1", ID: m.ID, Text: text, Attachments: atts, CreatedAt: at}}}, nil
+	return []umItem{{message: &umMessage{Spec: "0.1", ID: m.ID, Text: text, Attachments: atts, Unavailable: missing, CreatedAt: at}}}
+}
+
+// fetchReason is why a file could not be saved, in words for the agent.
+func fetchReason(err error) string {
+	msg := err.Error()
+	switch {
+	case strings.Contains(msg, "404"):
+		return "it is no longer on the server; files are kept for 30 days. Ask the user to send it again"
+	case strings.Contains(msg, "digest mismatch"):
+		return "it arrived damaged and was discarded. Ask the user to send it again"
+	}
+	return "could not be saved: " + msg
 }
 
 func fieldNamed(fields []core.AskField, name string) bool {
@@ -625,7 +677,7 @@ func (c *client) saveUserFile(a core.Attachment, home string) (umAttachment, err
 	path := filepath.Join(dir, name)
 	if have, err := fileDigest(path); err != nil || have != a.Digest {
 		if err := c.download(a, dir, path); err != nil {
-			return umAttachment{}, fmt.Errorf("%s: %v", a.Filename, err)
+			return umAttachment{}, err
 		}
 	}
 	return umAttachment{ID: a.ID, Name: a.Filename, ContentType: a.ContentType, Size: a.Size, Path: ".user-channel/files/" + id + "/" + name}, nil

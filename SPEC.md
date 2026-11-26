@@ -421,7 +421,11 @@ model so it corrects the call.
   Each mail is claimed with `POST /v1/messages/{id}/claim` (marks it read only
   if unread; 409 otherwise), so two readers never both return it. Files are
   saved to `.user-channel/files/<id>/<safe name>` in the agent dir (with a
-  `.gitignore` of `*`). Secrets: Claude agents get "saved (in your
+  `.gitignore` of `*`; Windows reserved names such as `nul.log` get a `_`
+  prefix). A file that can't be saved (expired after 30 days, damaged, disk
+  full) never fails the call or holds back later mail: its record lists it
+  under `unavailable` (`name`, `reason`), the text form says "File not
+  received: …", and the mail is claimed like any other. Secrets: Claude agents get "saved (in your
   environment)"; Codewhale agents get the spec's secrets file
   (`.user-channel/secrets.env`, copied from the env file). `open` counts asks
   with no answers/decision mail (asks before 2026-11-21 04:00 UTC: no later
