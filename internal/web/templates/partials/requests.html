@@ -38,6 +38,7 @@ card it points at is on screen. */}}
       {{range $i, $o := $m.Chat.Options}}<label class="opt"><input type="radio" name="option" value="{{$o}}" data-ask-pick><span class="opt-r" aria-hidden="true"></span><span class="opt-text"><b>{{optLabel $o}}</b>{{with optNote $o}}<small>{{.}}</small>{{end}}</span></label>{{end}}
       <label class="opt is-alt"><input type="radio" name="option" value="" data-ask-pick data-ask-other{{if $r.Text}} checked{{end}}><span class="opt-r" aria-hidden="true"></span><span class="opt-text">Something else…</span></label>
       <div class="ask-other"><label class="label" for="w-{{short $m.ID}}">Your answer</label><textarea id="w-{{short $m.ID}}" name="text" rows="2" placeholder="Say it in your own words…" data-req-input data-key="{{$key}}.text">{{$r.Text}}</textarea></div>
+      <p class="req-note ask-dropped" role="note">{{template "icon" "info"}}<span>A choice is sent on its own: what you typed under “Something else” won’t be sent.</span></p>
     </div>
     {{else if eq $k "form"}}
     <div class="req-fields">{{range $r.Fields}}{{template "req-field" (dict "F" . "K" $key "R" $r "T" $t)}}{{end}}</div>

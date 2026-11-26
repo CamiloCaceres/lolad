@@ -428,6 +428,11 @@
 .opt.is-alt .opt-r { margin-top: 0; }
 .ask-other { display: none; gap: 6px; padding: 2px 2px 0; }
 .ask-opts:has(input[data-ask-other]:checked) .ask-other { display: grid; }
+/* A choice and your own words don't go together (user-channel 3.6): when a
+   choice is picked while the hidden "Something else" box still holds words,
+   say they won't be sent instead of dropping them silently. */
+.ask-dropped { display: none; }
+.ask-opts:has(input[data-ask-pick]:not([data-ask-other]):checked):has(.ask-other textarea:not(:placeholder-shown)) .ask-dropped { display: flex; }
 
 .req-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
 .req-field.is-wide { grid-column: 1 / -1; }

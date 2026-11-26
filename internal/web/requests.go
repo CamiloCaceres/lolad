@@ -579,7 +579,8 @@ func (s *server) stageRequest(w http.ResponseWriter, r *http.Request) {
 		if !ask.Chat.Task {
 			// user-channel 3.6: a choice or your own words, not both. The
 			// "Something else" box is always posted; with a choice picked,
-			// the choice is the answer.
+			// the choice is the answer, and the card says beforehand that
+			// the typed words won't be sent (.ask-dropped).
 			text = ""
 		}
 		a := core.AskAnswer{Ask: id, Decision: option, Text: text} // a task's "what happened" rides along
