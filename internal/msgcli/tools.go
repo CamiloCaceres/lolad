@@ -79,7 +79,7 @@ var blockKeys = map[string][]string{
 	core.BlockCommand: {"type", "code", "where", "admin", "title"},
 	core.BlockCode:    {"type", "code", "title"},
 	core.BlockValues:  {"type", "rows", "title"},
-	core.BlockLink:    {"type", "url", "label"},
+	core.BlockLink:    {"type", "url", "label", "title"}, // title: read as label
 	core.BlockSteps:   {"type", "items", "title"},
 }
 
@@ -145,6 +145,13 @@ func checkShape(tool string, raw []byte) (map[string]bool, error) {
 	}
 	present := map[string]bool{}
 	for k := range top {
+		if tool == "ask_user" && k == "kind" {
+			// kind:"ask" says what ask_user is anyway; any other kind
+			// means the model wanted message_user.
+			if s, _ := top[k].(string); strings.EqualFold(strings.TrimSpace(s), "ask") {
+				continue
+			}
+		}
 		if !slices.Contains(toolKeys[tool], k) {
 			switch {
 			case tool == "message_user" && (k == "options" || k == "fields" || k == "task"):
@@ -163,6 +170,7 @@ func checkShape(tool string, raw []byte) (map[string]bool, error) {
 				continue // the struct decode reports the type
 			}
 			t, _ := m["type"].(string)
+			t = strings.ToLower(strings.TrimSpace(t))
 			keys, known := blockKeys[t]
 			if !known {
 				continue // ValidateBlocks reports the type
@@ -229,7 +237,33 @@ func decodeToolInput(tool string, raw []byte) (toolInput, error) {
 		return in, fmt.Errorf("arguments: %v", err)
 	}
 	in.present = present
+	normalizeInput(tool, &in)
 	return in, nil
+}
+
+// normalizeInput takes what models commonly send in place of the exact form
+// (lenient in, strict out): kind and field types in any case, kind:"ask" on
+// ask_user, and a link block's title as its label. What the user-channel
+// spec's fixtures refuse (nulls, padded URLs, blank values) stays refused;
+// the error says how to fix the call.
+func normalizeInput(tool string, in *toolInput) {
+	in.Kind = strings.ToLower(strings.TrimSpace(in.Kind))
+	if tool == "ask_user" && in.Kind == "ask" {
+		in.Kind = ""
+	}
+	for i := range in.Fields {
+		in.Fields[i].Type = strings.ToLower(strings.TrimSpace(in.Fields[i].Type))
+	}
+	for i := range in.Blocks {
+		b := &in.Blocks[i]
+		b.Type = strings.ToLower(strings.TrimSpace(b.Type))
+		if b.Type == core.BlockLink {
+			if core.Blank(b.Label) {
+				b.Label = b.Title
+			}
+			b.Title = ""
+		}
+	}
 }
 
 func oneLineRunes(s string, max int) bool {

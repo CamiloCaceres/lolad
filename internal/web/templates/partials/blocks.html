@@ -12,7 +12,7 @@ remember their ticks on this device. */}}
   <div class="blk-head">{{template "icon" "list"}}<span class="blk-title">{{or .Title "Values"}}</span>{{if gt (len .Rows) 1}}<button class="blk-copy" type="button" data-copy="{{valuesText .Rows}}">{{template "icon" "copy"}}<span>Copy all</span></button>{{end}}</div>
   <dl>{{range .Rows}}<div class="blk-row"><dt>{{.Label}}</dt><dd><button class="blk-val" type="button" data-copy="{{.Value}}" title="Copy"><span class="blk-val-text">{{.Value}}</span>{{template "icon" "copy"}}<span class="sr-only"> Copy {{.Label}}</span></button></dd></div>{{end}}</dl>
 </div>
-{{else if eq .Type "link"}}{{if safeLink .URL}}<a class="blk-link" href="{{.URL}}" target="_blank" rel="noopener noreferrer">{{template "icon" "external"}}<span class="blk-link-label">{{or .Label (linkHost .URL)}}</span><span class="blk-host">{{linkHost .URL}}</span></a>{{end}}
+{{else if eq .Type "link"}}{{$u := linkURL .URL}}{{if safeLink $u}}<a class="blk-link" href="{{$u}}" target="_blank" rel="noopener noreferrer">{{template "icon" "external"}}<span class="blk-link-label">{{or .Label (linkHost $u)}}</span><span class="blk-host">{{linkHost $u}}</span></a>{{end}}
 {{else if eq .Type "steps"}}<div class="blk blk-steps">
   {{with .Title}}<div class="blk-head"><span class="blk-title">{{.}}</span></div>{{end}}
   <ol>{{range $j, $s := .Items}}<li><input type="checkbox" id="st-{{$id}}-{{$i}}-{{$j}}" data-step="{{$id}}-{{$i}}-{{$j}}" aria-label="Step {{add $j 1}} done"><div class="blk-step rich">{{chatmd $s}}</div></li>{{end}}</ol>

@@ -38,6 +38,7 @@ func funcs(s *server) template.FuncMap {
 		"chatmd":        chatMarkdown,
 		"adminCmd":      adminCommand,
 		"safeLink":      core.SafeLinkURL,
+		"linkURL":       strings.TrimSpace, // links stored before URLs were checked may carry spaces
 		"linkHost":      linkHost,
 		"valuesText":    valuesText,
 		"optLabel":      optLabel,
