@@ -422,7 +422,12 @@ model so it corrects the call.
   (`choice`, `outcome` for tasks, `values`, `secrets`, `files` with the
   task's "details" files as `note`, `question`), anything else a user message.
   Each mail is claimed with `POST /v1/messages/{id}/claim` (marks it read only
-  if unread; 409 otherwise), so two readers never both return it. Files are
+  if unread; 409 otherwise), so two readers never both return it. Every mail
+  is prepared (files saved) before any is claimed, and one call stops
+  fetching after 20 s: the rest stays unread and the result says "More from
+  the user is waiting" (`more: true`). Notes such as a secrets file that
+  could not be written go in the text and in `notes`, never as an error once
+  mail is claimed. Files are
   saved to `.user-channel/files/<id>/<safe name>` in the agent dir (with a
   `.gitignore` of `*`; Windows reserved names such as `nul.log` get a `_`
   prefix). A file that can't be saved (expired after 30 days, damaged, disk

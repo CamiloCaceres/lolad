@@ -19,8 +19,9 @@ import (
 
 // get_user_messages (user-channel spec 4.5): what the user sent this agent
 // that it hasn't received yet — messages the user wrote and answers to its
-// requests — claimed (marked read) one mail at a time so two servers of one
-// agent never both return it, with every file saved under .user-channel/.
+// requests — claimed (marked read) only after every file is saved under
+// .user-channel/, one mail at a time so two servers of one agent never both
+// return it.
 
 type umAttachment struct {
 	ID          string `json:"id"`
@@ -438,7 +439,17 @@ func (c *client) getUserMessages() (umResult, error) {
 		}
 	}
 	home := agentHome()
-	var items []umItem
+	// Prepare first (download files), claim last: a slow download or a
+	// failure while preparing never leaves mail claimed but unreturned. The
+	// time budget keeps one call short of a client's timeout; whatever is
+	// left stays unread for the next call.
+	type prepared struct {
+		id    string
+		items []umItem
+	}
+	var ready []prepared
+	more := false
+	start := time.Now()
 	for _, m := range fromUser {
 		if m.Status == string(core.MailRead) {
 			continue
@@ -447,21 +458,27 @@ func (c *client) getUserMessages() (umResult, error) {
 		if err != nil {
 			continue
 		}
-		// A file that can't be fetched never fails the mail: it is reported
-		// in the item, and the mail is claimed like any other, so it can't
-		// hold back everything sent after it.
-		next := c.prepare(m, p, asks, home)
-		claimed, err := c.claim(m.ID)
+		if len(ready) > 0 && time.Since(start) >= prepareBudget {
+			more = true
+			break
+		}
+		ready = append(ready, prepared{m.ID, c.prepare(m, p, asks, home)})
+	}
+	var items []umItem
+	for _, r := range ready {
+		claimed, err := c.claim(r.id)
 		if err != nil {
 			if len(items) > 0 {
+				more = true
 				break // what is left waits for the next call
 			}
 			return umResult{}, err
 		}
 		if claimed {
-			items = append(items, next...)
+			items = append(items, r.items...)
 		}
 	}
+	var notes []string
 	mode := secretsMode()
 	if mode == secretsFile {
 		var names []string
@@ -470,16 +487,33 @@ func (c *client) getUserMessages() (umResult, error) {
 				names = append(names, it.answer.Secrets...)
 			}
 		}
+		// The mail is claimed by now: a failed copy is reported, never
+		// returned as an error that would lose the answers.
 		if err := writeSecretsFile(home, names); err != nil {
-			return umResult{}, err
+			notes = append(notes, "The secrets could not be copied to "+secretsFilePath+" ("+err.Error()+"); they are saved in your env file.")
 		}
+	}
+	if more {
+		notes = append(notes, "More from the user is waiting: call get_user_messages again.")
 	}
 	reqs := map[string]umRequest{}
 	for id, a := range asks {
 		reqs[id] = a.req
 	}
-	return assemble(reqs, items, open, mode), nil
+	res := assemble(reqs, items, open, mode)
+	if len(notes) > 0 {
+		res.Text += "\n\n" + strings.Join(notes, "\n")
+		res.Structured["notes"] = notes
+	}
+	if more {
+		res.Structured["more"] = true
+	}
+	return res, nil
 }
+
+// prepareBudget is how long one get_user_messages call spends fetching files
+// before it returns what it has; the rest waits for the next call.
+var prepareBudget = 20 * time.Second
 
 // claim marks one mail read; false when another reader got it first.
 func (c *client) claim(id string) (bool, error) {
