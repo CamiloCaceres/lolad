@@ -4,6 +4,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -76,5 +77,36 @@ func TestUnzipWriteThroughSymlinkDir(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(outside, "evil")); err == nil {
 		t.Fatal("file landed outside")
+	}
+}
+
+// ditto -c -k stores extended attributes as "._name" entries (and some zips
+// carry __MACOSX/); written into a bundle they break its code seal, so they
+// are skipped.
+func TestUnzipSkipsAppleDouble(t *testing.T) {
+	dir := t.TempDir()
+	z := writeTmp(t, dir, "a.zip", buildZip(t, []zent{
+		{"Lolad.app/", "", fs.ModeDir | 0o755},
+		{"Lolad.app/Contents/", "", fs.ModeDir | 0o755},
+		{"Lolad.app/Contents/MacOS/lolad", "bin", 0o755},
+		{"Lolad.app/Contents/MacOS/._lolad", "xattr", 0o644},
+		{"Lolad.app/._Contents", "xattr", 0o644},
+		{"__MACOSX/", "", fs.ModeDir | 0o755},
+		{"__MACOSX/Lolad.app/._Info.plist", "xattr", 0o644},
+	}))
+	out := filepath.Join(dir, "out")
+	os.Mkdir(out, 0o755)
+	if err := safeUnzip(z, out); err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	filepath.WalkDir(out, func(p string, d fs.DirEntry, err error) error {
+		rel, _ := filepath.Rel(out, p)
+		got = append(got, filepath.ToSlash(rel))
+		return nil
+	})
+	want := ". Lolad.app Lolad.app/Contents Lolad.app/Contents/MacOS Lolad.app/Contents/MacOS/lolad"
+	if strings.Join(got, " ") != want {
+		t.Fatalf("extracted %v", got)
 	}
 }

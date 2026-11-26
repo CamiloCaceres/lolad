@@ -384,7 +384,14 @@ fi
 # ------------------------------------------------------------------ packing
 step "Lolad.app.zip (the updater's artifact)"
 rm -f "$dist/Lolad.app.zip"
-ditto -c -k --keepParent "$app" "$dist/Lolad.app.zip"
+# No extended attributes: ditto would store them as "._name" entries (macOS 26
+# puts com.apple.provenance on every file), and the updater of 0.2.0-beta.8
+# and earlier unpacks those as files inside the bundle, which breaks its code
+# seal and makes the in-app update fail. The signature does not need them.
+ditto -c -k --norsrc --noextattr --noqtn --noacl --keepParent "$app" "$dist/Lolad.app.zip"
+if unzip -Z1 "$dist/Lolad.app.zip" | grep -Eq '(^|/)(\._|__MACOSX)'; then
+  die "Lolad.app.zip still has AppleDouble entries; the in-app update would fail"
+fi
 
 if [ "$dmg" = 1 ]; then
   step "Lolad.dmg"

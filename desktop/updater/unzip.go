@@ -17,6 +17,15 @@ const (
 	maxZipBytes   = 4 << 30
 )
 
+// appleDouble reports a macOS metadata entry ("._name" beside a file, or
+// anything under "__MACOSX/"). `ditto -c -k` stores extended attributes that
+// way and `ditto -x` turns them back into attributes; written out as files
+// they sit inside the bundle and break its code seal ("a sealed resource is
+// missing or invalid"), so the update is refused. They are skipped.
+func appleDouble(clean string) bool {
+	return strings.HasPrefix(path.Base(clean), "._") || clean == "__MACOSX" || strings.HasPrefix(clean, "__MACOSX/")
+}
+
 // safeUnzip extracts zipPath into dest (which must exist) refusing path
 // traversal, absolute names, special files, and symlinks that point outside
 // dest. Symlinks inside dest are kept: macOS frameworks need them.
@@ -49,6 +58,9 @@ func safeUnzip(zipPath, dest string) error {
 		target := filepath.Join(root, filepath.FromSlash(clean))
 		if !within(root, target) {
 			return fmt.Errorf("zip entry %q escapes the destination", name)
+		}
+		if appleDouble(clean) {
+			continue
 		}
 		mode := f.Mode()
 		switch {
