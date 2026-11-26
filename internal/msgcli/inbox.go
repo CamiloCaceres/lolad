@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -87,6 +88,19 @@ const (
 	secretsFile        = "file"
 	secretsFilePath    = ".user-channel/secrets.env"
 )
+
+// secretsGOOS picks the shell form of the secrets-file hint (tests set it).
+var secretsGOOS = runtime.GOOS
+
+// secretsLoadHint says how to load the secrets file into the shell: the
+// spec's POSIX form, or PowerShell on Windows (the file holds one
+// export NAME='value' line each, with ' written as '\”).
+func secretsLoadHint(goos string) string {
+	if goos == "windows" {
+		return `load in PowerShell with: Get-Content .user-channel\secrets.env | ForEach-Object { if ($_ -match "^export (\w+)='(.*)'$") { Set-Item "env:$($Matches[1])" ($Matches[2] -replace "'\\''", "'") } }`
+	}
+	return "load with: set -a; . ./" + secretsFilePath + "; set +a"
+}
 
 func secretsMode() string {
 	if os.Getenv("LOLAD_HARNESS") == string(core.HarnessCodewhale) {
@@ -209,7 +223,7 @@ func answerLines(a umAnswer, r umRequest, mode string) []string {
 			for _, s := range a.Secrets {
 				if s == f.Name {
 					if mode == secretsFile {
-						lines = append(lines, "   "+f.Name+" saved (load with: set -a; . ./"+secretsFilePath+"; set +a)")
+						lines = append(lines, "   "+f.Name+" saved ("+secretsLoadHint(secretsGOOS)+")")
 					} else {
 						lines = append(lines, "   "+f.Name+" saved (in your environment)")
 					}

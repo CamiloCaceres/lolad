@@ -438,7 +438,11 @@ model so it corrects the call.
   saved, listed with how to fetch it (`lolad msg download <id> --force`)
   once the user agrees. Secrets: Claude agents get "saved (in your
   environment)"; Codewhale agents get the spec's secrets file
-  (`.user-channel/secrets.env`, copied from the env file). `open` counts asks
+  (`.user-channel/secrets.env`, copied from the env file), with the spec's
+  `set -a; . ./…; set +a` hint, or a PowerShell one-liner on Windows. The
+  harness sets `LOLAD_HARNESS` in the session's environment as well as the
+  MCP server's, so `lolad msg get-user-messages` run from a Codewhale shell
+  picks the file way too. `open` counts asks
   with no answers/decision mail (asks before 2026-11-21 04:00 UTC: no later
   user mail).
 - Push: mail from the local user to a Claude agent whose session was launched

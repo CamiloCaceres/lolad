@@ -117,6 +117,10 @@ func TestUserChannelToolFixtures(t *testing.T) {
 }
 
 func TestUserChannelTextForm(t *testing.T) {
+	// The fixtures carry the spec's POSIX hint for the secrets file.
+	old := secretsGOOS
+	secretsGOOS = "linux"
+	t.Cleanup(func() { secretsGOOS = old })
 	for _, path := range fixtureFiles(t, "get_user_messages") {
 		b, err := os.ReadFile(path)
 		if err != nil {
