@@ -68,6 +68,10 @@ func (c *client) upload(path string) (core.Attachment, error) {
 	return a, json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&a)
 }
 func (c *client) uploadAll(paths []string) ([]core.Attachment, error) {
+	paths, e := resolveAttach(attachBase(), paths)
+	if e != nil {
+		return nil, e
+	}
 	var out []core.Attachment
 	for _, p := range paths {
 		a, e := c.upload(p)

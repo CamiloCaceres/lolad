@@ -693,7 +693,7 @@ func (c *client) tellUserJSON(pos []string, opts map[string][]string, js string)
 		return e
 	}
 	if len(m.Attach) > 0 {
-		if m.Attach, e = checkAttach(agentHome(), m.Attach); e != nil {
+		if m.Attach, e = resolveAttach(attachBase(), m.Attach); e != nil {
 			return e
 		}
 	}

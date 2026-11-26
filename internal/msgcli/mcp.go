@@ -160,7 +160,7 @@ func (c *client) callTool(params json.RawMessage, structured bool) (map[string]a
 		return toolResult(err.Error()+". Fix the arguments and call again.", true), nil
 	}
 	if len(m.Attach) > 0 {
-		if m.Attach, err = checkAttach(agentHome(), m.Attach); err != nil {
+		if m.Attach, err = resolveAttach(attachBase(), m.Attach); err != nil {
 			return toolResult(err.Error()+".", true), nil
 		}
 	}

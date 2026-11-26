@@ -463,34 +463,40 @@ func deriveName(label string, taken map[string]bool) string {
 // fieldName is deriveName with nothing taken (tell-user --field).
 func fieldName(label string) string { return deriveName(label, nil) }
 
-// checkAttach resolves the files a call attaches (spec 2.7): each an existing
-// regular file inside the agent's working directory, both as real paths.
-func checkAttach(home string, paths []string) ([]string, error) {
-	root, err := filepath.EvalSymlinks(home)
-	if err != nil {
-		return nil, fmt.Errorf("attach: can't read your working directory: %v", err)
-	}
+// resolveAttach resolves the files a send attaches, the same way for every
+// path (MCP tools, tell-user, send, reply): a relative path is taken from
+// base (the session's working directory), an absolute path is used as is,
+// and each must be an existing regular file. There is no folder limit: the
+// agent may already read and send any file it can open, and the recipient is
+// its user or a contact policy allows.
+func resolveAttach(base string, paths []string) ([]string, error) {
 	out := make([]string, len(paths))
 	for i, p := range paths {
 		if core.Blank(p) {
 			return nil, fmt.Errorf("attach: path %d is empty", i+1)
 		}
 		if !filepath.IsAbs(p) {
-			p = filepath.Join(home, p)
+			p = filepath.Join(base, p)
 		}
-		real, err := filepath.EvalSymlinks(p)
-		if err != nil {
-			return nil, fmt.Errorf("attach: %s doesn't exist", paths[i])
+		st, err := os.Stat(p)
+		switch {
+		case err != nil:
+			return nil, fmt.Errorf("attach: %s doesn't exist (relative paths start at %s)", paths[i], base)
+		case st.IsDir():
+			return nil, fmt.Errorf("attach: %s is a folder; zip it first", paths[i])
+		case !st.Mode().IsRegular():
+			return nil, fmt.Errorf("attach: %s is not a regular file", paths[i])
 		}
-		rel, err := filepath.Rel(root, real)
-		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-			return nil, fmt.Errorf("attach: %s is outside your working directory; copy it into your working directory first", paths[i])
-		}
-		st, err := os.Stat(real)
-		if err != nil || !st.Mode().IsRegular() {
-			return nil, fmt.Errorf("attach: %s is not a file (zip a folder first)", paths[i])
-		}
-		out[i] = real
+		out[i] = filepath.Clean(p)
 	}
 	return out, nil
+}
+
+// attachBase is where relative attach paths start: the working directory,
+// else the agent's folder.
+func attachBase() string {
+	if wd, err := os.Getwd(); err == nil {
+		return wd
+	}
+	return agentHome()
 }

@@ -412,7 +412,10 @@ the three tools; Codewhale gets a `user` entry merged into
 `$CODEWHALE_HOME/mcp.json` (replacing the old `lolad` entry). The MCP env carries
 `LOLAD_HARNESS` and `LOLAD_ENV_FILE`. `lolad msg tell-user <kind> --json` takes
 the same arguments; `lolad msg get-user-messages [--json]` is the CLI twin of
-the third tool. Unknown keys, nulls and broken rules are errors returned to the
+the third tool. Attach paths follow one rule on every path (the
+tools, `tell-user`, `send` and `reply --attach`): relative to the session's
+working directory, absolute anywhere, existing regular files only (folders:
+zip first). Unknown keys, nulls and broken rules are errors returned to the
 model so it corrects the call.
 - `get_user_messages` returns unread mail from the local user to the agent as
   the spec's records: an answers or decision mail becomes answer records
