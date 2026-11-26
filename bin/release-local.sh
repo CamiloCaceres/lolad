@@ -28,6 +28,9 @@
 #                            Required without --throwaway-key. Read, never printed.
 #   UPDATE_PUBLIC_KEY        base64 public key stamped into the apps; default
 #                            desktop/packaging/update-public-key.txt.
+#   UPDATE_NOTES_FILE        optional: a few plain-text lines (under 600 characters)
+#                            that Settings → Updates shows for this version. They
+#                            go into update.json and are signed with it.
 #   LOLABOT_SRC              a checkout of the pinned lolabot tag; default: cloned
 #                            from versions.env into the work dir.
 #   REPO                     GitHub owner/name for download URLs (CamiloCaceres/lolad)
@@ -145,6 +148,12 @@ else
   [ -n "${UPDATE_PUBLIC_KEY:-}" ] || die "no public key: commit desktop/packaging/update-public-key.txt or set UPDATE_PUBLIC_KEY"
 fi
 export UPDATE_PUBLIC_KEY
+# Resolved now so a wrong path stops the run before the long build.
+notes_file=""
+if [ -n "${UPDATE_NOTES_FILE:-}" ]; then
+  [ -f "$UPDATE_NOTES_FILE" ] || die "UPDATE_NOTES_FILE not found: $UPDATE_NOTES_FILE"
+  notes_file="$(cd "$(dirname "$UPDATE_NOTES_FILE")" && pwd)/$(basename "$UPDATE_NOTES_FILE")"
+fi
 
 # ------------------------------------------------------------- lolabot
 if [ -z "${LOLABOT_SRC:-}" ]; then
@@ -195,6 +204,7 @@ fi
 # ------------------------------------------------------------- update.json
 step "update.json (Ed25519)"
 (cd desktop && go run ./tools/sign-manifest generate \
+  --notes-file "$notes_file" \
   --version "$version" \
   --multiplexer-version "$MULTIPLEXER_VERSION" \
   --notes-url "https://github.com/$REPO/releases/tag/$tag" \

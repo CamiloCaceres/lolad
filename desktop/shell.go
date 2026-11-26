@@ -62,6 +62,7 @@ type shell struct {
 	movePending bool
 	silentSince time.Time // first silent read of this silence, or zero
 	permNoted   bool      // the macOS permission note is out for this wait
+	openOnUp    string    // dashboard path to show once the daemon answers (openWhenUp)
 }
 
 func newShell(app *application.App, win *application.WebviewWindow, base string, notif *notifications.NotificationService, background bool) *shell {
@@ -138,6 +139,23 @@ func (s *shell) openLink(path string) {
 	if up {
 		target := s.baseURL() + path
 		s.nav.Navigate(target)
+	}
+	s.showMain()
+}
+
+// openWhenUp shows the window at path now, or as soon as the daemon answers
+// (the restart that finishes an update opens Settings → Updates before the
+// new daemon is up).
+func (s *shell) openWhenUp(path string) {
+	s.mu.Lock()
+	up := s.up
+	if !up {
+		s.openOnUp = path
+	}
+	s.mu.Unlock()
+	if up {
+		s.openLink(path)
+		return
 	}
 	s.showMain()
 }
@@ -224,8 +242,8 @@ func (s *shell) buildTray() {
 	m.Add("View logs").OnClick(func(*application.Context) { go s.viewLogs() })
 	m.Add("Reload").OnClick(func(*application.Context) { s.nav.Reload() })
 	InitUpdates(s.app, m, s.win, func(title, body string) {
-		s.deliver(Note{ID: "update", Kind: "update", Title: title, Body: body, Link: "/"})
-	})
+		s.deliver(Note{ID: "update", Kind: "update", Title: title, Body: body, Link: updatesPath})
+	}, s.openWhenUp)
 	if runtime.GOOS == "darwin" {
 		m.Add("Uninstall…").OnClick(func(*application.Context) { go s.uninstall() })
 	}
@@ -456,6 +474,14 @@ func (s *shell) onDaemonUp() {
 				s.showMain()
 			}
 		}
+	}
+	s.mu.Lock()
+	pending := s.openOnUp
+	s.openOnUp = ""
+	s.mu.Unlock()
+	if pending != "" {
+		s.nav.Navigate(base + pending)
+		s.showMain()
 	}
 	s.afterOnboarding()
 	s.mu.Lock()

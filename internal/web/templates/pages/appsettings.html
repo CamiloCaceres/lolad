@@ -19,6 +19,22 @@
     {{if .Version}}<div class="set-row"><span class="set-ico">{{template "icon" "info"}}</span><div><strong>lolad {{.Version}}</strong></div></div>{{end}}
   </section>
 
+  {{/* Filled by static/updates.js from the desktop app's updater; stays hidden in a browser. */}}
+  <section class="set-group upd" id="updates" aria-labelledby="as-updates" data-updates hidden>
+    <h2 id="as-updates" class="eyebrow">Updates</h2>
+    <div class="set-row upd-row" data-phase="idle">
+      <span class="set-ico">{{template "icon" "download"}}</span>
+      <div class="upd-main" aria-live="polite">
+        <strong data-upd-title>Lolad</strong>
+        <p class="muted" data-upd-sub></p>
+        <div class="upd-bar" data-upd-bar role="progressbar" aria-label="Download progress" aria-valuemin="0" aria-valuemax="100" hidden><i></i></div>
+        <p class="upd-notes" data-upd-notes hidden></p>
+        <a class="upd-link" data-upd-link target="_blank" rel="noopener" hidden>Release notes{{template "icon" "external"}}</a>
+      </div>
+      <div class="upd-actions" data-upd-actions></div>
+    </div>
+  </section>
+
   <section class="set-group" aria-labelledby="as-adv">
     <h2 id="as-adv" class="eyebrow">Advanced <span class="muted">· for troubleshooting</span></h2>
     <a class="set-row is-link" href="/traffic"><span class="set-ico">{{template "icon" "pulse"}}</span><div><strong>Activity</strong><p class="muted">Every message, and anything that was stopped</p></div>{{template "icon" "next"}}</a>

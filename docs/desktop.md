@@ -431,14 +431,34 @@ neither updates the daemon.
   listing version, notes URL, and per-platform artifact URL + SHA-256. The
   manifest is signed with **Ed25519**; the public key is compiled into the app.
   An unsigned or mismatched manifest is ignored.
-- Checks once a day and on "Check for updates…". Downloads in the background,
-  then notifies "Restart to update". Never updates on its own while the user
-  is mid-onboarding.
+- Checks once a day and on "Check for updates…". The daily check downloads in
+  the background, then notifies "Restart to update". Never updates on its own
+  while the user is mid-onboarding.
+- **Settings → Updates** (`/settings#updates`, only inside the app) shows the
+  same state as the tray item: current version, last checked, "Check for
+  updates", and for a new version its number, short notes and a release-notes
+  link, "Download and install" with a progress bar, then "Restart to finish".
+  Plain states for up to date, checking, downloading, ready, restarting and
+  failed (with the reason and "Try again", which repeats only the step that
+  failed). The page is served by the daemon but the updater lives in the app,
+  so they talk through the window bridge (`desktop/bridge.go`): the page
+  posts `lolad:update\n<state|check|download|restart|retry>`, and the app
+  pushes every change with `window.__loladUpdate(state)` (`desktop/updates.go`,
+  `internal/web/static/updates.js`). In a browser the section stays hidden.
+  "Download and install" also runs the code-signature check (below) on the
+  download, so a bad update fails before the restart. The restart leaves a
+  marker in the state dir; the relaunched app opens on Settings → Updates and
+  says it updated, on both platforms.
+- **Notes:** `update.json` may carry `notes`, a few plain-text lines (under
+  600 characters) signed with the rest. `bin/release-local.sh` reads them from
+  `UPDATE_NOTES_FILE`; without it, only the release-notes link shows.
 - **macOS apply:** download the zipped `.app`, verify the hash, then verify
   `codesign --verify --deep --strict` and that the Team ID matches. Replace
   `/Applications/Lolad.app` (rename the old one aside, move the new one in,
   delete the old one), then `launchctl kickstart -k` the agent and relaunch
-  the app.
+  the app. When launchd does not run the daemon (the app started it), the
+  app stops that daemon instead, if it runs from this bundle, and the
+  relaunched app starts the new one. A CLI-installed daemon is left alone.
 - **Windows apply:** download the new installer, verify the hash and
   Authenticode signature, run it with `/S` (silent, per user). The installer
   stops the daemon and app, replaces files, and starts both.

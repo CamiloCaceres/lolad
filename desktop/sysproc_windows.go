@@ -3,6 +3,7 @@
 package main
 
 import (
+	"errors"
 	"os/exec"
 	"syscall"
 )
@@ -18,3 +19,6 @@ func detach(cmd *exec.Cmd) {
 func hideWindow(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: createNoWindow, HideWindow: true}
 }
+
+// terminate is only used by the macOS updater (stopAppDaemon).
+func terminate(int) error { return errors.New("not supported on Windows") }

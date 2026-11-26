@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
+	"errors"
 	"os"
-	"sync"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/CamiloCaceres/lolad/desktop/updater"
@@ -19,15 +21,23 @@ var updateVersion = "0.0.0-dev"
 // updateCheckEvery is how often the background check runs.
 const updateCheckEvery = 24 * time.Hour
 
-// InitUpdates adds "Check for updates…" to the tray menu and starts a daily
+// updatesPath is the Settings section the tray and the notice open.
+const updatesPath = "/settings#updates"
+
+// updates is the app's one update flow (nil until InitUpdates). The tray item,
+// the "ready" notice and Settings → Updates (through the bridge) all drive it.
+var updates *updateController
+
+// InitUpdates adds the update item to the tray menu and starts a daily
 // background check. A found update is downloaded in the background and the
-// menu item turns into "Restart to update…" (plus a notification). Nothing is
-// installed without the user choosing it, and never during onboarding.
+// item turns into "Restart to update…" (plus a notification). Settings →
+// Updates shows the same state and runs the same steps. Nothing is installed
+// without the user choosing it, and never during onboarding.
 //
 // Dev environment: LOLAD_UPDATE_URL overrides the manifest URL,
 // LOLAD_UPDATE_ALLOW_UNSIGNED=1 permits the public test key and unsigned
 // dev builds.
-func InitUpdates(app *application.App, menu *application.Menu, win *application.WebviewWindow, notify func(title, body string)) {
+func InitUpdates(app *application.App, menu *application.Menu, win *application.WebviewWindow, notify func(title, body string), open func(path string)) {
 	if notify == nil {
 		notify = func(string, string) {}
 	}
@@ -36,171 +46,161 @@ func InitUpdates(app *application.App, menu *application.Menu, win *application.
 		ManifestURL:    os.Getenv("LOLAD_UPDATE_URL"),
 		AllowUnsigned:  os.Getenv("LOLAD_UPDATE_ALLOW_UNSIGNED") == "1",
 		Quit:           func() { app.Quit() },
+		StopDaemon:     stopAppDaemon,
 	})
-	if err != nil {
-		menu.Add("Updates unavailable").SetEnabled(false)
-		menu.Update()
-		return
+	var backend updateBackend
+	if err == nil {
+		backend = u
 	}
-	c := &updateController{app: app, u: u, win: win, notify: notify}
-	c.item = menu.Add("Check for updates…").OnClick(func(*application.Context) { c.onClick() })
+	flow := newUpdateFlow(backend, updateVersion, updater.StateDir())
+	if err != nil {
+		flow.st.Error = unavailableReason(err)
+	}
+	flow.notify = notify
+	c := &updateController{app: app, win: win, open: open, flow: flow}
+	flow.onChange = c.changed
+	label, enabled := trayUpdateLabel(flow.State())
+	c.item = menu.Add(label).SetEnabled(enabled).OnClick(func(*application.Context) { c.onClick() })
 	menu.Update()
-	go c.loop()
+	updates = c
+	if backend != nil {
+		go c.loop()
+	}
+}
+
+func unavailableReason(err error) string {
+	if errors.Is(err, updater.ErrTestKey) {
+		return "This is a development build. It doesn't update itself."
+	}
+	return "This copy of Lolad can't update itself: " + clip(err.Error(), 160)
 }
 
 type updateController struct {
-	app    *application.App
-	u      *updater.Updater
-	win    *application.WebviewWindow
-	notify func(title, body string)
-	item   *application.MenuItem
-
-	mu    sync.Mutex
-	busy  bool
-	ready string // downloaded artifact waiting for "Restart to update"
-	res   *updater.CheckResult
+	app  *application.App
+	win  *application.WebviewWindow
+	open func(path string)
+	flow *updateFlow
+	item *application.MenuItem
 }
 
-func (c *updateController) setLabel(s string, enabled bool) {
-	application.InvokeAsync(func() {
-		c.item.SetLabel(s).SetEnabled(enabled)
-	})
+// trayUpdateLabel is the tray item for a state.
+func trayUpdateLabel(s UpdateState) (string, bool) {
+	switch s.Phase {
+	case phUnavailable:
+		return "Updates unavailable", false
+	case phChecking:
+		return "Checking for updates…", false
+	case phAvailable, phOnboarding:
+		return "Update to " + s.Version + "…", true
+	case phDownloading:
+		return "Downloading update… " + strconv.Itoa(s.Percent) + "%", false
+	case phReady:
+		return "Restart to update to " + s.Version + "…", true
+	case phRestarting:
+		return "Updating…", false
+	case phFailed:
+		return "Update failed: try again…", true
+	}
+	return "Check for updates…", true
+}
+
+// changed mirrors a new state into the tray and the open page.
+func (c *updateController) changed(s UpdateState) {
+	label, enabled := trayUpdateLabel(s)
+	application.InvokeAsync(func() { c.item.SetLabel(label).SetEnabled(enabled) })
+	c.push(s)
+}
+
+// push hands the state to Settings → Updates (static/updates.js). ExecJS
+// runs once the page has reported ready (bridgeJS does that on every page),
+// and the call is a no-op on pages without the section.
+func (c *updateController) push(s UpdateState) {
+	b, err := json.Marshal(s)
+	if err != nil {
+		return
+	}
+	js := "window.__loladUpdate&&window.__loladUpdate(" + string(b) + ")"
+	go c.win.ExecJS(js)
 }
 
 func (c *updateController) loop() {
 	time.Sleep(30 * time.Second) // let the app settle first
 	for {
-		c.backgroundCheck()
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+		c.flow.Check(ctx, true)
+		cancel()
 		time.Sleep(updateCheckEvery)
 	}
 }
 
-func (c *updateController) backgroundCheck() {
-	if !c.begin() {
-		return
-	}
-	defer c.end()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
-	defer cancel()
-	res, err := c.u.Check(ctx)
-	if err != nil || !res.Available || res.ManualInstall || res.OnboardingBlocked {
-		return // quiet: unsigned, older, offline or mid-onboarding
-	}
-	c.download(ctx, res)
-	c.mu.Lock()
-	ready := c.ready != ""
-	c.mu.Unlock()
-	if ready {
-		c.notify("Lolad "+res.Version+" is ready", res.Message+" Restart to update.")
-	}
-}
-
-func (c *updateController) begin() bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.busy {
-		return false
-	}
-	c.busy = true
-	return true
-}
-
-func (c *updateController) end() { c.mu.Lock(); c.busy = false; c.mu.Unlock() }
-
-// download fetches res and, on success, remembers it and relabels the menu.
-func (c *updateController) download(ctx context.Context, res *updater.CheckResult) {
-	last := -1
-	path, err := c.u.Download(ctx, res, func(done, total int64) {
-		if total <= 0 {
-			return
-		}
-		if pct := int(done * 100 / total); pct != last && pct%5 == 0 {
-			last = pct
-			c.setLabel(fmt.Sprintf("Downloading update… %d%%", pct), false)
-		}
-	})
-	if err != nil {
-		c.setLabel("Check for updates…", true)
-		return
-	}
-	c.mu.Lock()
-	c.ready, c.res = path, res
-	c.mu.Unlock()
-	c.setLabel("Restart to update to "+res.Version+"…", true)
-}
-
+// onClick: a ready update asks to restart, as before; anything else opens
+// Settings → Updates, checking first when there is nothing to show yet.
 func (c *updateController) onClick() {
-	c.mu.Lock()
-	ready, res := c.ready, c.res
-	c.mu.Unlock()
-	if ready != "" {
-		go c.confirmAndApply(ready, res)
+	s := c.flow.State()
+	if s.Phase == phReady {
+		c.confirmRestart(s)
 		return
 	}
-	go c.manualCheck()
+	c.open(updatesPath)
+	switch s.Phase {
+	case phIdle, phUpToDate:
+		go c.action("check")
+	case phFailed:
+		go c.action("retry")
+	}
 }
 
-func (c *updateController) info(title, msg string) {
+func (c *updateController) confirmRestart(s UpdateState) {
 	application.InvokeAsync(func() {
-		c.app.Dialog.Info().SetTitle(title).SetMessage(msg).Show()
-	})
-}
-
-func (c *updateController) manualCheck() {
-	if !c.begin() {
-		return
-	}
-	defer c.end()
-	c.setLabel("Checking for updates…", false)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
-	defer cancel()
-	res, err := c.u.Check(ctx)
-	c.setLabel("Check for updates…", true)
-	switch {
-	case err != nil:
-		c.info("Could not check for updates", err.Error())
-		return
-	case !res.Available:
-		c.info("Lolad is up to date", "You have the latest version ("+updateVersion+").")
-		return
-	case res.ManualInstall:
-		c.info("Update available", res.Message+"\n\nRelease notes: "+res.NotesURL)
-		return
-	case res.OnboardingBlocked:
-		c.info("Update available", "Lolad "+res.Version+" is available. Finish setting up Lolad first, then check again.")
-		return
-	}
-	c.download(ctx, res)
-	c.mu.Lock()
-	ready, r := c.ready, c.res
-	c.mu.Unlock()
-	if ready == "" {
-		c.info("Update failed", "The update could not be downloaded or did not pass verification.")
-		return
-	}
-	c.confirmAndApply(ready, r)
-}
-
-func (c *updateController) confirmAndApply(path string, res *updater.CheckResult) {
-	if c.u.OnboardingInProgress() {
-		c.info("Update", "Finish setting up Lolad first; the update will wait.")
-		return
-	}
-	application.InvokeAsync(func() {
-		d := c.app.Dialog.Question().SetTitle("Update Lolad").
-			SetMessage(res.Message + "\n\nRelease notes: " + res.NotesURL)
+		msg := "Lolad " + s.Version + " is downloaded and checked."
+		if s.AgentsRestart {
+			msg += " Your assistants will restart during the update."
+		} else {
+			msg += " Your assistants keep running."
+		}
+		d := c.app.Dialog.Question().SetTitle("Update Lolad").SetMessage(msg)
 		yes := d.AddButton("Restart to update")
 		no := d.AddButton("Later")
 		d.SetDefaultButton(yes).SetCancelButton(no)
-		yes.OnClick(func() { go c.apply(path) })
+		yes.OnClick(func() {
+			go func() {
+				c.flow.Restart()
+				if c.flow.State().Phase == phFailed {
+					c.open(updatesPath) // the reason is shown there
+				}
+			}()
+		})
 		d.Show()
 	})
 }
 
-func (c *updateController) apply(path string) {
-	if err := c.u.Apply(path); err != nil {
-		c.info("Update failed", err.Error())
+// action runs one step asked for by the page or the tray. It blocks; callers
+// run it on a goroutine.
+func (c *updateController) action(name string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancel()
+	switch name {
+	case "state":
+		c.push(c.flow.State())
+	case "check":
+		c.flow.Check(ctx, false)
+	case "download":
+		c.flow.Download(ctx)
+	case "restart":
+		c.flow.Restart()
+	case "retry":
+		c.flow.Retry(ctx)
+	}
+}
+
+// handleUpdateMessage is the bridge's "lolad:update\n<action>" verb.
+func handleUpdateMessage(action string) {
+	if updates == nil {
 		return
 	}
-	// Apply asks the app to quit itself once the new version is in place.
+	action = strings.TrimSpace(action)
+	switch action {
+	case "state", "check", "download", "restart", "retry":
+		go updates.action(action)
+	}
 }

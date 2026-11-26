@@ -20,6 +20,8 @@
 <script src="{{asset "devices.js"}}" defer></script>
 {{/* Settings workspace keyboard navigation and safe GET-form leave guard. */}}
 <script src="{{asset "settings.js"}}" defer></script>
+{{/* Settings → Updates: talks to the desktop app's updater through its bridge. */}}
+<script src="{{asset "updates.js"}}" defer></script>
 </head>
 <body hx-boost="true" hx-ext="morph" hx-headers='{"X-Lolad-Build": "{{build}}"}'>
 {{template "icons"}}

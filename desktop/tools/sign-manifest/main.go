@@ -178,6 +178,7 @@ func generate(args []string, stdout io.Writer) error {
 	fs := newFlags("generate")
 	version := fs.String("version", "", "release version")
 	notes := fs.String("notes-url", "", "release notes URL")
+	notesFile := fs.String("notes-file", "", "a few plain-text lines shown in Settings → Updates (optional)")
 	minV := fs.String("min-version", "", "oldest version that can update in place")
 	mux := fs.String("multiplexer-version", "", "bundled tmux/psmux version")
 	base := fs.String("url-base", "", "URL prefix the artifacts are published under")
@@ -195,6 +196,16 @@ func generate(args []string, stdout io.Writer) error {
 		return errors.New("--version, --notes-url, --multiplexer-version and --url-base are required")
 	}
 	m := updater.Manifest{Version: *version, NotesURL: *notes, MinVersion: *minV, MultiplexerVersion: *mux, Platforms: map[string]updater.Artifact{}}
+	if *notesFile != "" {
+		b, err := os.ReadFile(*notesFile)
+		if err != nil {
+			return err
+		}
+		m.Notes = strings.TrimSpace(string(b))
+		if n := len([]rune(m.Notes)); n > 600 {
+			return fmt.Errorf("--notes-file: %d characters; keep it under 600 (the app cuts it there)", n)
+		}
+	}
 	for plat, p := range arts {
 		if *p == "" {
 			continue

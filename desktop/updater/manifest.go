@@ -40,6 +40,7 @@ type Artifact struct {
 type Manifest struct {
 	Version            string              `json:"version"`
 	NotesURL           string              `json:"notes_url"`
+	Notes              string              `json:"notes,omitempty"` // a few plain-text lines for the Updates screen; signed like the rest
 	MinVersion         string              `json:"min_version,omitempty"`
 	MultiplexerVersion string              `json:"multiplexer_version"`
 	Platforms          map[string]Artifact `json:"platforms"`

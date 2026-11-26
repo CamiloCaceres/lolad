@@ -7,3 +7,7 @@ import "errors"
 func (u *Updater) platformApply(string) error {
 	return errors.New("automatic updates are only supported on macOS and Windows")
 }
+
+func (u *Updater) platformVerify(string) error {
+	return errors.New("automatic updates are only supported on macOS and Windows")
+}

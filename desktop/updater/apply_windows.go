@@ -10,14 +10,30 @@ import (
 )
 
 func (u *Updater) platformApply(installer string) error {
-	exe := u.cfg.AppPath
-	if exe == "" {
-		var err error
-		if exe, err = os.Executable(); err != nil {
-			return fmt.Errorf("cannot find the running executable: %w", err)
-		}
+	exe, err := u.appExe()
+	if err != nil {
+		return err
 	}
 	return u.applyWin(installer, exe, startDetached)
+}
+
+func (u *Updater) platformVerify(installer string) error {
+	exe, err := u.appExe()
+	if err != nil {
+		return err
+	}
+	return u.verifyWinInstaller(installer, exe)
+}
+
+func (u *Updater) appExe() (string, error) {
+	if u.cfg.AppPath != "" {
+		return u.cfg.AppPath, nil
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return "", fmt.Errorf("cannot find the running executable: %w", err)
+	}
+	return exe, nil
 }
 
 func startDetached(path string, args ...string) error {

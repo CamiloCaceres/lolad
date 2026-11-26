@@ -34,3 +34,20 @@
 .rename-wait, .rename-result { display: grid; gap: 12px; justify-items: start; padding: 28px 0 8px; }
 .rename-ring { width: 28px; height: 28px; }
 .rename-result.is-no .page-title { color: var(--st-failed-text); }
+
+/* Settings → Updates (static/updates.js). */
+.set-group .upd-row { align-items: flex-start; }
+.upd-row .set-ico { margin-top: 2px; }
+.upd-row.is-bad .set-ico { color: var(--st-failed-text); }
+.upd-row.is-bad [data-upd-sub] { color: var(--st-failed-text); }
+.upd-row.is-good .set-ico { color: var(--aqua); }
+.upd-row[data-phase="ready"] .set-ico, .upd-row[data-phase="available"] .set-ico { color: var(--btn-primary); }
+.set-group .set-row > .upd-actions { flex: none; display: flex; gap: 8px; align-self: center; }
+.upd-bar { height: 6px; margin-top: 10px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); overflow: hidden; max-width: 420px; }
+.upd-bar > i { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--btn-primary); transition: width 200ms var(--ease); }
+.upd-notes { margin-top: 10px; white-space: pre-line; color: var(--ink-2); font-size: var(--t-sm); max-width: 560px; }
+.upd-link { display: inline-flex; align-items: center; gap: 4px; margin-top: 8px; font-size: var(--t-sm); color: var(--ink-2); }
+.upd-link .i { width: 14px; height: 14px; }
+.upd-row[data-phase="checking"] .set-ico .i, .upd-row[data-phase="restarting"] .set-ico .i { animation: breathe 1.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .upd-bar > i { transition: none; } .upd-row .set-ico .i { animation: none !important; } }
+@media (max-width: 640px) { .set-group .upd-row { flex-wrap: wrap; } .upd-actions { width: 100%; padding-left: 56px; } }

@@ -21,12 +21,20 @@ import (
 // dashboard posts a line to Go, and Go validates it before acting.
 //
 // Message format: "lolad:<verb>\n<absolute url>[\n<filename>]".
+//
+// Settings → Updates talks to the app's updater the same way: the page calls
+// window.__loladUpdates(action), which posts "lolad:update\n<action>", and
+// the app answers by calling window.__loladUpdate(state) with ExecJS. Wails
+// holds ExecJS until a page reports "wails:runtime:ready", which only its own
+// runtime.js sends, so the bridge sends it (the flag never resets).
 const bridgeJS = `(()=>{
 if(window.__loladBridge)return;window.__loladBridge=1;
 const post=m=>{try{
   if(window.webkit&&window.webkit.messageHandlers&&window.webkit.messageHandlers.external){window.webkit.messageHandlers.external.postMessage(m);return true}
   if(window.chrome&&window.chrome.webview){window.chrome.webview.postMessage(m);return true}
 }catch(_){}return false};
+post('wails:runtime:ready');
+window.__loladUpdates=a=>post('lolad:update\n'+a);
 document.addEventListener('click',e=>{
   if(e.defaultPrevented||e.button!==0)return;
   const a=e.target&&e.target.closest&&e.target.closest('a[href]');
@@ -48,6 +56,10 @@ func handleBridge(app *application.App, base string) func(application.Window, st
 		}
 		parts := strings.SplitN(msg, "\n", 3)
 		if len(parts) < 2 {
+			return
+		}
+		if parts[0] == "lolad:update" {
+			handleUpdateMessage(parts[1])
 			return
 		}
 		target, err := neturl.Parse(parts[1])

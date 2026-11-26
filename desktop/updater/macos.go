@@ -115,6 +115,24 @@ func swapBundle(newApp, target string) error {
 	return nil
 }
 
+// verifyMacZip unpacks zipPath into a scratch dir beside it and checks the
+// bundle against target the way applyMac will, without touching target.
+func (u *Updater) verifyMacZip(zipPath, target string) error {
+	scratch, err := os.MkdirTemp(filepath.Dir(zipPath), ".lolad-update-verify-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(scratch)
+	if err := safeUnzip(zipPath, scratch); err != nil {
+		return fmt.Errorf("unpack update: %w", err)
+	}
+	newApp, err := findApp(scratch)
+	if err != nil {
+		return err
+	}
+	return u.verifyMacUpdate(newApp, filepath.Clean(target))
+}
+
 // applyMac is the whole macOS flow. exec hands off the relaunch.
 func (u *Updater) applyMac(zipPath, target string, uid int, relaunch func(app string) error) error {
 	target = filepath.Clean(target)
@@ -139,8 +157,12 @@ func (u *Updater) applyMac(zipPath, target string, uid int, relaunch func(app st
 	}
 	os.RemoveAll(filepath.Dir(zipPath)) // downloaded artifact
 	// The daemon runs from the bundle; restart it so it is the new one.
+	// launchd restarts its own job; a daemon it does not manage (the app
+	// started it) is stopped, and the relaunched app starts the new one.
 	// A failure here is not fatal: the app relaunch still proceeds.
-	_, _ = u.cfg.run("/bin/launchctl", "kickstart", "-k", fmt.Sprintf("gui/%d/%s", uid, LaunchdLabel))
+	if _, err := u.cfg.run("/bin/launchctl", "kickstart", "-k", fmt.Sprintf("gui/%d/%s", uid, LaunchdLabel)); err != nil && u.cfg.StopDaemon != nil {
+		_ = u.cfg.StopDaemon()
+	}
 	if err := relaunch(target); err != nil {
 		return fmt.Errorf("updated, but relaunch failed: %w", err)
 	}

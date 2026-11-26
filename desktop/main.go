@@ -103,6 +103,11 @@ func main() {
 		if !sh.background && !launchedAtLogin() {
 			sh.showMain()
 		}
+		// The restart that finished an update comes back on Settings →
+		// Updates, even from the Windows installer's tray-only relaunch.
+		if updates != nil && updates.flow.TakeReopen() {
+			sh.openWhenUp(updatesPath)
+		}
 	})
 
 	sh.setupNotifications()

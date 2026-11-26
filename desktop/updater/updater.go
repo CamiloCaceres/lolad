@@ -53,6 +53,11 @@ type Config struct {
 	// Quit ends the app after an update has been handed off. Required for
 	// Apply to finish the restart.
 	Quit func()
+	// StopDaemon (macOS) stops a daemon that launchd does not manage, such
+	// as one the app started itself, once the new bundle is in place. The
+	// relaunched app then starts the new daemon. Agents keep running: they
+	// live in the tmux server.
+	StopDaemon func() error
 
 	// run executes external commands (codesign, launchctl, open,
 	// powershell); tests replace it.
@@ -71,6 +76,7 @@ type CheckResult struct {
 	Available         bool   // a newer, verified version exists for this platform
 	Version           string // the new version
 	NotesURL          string
+	Notes             string // short release notes from the signed manifest ("" if none)
 	NeedsAgentRestart bool   // multiplexer_version differs: agents restart during the update
 	ManualInstall     bool   // current < min_version: cannot update in place
 	OnboardingBlocked bool   // onboarding flag present: do not install now
@@ -174,7 +180,7 @@ func (u *Updater) Check(ctx context.Context) (*CheckResult, error) {
 	if cmp < 0 {
 		return nil, fmt.Errorf("%w (manifest %s, installed %s)", ErrDowngrade, m.Version, u.cfg.CurrentVersion)
 	}
-	res := &CheckResult{Version: m.Version, NotesURL: m.NotesURL, Manifest: m}
+	res := &CheckResult{Version: m.Version, NotesURL: m.NotesURL, Notes: clipNotes(m.Notes), Manifest: m}
 	if cmp == 0 {
 		res.Message = "Lolad is up to date."
 		return res, nil
@@ -304,6 +310,14 @@ func (u *Updater) Download(ctx context.Context, res *CheckResult, progress func(
 	return path, nil
 }
 
+// Verify runs the platform's code-signature checks on a downloaded artifact
+// without installing it (macOS: unpack to a scratch dir and check the bundle
+// against the running app; Windows: Authenticode). Apply checks again; this
+// lets a bad update fail before the user is asked to restart.
+func (u *Updater) Verify(path string) error {
+	return u.platformVerify(path)
+}
+
 // Apply installs a downloaded artifact and restarts the app (platform
 // specific). It re-checks the onboarding flag first.
 func (u *Updater) Apply(path string) error {
@@ -320,6 +334,16 @@ func (u *Updater) Install(ctx context.Context, res *CheckResult, progress func(d
 		return err
 	}
 	return u.Apply(p)
+}
+
+// clipNotes keeps notes short enough for a settings row.
+func clipNotes(s string) string {
+	s = strings.TrimSpace(strings.ReplaceAll(s, "\r\n", "\n"))
+	const max = 600
+	if r := []rune(s); len(r) > max {
+		s = strings.TrimSpace(string(r[:max-1])) + "…"
+	}
+	return s
 }
 
 func (u *Updater) quit() {

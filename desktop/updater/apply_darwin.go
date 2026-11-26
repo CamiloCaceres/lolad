@@ -12,14 +12,30 @@ import (
 )
 
 func (u *Updater) platformApply(zipPath string) error {
+	app, err := u.appBundle()
+	if err != nil {
+		return err
+	}
+	return u.applyMac(zipPath, app, os.Getuid(), relaunch)
+}
+
+func (u *Updater) platformVerify(zipPath string) error {
+	app, err := u.appBundle()
+	if err != nil {
+		return err
+	}
+	return u.verifyMacZip(zipPath, app)
+}
+
+func (u *Updater) appBundle() (string, error) {
 	app := u.cfg.AppPath
 	if app == "" {
 		app = runningBundle()
 	}
 	if app == "" {
-		return fmt.Errorf("cannot find the running Lolad.app")
+		return "", fmt.Errorf("cannot find the running Lolad.app")
 	}
-	return u.applyMac(zipPath, app, os.Getuid(), relaunch)
+	return app, nil
 }
 
 // runningBundle walks up from the executable to the enclosing .app.
