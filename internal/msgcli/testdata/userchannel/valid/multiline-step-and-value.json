@@ -1,0 +1,46 @@
+{
+  "name": "multiline-step-and-value",
+  "tool": "message_user",
+  "input": {
+    "blocks": [
+      {
+        "type": "steps",
+        "items": [
+          "Line one\nline two "
+        ]
+      },
+      {
+        "type": "values",
+        "rows": [
+          {
+            "label": "Key",
+            "value": "a\nb "
+          }
+        ]
+      }
+    ]
+  },
+  "valid": true,
+  "note": "Steps are trimmed; values are not.",
+  "expect": {
+    "kind": "say",
+    "blocks": [
+      {
+        "type": "steps",
+        "items": [
+          "Line one\nline two "
+        ]
+      },
+      {
+        "type": "values",
+        "rows": [
+          {
+            "label": "Key",
+            "value": "a\nb "
+          }
+        ]
+      }
+    ],
+    "text": "1. Line one\nline two\n\nKey: a\nb "
+  }
+}

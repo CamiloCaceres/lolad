@@ -1,0 +1,50 @@
+{
+  "name": "too-many-fields",
+  "tool": "ask_user",
+  "input": {
+    "text": "Lots",
+    "fields": [
+      {
+        "label": "F1"
+      },
+      {
+        "label": "F2"
+      },
+      {
+        "label": "F3"
+      },
+      {
+        "label": "F4"
+      },
+      {
+        "label": "F5"
+      },
+      {
+        "label": "F6"
+      },
+      {
+        "label": "F7"
+      },
+      {
+        "label": "F8"
+      },
+      {
+        "label": "F9"
+      },
+      {
+        "label": "F10"
+      },
+      {
+        "label": "F11"
+      },
+      {
+        "label": "F12"
+      },
+      {
+        "label": "F13"
+      }
+    ]
+  },
+  "valid": false,
+  "reason": "at most 12 fields"
+}

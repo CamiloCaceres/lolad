@@ -1,0 +1,13 @@
+{
+  "name": "option-too-long",
+  "tool": "ask_user",
+  "input": {
+    "text": "Pick",
+    "options": [
+      "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "B"
+    ]
+  },
+  "valid": false,
+  "reason": "options: at most 60 characters"
+}

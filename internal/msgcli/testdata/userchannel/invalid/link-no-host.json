@@ -1,0 +1,14 @@
+{
+  "name": "link-no-host",
+  "tool": "message_user",
+  "input": {
+    "blocks": [
+      {
+        "type": "link",
+        "url": "https://"
+      }
+    ]
+  },
+  "valid": false,
+  "reason": "link needs an http(s) url with a host"
+}

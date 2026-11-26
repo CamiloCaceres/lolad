@@ -1,0 +1,10 @@
+{
+  "name": "null-title",
+  "tool": "message_user",
+  "input": {
+    "title": null,
+    "text": "x"
+  },
+  "valid": false,
+  "reason": "title must be a string"
+}

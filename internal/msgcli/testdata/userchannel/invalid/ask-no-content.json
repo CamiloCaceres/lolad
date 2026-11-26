@@ -1,0 +1,13 @@
+{
+  "name": "ask-no-content",
+  "tool": "ask_user",
+  "input": {
+    "title": "x",
+    "options": [
+      "A",
+      "B"
+    ]
+  },
+  "valid": false,
+  "reason": "give text or blocks"
+}

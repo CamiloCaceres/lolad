@@ -8,8 +8,8 @@ import (
 	"maps"
 	"mime/multipart"
 	"net/http"
+	"regexp"
 	"slices"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -140,6 +140,13 @@ func optNote(o string) string {
 	}
 	return ""
 }
+
+// numberRE and dateRE are the user-channel spec's forms (3.6): ASCII digits,
+// one optional decimal point or comma; YYYY-MM-DD.
+var (
+	numberRE = regexp.MustCompile(`^-?[0-9]+([.,][0-9]+)?$`)
+	dateRE   = regexp.MustCompile(`^[0-9]{4}-[0-9]{2}-[0-9]{2}$`)
+)
 
 // taskFiles is the key, in a task answer's Files and Values, of the
 // screenshots or logs sent with "I couldn't do it".
@@ -569,11 +576,21 @@ func (s *server) stageRequest(w http.ResponseWriter, r *http.Request) {
 			s.renderRequests(w, r, peer, http.StatusUnprocessableEntity, map[string]reqEdit{id: {Error: fmt.Sprintf("That note is too long (at most %d characters).", maxAnswerRunes), Text: text}}, "")
 			return
 		}
+		if !ask.Chat.Task {
+			// user-channel 3.6: a choice or your own words, not both. The
+			// "Something else" box is always posted; with a choice picked,
+			// the choice is the answer.
+			text = ""
+		}
 		a := core.AskAnswer{Ask: id, Decision: option, Text: text} // a task's "what happened" rides along
 		if ask.Chat.Task {
 			names, ids, msg := s.uploadAll(ctx, peer, r, "files")
 			if msg != "" {
 				s.renderRequests(w, r, peer, http.StatusUnprocessableEntity, map[string]reqEdit{id: {Error: msg, Text: text}}, "")
+				return
+			}
+			if len(ids) > 0 && len(ask.Chat.Options) > 0 && option == ask.Chat.Options[0] {
+				s.renderRequests(w, r, peer, http.StatusUnprocessableEntity, map[string]reqEdit{id: {Error: "Files go with \"" + optLabel(ask.Chat.Options[len(ask.Chat.Options)-1]) + "\"; remove them, or say what went wrong.", Text: text}}, "")
 				return
 			}
 			if len(ids) > 0 {
@@ -667,6 +684,24 @@ func (s *server) collect(ctx context.Context, peer string, ask msgView, r *http.
 		a.Text = text
 		return a, e
 	}
+	known := map[string]bool{}
+	for _, f := range fields {
+		known["f."+f.Name] = true
+	}
+	posted := []string{}
+	for k := range r.Form {
+		posted = append(posted, k)
+	}
+	if r.MultipartForm != nil {
+		for k := range r.MultipartForm.File {
+			posted = append(posted, k)
+		}
+	}
+	for _, k := range posted {
+		if strings.HasPrefix(k, "f.") && !known[k] {
+			return fail("This request has no field %q.", strings.TrimPrefix(k, "f."))
+		}
+	}
 	var secrets, files []core.AskField
 	for _, f := range fields {
 		switch f.Type {
@@ -677,15 +712,22 @@ func (s *server) collect(ctx context.Context, peer string, ask msgView, r *http.
 			files = append(files, f)
 			continue
 		}
-		v := strings.TrimSpace(r.FormValue("f." + f.Name))
-		if f.Type == core.FieldLogs { // verbatim, but without blank lines around it
-			v = strings.Trim(strings.ReplaceAll(r.FormValue("f."+f.Name), "\r\n", "\n"), "\n")
+		raw := r.FormValue("f." + f.Name)
+		v := strings.TrimSpace(raw)
+		label := fieldLabel(f)
+		switch f.Type {
+		case core.FieldText: // user-channel 3.6: one line as typed
+			if strings.ContainsAny(raw, "\r\n") {
+				e.Values[f.Name] = v
+				return fail("%s takes one line.", label)
+			}
+		case core.FieldLogs, core.FieldLongText: // as typed (browsers send CRLF; kept as LF)
+			v = strings.ReplaceAll(raw, "\r\n", "\n")
 			if strings.TrimSpace(v) == "" {
 				v = ""
 			}
 		}
 		e.Values[f.Name] = v
-		label := fieldLabel(f)
 		if v == "" {
 			if f.Optional {
 				continue
@@ -694,11 +736,11 @@ func (s *server) collect(ctx context.Context, peer string, ask msgView, r *http.
 		}
 		switch f.Type {
 		case core.FieldNumber:
-			if _, err := strconv.ParseFloat(v, 64); err != nil {
-				return fail("%s needs a number.", label)
+			if !numberRE.MatchString(v) {
+				return fail("%s needs a number, like 40 or 2.5.", label)
 			}
 		case core.FieldDate:
-			if _, err := time.Parse("2006-01-02", v); err != nil {
+			if d, err := time.Parse("2006-01-02", v); err != nil || !dateRE.MatchString(v) || d.Year() < 1 {
 				return fail("%s needs a date.", label)
 			}
 		case core.FieldChoice:

@@ -1,0 +1,30 @@
+{
+  "name": "limits-after-trim",
+  "tool": "ask_user",
+  "input": {
+    "title": "     xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "text": "Pick",
+    "options": [
+      "  yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+      "B"
+    ]
+  },
+  "valid": true,
+  "expect": {
+    "kind": "ask",
+    "title": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "blocks": [
+      {
+        "type": "text",
+        "text": "Pick"
+      }
+    ],
+    "ask": {
+      "options": [
+        "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+        "B"
+      ]
+    },
+    "text": "Pick"
+  }
+}

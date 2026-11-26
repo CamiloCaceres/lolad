@@ -1,0 +1,14 @@
+{
+  "name": "label-with-newline",
+  "tool": "ask_user",
+  "input": {
+    "text": "X?",
+    "fields": [
+      {
+        "label": "Two\nlines"
+      }
+    ]
+  },
+  "valid": false,
+  "reason": "a label is one line"
+}

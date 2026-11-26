@@ -1,0 +1,24 @@
+{
+  "name": "code-crlf",
+  "tool": "message_user",
+  "input": {
+    "blocks": [
+      {
+        "type": "code",
+        "code": "echo hi\r\n\r\n"
+      }
+    ]
+  },
+  "valid": true,
+  "note": "Trailing CR and LF are removed before fencing.",
+  "expect": {
+    "kind": "say",
+    "blocks": [
+      {
+        "type": "code",
+        "code": "echo hi\r\n\r\n"
+      }
+    ],
+    "text": "```\necho hi\n```"
+  }
+}

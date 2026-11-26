@@ -1,0 +1,10 @@
+{
+  "name": "unknown-key",
+  "tool": "message_user",
+  "input": {
+    "text": "Hi",
+    "body": "Hi"
+  },
+  "valid": false,
+  "reason": "unknown argument"
+}

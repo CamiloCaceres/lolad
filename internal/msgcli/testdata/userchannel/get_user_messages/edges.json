@@ -1,0 +1,165 @@
+{
+  "name": "edges",
+  "secrets": "environment",
+  "requests": [
+    {
+      "id": "r-long",
+      "title": "Please confirm the shipping plan for the forty books going to the Bogotá office next week",
+      "text": "x",
+      "ask": {
+        "task": {
+          "done": "Done",
+          "failed": "I couldn't do it"
+        }
+      }
+    },
+    {
+      "id": "r-form",
+      "text": "What should the note say?\nKeep it short.",
+      "ask": {
+        "fields": [
+          {
+            "name": "note",
+            "label": "Note",
+            "type": "longtext"
+          },
+          {
+            "name": "ref",
+            "type": "longtext",
+            "optional": true
+          }
+        ]
+      }
+    }
+  ],
+  "open": 0,
+  "items": [
+    {
+      "type": "message",
+      "record": {
+        "spec": "0.1",
+        "id": "m-1",
+        "text": "   ",
+        "created_at": "2026-11-25T08:00:00Z",
+        "attachments": [
+          {
+            "id": "att_a",
+            "name": "report.pdf",
+            "size": 10,
+            "path": ".user-channel/files/att_a/report.pdf"
+          },
+          {
+            "id": "att_b",
+            "name": "data.csv",
+            "content_type": "text/csv",
+            "size": 20,
+            "path": ".user-channel/files/att_b/data.csv"
+          }
+        ]
+      }
+    },
+    {
+      "type": "message",
+      "record": {
+        "spec": "0.1",
+        "id": "m-2",
+        "text": "First line\r\n  \r\nThird line\n\n",
+        "created_at": "2026-11-25T08:01:00Z"
+      }
+    },
+    {
+      "type": "answer",
+      "record": {
+        "ask": "r-long",
+        "status": "answered",
+        "outcome": "done",
+        "choice": "Done",
+        "text": "Went fine.",
+        "answered_at": "2026-11-25T08:02:00Z"
+      }
+    },
+    {
+      "type": "answer",
+      "record": {
+        "ask": "r-form",
+        "status": "answered",
+        "values": {
+          "note": "Line A\rLine B",
+          "ref": "ok\n"
+        },
+        "answered_at": "2026-11-25T08:03:00Z"
+      }
+    },
+    {
+      "type": "message",
+      "record": {
+        "spec": "0.1",
+        "id": "m-3",
+        "text": "Seconds are dropped, not rounded.",
+        "created_at": "2026-11-25T08:04:59.900Z"
+      }
+    }
+  ],
+  "expect": {
+    "structured": {
+      "answers": [
+        {
+          "ask": "r-long",
+          "status": "answered",
+          "outcome": "done",
+          "choice": "Done",
+          "text": "Went fine.",
+          "answered_at": "2026-11-25T08:02:00Z",
+          "question": "Please confirm the shipping plan for the forty books going to the Bogotá office…"
+        },
+        {
+          "ask": "r-form",
+          "status": "answered",
+          "values": {
+            "note": "Line A\rLine B",
+            "ref": "ok\n"
+          },
+          "answered_at": "2026-11-25T08:03:00Z",
+          "question": "What should the note say?"
+        }
+      ],
+      "messages": [
+        {
+          "spec": "0.1",
+          "id": "m-1",
+          "text": "   ",
+          "created_at": "2026-11-25T08:00:00Z",
+          "attachments": [
+            {
+              "id": "att_a",
+              "name": "report.pdf",
+              "size": 10,
+              "path": ".user-channel/files/att_a/report.pdf"
+            },
+            {
+              "id": "att_b",
+              "name": "data.csv",
+              "content_type": "text/csv",
+              "size": 20,
+              "path": ".user-channel/files/att_b/data.csv"
+            }
+          ]
+        },
+        {
+          "spec": "0.1",
+          "id": "m-2",
+          "text": "First line\r\n  \r\nThird line\n\n",
+          "created_at": "2026-11-25T08:01:00Z"
+        },
+        {
+          "spec": "0.1",
+          "id": "m-3",
+          "text": "Seconds are dropped, not rounded.",
+          "created_at": "2026-11-25T08:04:59.900Z"
+        }
+      ],
+      "open": 0
+    },
+    "text": "From the user (3 messages, 2 answers; 0 requests still open):\n\nMessage, 2026-11-25 08:00 UTC:\n   File: .user-channel/files/att_a/report.pdf\n   File: .user-channel/files/att_b/data.csv (text/csv)\n\nMessage, 2026-11-25 08:01 UTC:\n   First line\n\n   Third line\n\nAnswer to \"Please confirm the shipping plan for the forty books going to the Bogotá office…\" (request r-long):\n   Result: Done\n   Went fine.\n\nAnswer to \"What should the note say?\" (request r-form):\n   Note:\n   Line A\n   Line B\n   ref: ok\n\nMessage, 2026-11-25 08:04 UTC:\n   Seconds are dropped, not rounded."
+  }
+}

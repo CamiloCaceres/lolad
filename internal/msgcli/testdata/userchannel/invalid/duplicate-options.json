@@ -1,0 +1,13 @@
+{
+  "name": "duplicate-options",
+  "tool": "ask_user",
+  "input": {
+    "text": "OK?",
+    "options": [
+      "Yes",
+      "Yes"
+    ]
+  },
+  "valid": false,
+  "reason": "options must differ"
+}

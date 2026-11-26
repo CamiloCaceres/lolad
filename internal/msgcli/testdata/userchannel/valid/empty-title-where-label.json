@@ -1,0 +1,44 @@
+{
+  "name": "empty-title-where-label",
+  "tool": "message_user",
+  "input": {
+    "blocks": [
+      {
+        "type": "command",
+        "title": "",
+        "where": "",
+        "code": "ls"
+      },
+      {
+        "type": "link",
+        "label": "",
+        "url": "https://x.io"
+      },
+      {
+        "type": "code",
+        "title": "",
+        "code": "y"
+      }
+    ]
+  },
+  "valid": true,
+  "expect": {
+    "kind": "say",
+    "blocks": [
+      {
+        "type": "command",
+        "code": "ls"
+      },
+      {
+        "type": "link",
+        "url": "https://x.io"
+      },
+      {
+        "type": "code",
+        "code": "y"
+      }
+    ],
+    "text": "Run:\n```\nls\n```\n\nLink: https://x.io\n\n```\ny\n```"
+  },
+  "note": "Empty strings are left out of the record (2.3)."
+}

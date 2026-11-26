@@ -1,0 +1,13 @@
+{
+  "name": "message-with-options",
+  "tool": "message_user",
+  "input": {
+    "text": "Pick",
+    "options": [
+      "A",
+      "B"
+    ]
+  },
+  "valid": false,
+  "reason": "options are for ask_user"
+}

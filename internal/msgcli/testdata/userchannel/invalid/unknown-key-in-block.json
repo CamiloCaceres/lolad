@@ -1,0 +1,15 @@
+{
+  "name": "unknown-key-in-block",
+  "tool": "message_user",
+  "input": {
+    "blocks": [
+      {
+        "type": "code",
+        "code": "x",
+        "lang": "sh"
+      }
+    ]
+  },
+  "valid": false,
+  "reason": "unknown key in a block"
+}

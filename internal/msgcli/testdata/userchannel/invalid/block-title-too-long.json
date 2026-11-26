@@ -1,0 +1,15 @@
+{
+  "name": "block-title-too-long",
+  "tool": "message_user",
+  "input": {
+    "blocks": [
+      {
+        "type": "code",
+        "title": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "code": "y"
+      }
+    ]
+  },
+  "valid": false,
+  "reason": "a block title: at most 200 characters"
+}

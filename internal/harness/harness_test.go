@@ -250,11 +250,11 @@ func TestUserToolsMCP(t *testing.T) {
 	if json.Unmarshal(b, &cfg) != nil {
 		t.Fatal(string(b))
 	}
-	srv := cfg.MCPServers["lolad"]
+	srv := cfg.MCPServers["user"]
 	if srv.Command != "/opt/lolad" || strings.Join(srv.Args, " ") != "msg --as test mcp" || srv.Env["LOLAD_AGENT"] != "test" || srv.Env["LOLAD_STATE"] != state || srv.Env["LOLAD_URL"] == "" {
 		t.Fatal(string(b))
 	}
-	if b, _ = os.ReadFile(filepath.Join(state, "agents/test/claude-settings.json")); !strings.Contains(string(b), "mcp__lolad__ask_user") {
+	if b, _ = os.ReadFile(filepath.Join(state, "agents/test/claude-settings.json")); !strings.Contains(string(b), "mcp__user__ask_user") || !strings.Contains(string(b), "mcp__user__get_user_messages") {
 		t.Fatal("tools not allowed:", string(b))
 	}
 
@@ -272,7 +272,7 @@ func TestUserToolsMCP(t *testing.T) {
 		t.Fatal(string(b))
 	}
 	servers := doc["servers"].(map[string]any)
-	mine, lolad := servers["mine"].(map[string]any), servers["lolad"].(map[string]any)
+	mine, lolad := servers["mine"].(map[string]any), servers["user"].(map[string]any)
 	if mine["command"] != "/bin/mine" || mine["read_timeout"] != float64(30) || lolad["command"] != "/opt/lolad" || lolad["enabled"] != true {
 		t.Fatal(string(b))
 	}

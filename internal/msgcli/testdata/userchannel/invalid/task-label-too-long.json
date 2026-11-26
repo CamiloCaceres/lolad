@@ -1,0 +1,12 @@
+{
+  "name": "task-label-too-long",
+  "tool": "ask_user",
+  "input": {
+    "text": "Do",
+    "task": {
+      "done": "ddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    }
+  },
+  "valid": false,
+  "reason": "task labels: at most 60 characters"
+}

@@ -242,6 +242,9 @@ type UserChat struct {
 	// Options are then its done and couldn't buttons.
 	Blocks []Block `json:"blocks,omitempty"`
 	Task   bool    `json:"task,omitempty"`
+	// Title is the headline the agent gave (the mail subject is derived from
+	// the text when it gave none); get_user_messages names a request by it.
+	Title string `json:"title,omitempty"`
 }
 
 // Outgoing is what a sender supplies; the provider fills id, from, timestamps.

@@ -1,0 +1,14 @@
+{
+  "name": "blank-text-block",
+  "tool": "message_user",
+  "input": {
+    "blocks": [
+      {
+        "type": "text",
+        "text": "  "
+      }
+    ]
+  },
+  "valid": false,
+  "reason": "a text block needs text"
+}

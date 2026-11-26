@@ -1,0 +1,14 @@
+{
+  "name": "field-without-name-or-label",
+  "tool": "ask_user",
+  "input": {
+    "text": "N?",
+    "fields": [
+      {
+        "type": "number"
+      }
+    ]
+  },
+  "valid": false,
+  "reason": "a field needs a name or a label"
+}

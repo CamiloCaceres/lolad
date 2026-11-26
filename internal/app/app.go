@@ -137,7 +137,7 @@ func New(ctx context.Context, configPath string) (_ *App, err error) {
 	bin = cliBinary(a.Config, bin)
 	sessions.Exec = bin
 	a.sessions = sessions
-	a.Supervisor, err = supervisor.New(supervisor.Options{DB: a.DB, Agents: r.List(), Sessions: sessions, Launchers: launchers, Notifier: deliver.NewRouter(sessions, launchers, a.Tracker.State), Mailer: a.Provider, Launch: core.LaunchOpts{StateDir: a.Config.StateDir, LoladBin: bin, LoladURL: URL(a.Config.Listen)}, ReloadAgents: a.reloadRegistry, MailWatch: agentcfg.MailWatcher{StateDir: a.Config.StateDir, Fallback: supervisor.ExecMailWatch{}}})
+	a.Supervisor, err = supervisor.New(supervisor.Options{DB: a.DB, Agents: r.List(), Sessions: sessions, Launchers: launchers, Notifier: deliver.NewRouter(sessions, launchers, a.Tracker.State).WithUserTools(a.userToolsNotice), Mailer: a.Provider, Launch: core.LaunchOpts{StateDir: a.Config.StateDir, LoladBin: bin, LoladURL: URL(a.Config.Listen)}, ReloadAgents: a.reloadRegistry, MailWatch: agentcfg.MailWatcher{StateDir: a.Config.StateDir, Fallback: supervisor.ExecMailWatch{}}})
 	if err != nil {
 		return nil, err
 	}
@@ -276,7 +276,15 @@ func (a *App) Adopt(ctx context.Context, r core.AdoptRequest) (core.AgentStatus,
 	}
 	return a.Get(ctx, v.Name)
 }
-func (a *App) Me() core.User                         { return a.Policy.Org().User }
+func (a *App) Me() core.User { return a.Policy.Org().User }
+
+// userToolsNotice reports whether mail m to agent gets the user-channel push
+// notice (call get_user_messages) instead of a lolad msg read line: it is
+// from the local user, and the agent's Claude session was launched with the
+// user-channel tools.
+func (a *App) userToolsNotice(agent core.Agent, m core.Mail) bool {
+	return m.Remote == "" && m.FromName == a.Me().Name && agent.Runtime.Harness == core.HarnessClaude && harness.UserTools(a.Config.StateDir, agent.Name)
+}
 func (a *App) Org(context.Context) (core.Org, error) { return a.Policy.Org(), nil }
 func (a *App) SaveOrg(ctx context.Context, o core.Org) error {
 	old := a.Policy.Org()

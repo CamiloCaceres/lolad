@@ -1,0 +1,15 @@
+{
+  "name": "admin-string",
+  "tool": "message_user",
+  "input": {
+    "blocks": [
+      {
+        "type": "command",
+        "code": "ls",
+        "admin": "true"
+      }
+    ]
+  },
+  "valid": false,
+  "reason": "admin must be a boolean"
+}

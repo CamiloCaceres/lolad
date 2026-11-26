@@ -1,0 +1,25 @@
+{
+  "name": "url-uppercase-scheme",
+  "tool": "message_user",
+  "input": {
+    "blocks": [
+      {
+        "type": "link",
+        "label": "Go",
+        "url": "HTTPS://Example.com/x"
+      }
+    ]
+  },
+  "valid": true,
+  "expect": {
+    "kind": "say",
+    "blocks": [
+      {
+        "type": "link",
+        "label": "Go",
+        "url": "HTTPS://Example.com/x"
+      }
+    ],
+    "text": "Go: HTTPS://Example.com/x"
+  }
+}

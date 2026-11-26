@@ -75,6 +75,16 @@ func NewRouter(sessions core.Sessions, launchers map[core.Harness]core.Launcher,
 	}
 	return r
 }
+
+// WithUserTools sets how every notifier tells user mail to an agent with
+// the user-channel tools apart (see Notifier.userTools).
+func (r *Router) WithUserTools(f func(a core.Agent, m core.Mail) bool) *Router {
+	for _, n := range r.notifiers {
+		n.userTools = f
+	}
+	return r
+}
+
 func (r *Router) Notify(ctx context.Context, a core.Agent, m core.Mail) (core.NotifyResult, error) {
 	n := r.notifiers[a.Runtime.Harness]
 	if n == nil {

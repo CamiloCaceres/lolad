@@ -398,6 +398,29 @@ func (p *Provider) MarkRead(ctx context.Context, owner, id string) error {
 	_, e = p.db.ExecContext(ctx, `UPDATE amp_messages SET status=?,read_at=CASE WHEN read_at='' THEN ? ELSE read_at END WHERE id=? AND to_name=?`, core.MailRead, time.Now().UTC().Format(time.RFC3339Nano), id, n)
 	return e
 }
+
+// ClaimRead marks a message read for its recipient and reports whether this
+// call is the one that did it: false when it was already read. Two readers
+// racing for the same mail (two MCP servers of one agent) never both claim it.
+func (p *Provider) ClaimRead(ctx context.Context, owner, id string) (bool, error) {
+	n, e := p.local(owner)
+	if e != nil {
+		return false, e
+	}
+	m, e := p.Get(ctx, id)
+	if e != nil {
+		return false, e
+	}
+	if m.ToName != n || m.Status == core.MailHeld {
+		return false, core.ErrDenied
+	}
+	r, e := p.db.ExecContext(ctx, `UPDATE amp_messages SET status=?,read_at=CASE WHEN read_at='' THEN ? ELSE read_at END WHERE id=? AND to_name=? AND status<>?`, core.MailRead, time.Now().UTC().Format(time.RFC3339Nano), id, n, core.MailRead)
+	if e != nil {
+		return false, e
+	}
+	k, e := r.RowsAffected()
+	return k == 1, e
+}
 func (p *Provider) wire(ctx context.Context, id string) (Message, error) {
 	var m Message
 	var raw, status string

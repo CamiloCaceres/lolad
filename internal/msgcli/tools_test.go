@@ -58,7 +58,7 @@ func TestBuildUserMessage(t *testing.T) {
 		{false, toolInput{Text: "x", Kind: "ask"}, "kind must be"},
 		{true, toolInput{Text: "x", Options: []string{"a"}}, "2 to 6"},
 		{true, toolInput{Text: "x", Options: []string{"a", "b"}, Task: &toolTask{}}, "one of options, fields or task"},
-		{true, toolInput{Text: "x", Fields: []toolField{{Label: "Key", Type: "secret"}}}, "env var"},
+		{true, toolInput{Text: "x", Fields: []toolField{{Label: "Key", Type: "secret"}}}, "environment variable"},
 		{true, toolInput{Text: "x", Fields: []toolField{{Label: "Size", Type: "text", Options: []string{"S", "M"}}}}, "only a choice"},
 		{true, toolInput{Blocks: []core.Block{{Type: "link", URL: "javascript:alert(1)"}}}, "http(s) url"},
 		{true, toolInput{Blocks: []core.Block{{Type: "values", Rows: []core.ValueRow{{Label: "Type", Value: ""}}}}}, "label and a value"},
@@ -68,7 +68,7 @@ func TestBuildUserMessage(t *testing.T) {
 			t.Errorf("%+v: got %v, want %q", c.in, err, c.want)
 		}
 	}
-	if _, err := decodeToolInput([]byte(`{"text":"x","blokcs":[]}`)); err == nil || !strings.Contains(err.Error(), "blokcs") {
+	if _, err := decodeToolInput("message_user", []byte(`{"text":"x","blokcs":[]}`)); err == nil || !strings.Contains(err.Error(), "blokcs") {
 		t.Errorf("unknown keys must be refused: %v", err)
 	}
 }
@@ -77,7 +77,9 @@ func TestBuildUserMessage(t *testing.T) {
 func mailbox(t *testing.T) (*amp.Provider, *client, string) {
 	t.Helper()
 	state := t.TempDir()
-	db, err := sql.Open("sqlite", filepath.Join(state, "mail.db"))
+	// busy_timeout as the daemon's store sets it: concurrent readers wait
+	// instead of failing (TestGetUserMessages races two of them).
+	db, err := sql.Open("sqlite", filepath.Join(state, "mail.db")+"?_pragma=busy_timeout(5000)")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,11 +140,11 @@ func TestMCPServer(t *testing.T) {
 		t.Fatalf("responses: %v", res)
 	}
 	init := res[1]["result"].(map[string]any)
-	if init["protocolVersion"] != "2025-06-18" || init["serverInfo"].(map[string]any)["name"] != "lolad" {
+	if init["protocolVersion"] != "2025-06-18" || init["serverInfo"].(map[string]any)["name"] != "user" || !strings.Contains(init["instructions"].(string), "get_user_messages") {
 		t.Fatalf("initialize: %v", init)
 	}
 	tools := res[2]["result"].(map[string]any)["tools"].([]any)
-	if len(tools) != 2 || tools[0].(map[string]any)["name"] != "message_user" || tools[1].(map[string]any)["name"] != "ask_user" {
+	if len(tools) != 3 || tools[0].(map[string]any)["name"] != "message_user" || tools[1].(map[string]any)["name"] != "ask_user" || tools[2].(map[string]any)["name"] != "get_user_messages" {
 		t.Fatalf("tools: %v", tools)
 	}
 	if schema, _ := json.Marshal(tools[1].(map[string]any)["inputSchema"]); !strings.Contains(string(schema), `"task"`) || !strings.Contains(string(schema), `"values"`) {
@@ -152,7 +154,7 @@ func TestMCPServer(t *testing.T) {
 		r := res[id]["result"].(map[string]any)
 		return r["content"].([]any)[0].(map[string]any)["text"].(string), r["isError"].(bool)
 	}
-	if s, bad := text(3); bad || !strings.Contains(s, "waiting for the user") {
+	if s, bad := text(3); bad || !strings.Contains(s, "It waits for the user") || res[3]["result"].(map[string]any)["structuredContent"].(map[string]any)["status"] != "open" {
 		t.Fatalf("ask_user: %s", s)
 	}
 	if s, bad := text(4); !bad || !strings.Contains(s, "ask_user") {

@@ -1,0 +1,41 @@
+{
+  "name": "choice-options-trimmed",
+  "tool": "ask_user",
+  "input": {
+    "text": "Size?",
+    "fields": [
+      {
+        "label": "Size",
+        "type": "choice",
+        "options": [
+          " S",
+          "M "
+        ]
+      }
+    ]
+  },
+  "valid": true,
+  "expect": {
+    "kind": "ask",
+    "blocks": [
+      {
+        "type": "text",
+        "text": "Size?"
+      }
+    ],
+    "ask": {
+      "fields": [
+        {
+          "name": "size",
+          "label": "Size",
+          "type": "choice",
+          "options": [
+            "S",
+            "M"
+          ]
+        }
+      ]
+    },
+    "text": "Size?"
+  }
+}

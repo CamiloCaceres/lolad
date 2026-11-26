@@ -397,14 +397,40 @@ An agent's `ask` is a request the user answers when ready. `UserChat` carries
   `option` with an optional `text`) and `…/requests/send`; both answer with
   the thread refresh.
 
-### User tools and blocks (`internal/msgcli/mcp.go`, `tools.go`, `core/blocks.go`)
-Agents reach the user through two MCP tools served by `lolad msg mcp` (stdio,
-newline JSON-RPC): `message_user` (say | update | deliver) and `ask_user`
-(options, fields, task, or words). The harness lists the server at launch:
-Claude gets `--mcp-config=<state>/agents/<name>/mcp.json` and an allow rule for
-both tools; Codewhale gets a `lolad` entry merged into `$CODEWHALE_HOME/mcp.json`.
-`lolad msg tell-user <kind> --json` takes the same arguments. Unknown keys and
-invalid blocks are errors returned to the model so it corrects the call.
+### User tools and blocks (`internal/msgcli/mcp.go`, `tools.go`, `inbox.go`, `core/blocks.go`)
+lolad implements the user-channel spec (github.com/CamiloCaceres, repo
+user-channel, draft 0.1) at its Requests level with the secret, file, attach
+and push capabilities; `internal/msgcli/testdata/userchannel` holds the spec's
+fixtures and `go test ./internal/msgcli` runs them. Agents reach the user
+through three MCP tools served by `lolad msg mcp` (stdio, newline JSON-RPC,
+server name `user`, the spec's tools.json embedded as `usertools.json` and its
+AGENTS.md as the server instructions): `message_user` (say | update |
+deliver), `ask_user` (options, fields, task, or words) and `get_user_messages`.
+The harness lists the server at launch: Claude gets
+`--mcp-config=<state>/agents/<name>/mcp.json` (key `user`) and an allow rule for
+the three tools; Codewhale gets a `user` entry merged into
+`$CODEWHALE_HOME/mcp.json` (replacing the old `lolad` entry). The MCP env carries
+`LOLAD_HARNESS` and `LOLAD_ENV_FILE`. `lolad msg tell-user <kind> --json` takes
+the same arguments; `lolad msg get-user-messages [--json]` is the CLI twin of
+the third tool. Unknown keys, nulls and broken rules are errors returned to the
+model so it corrects the call.
+- `get_user_messages` returns unread mail from the local user to the agent as
+  the spec's records: an answers or decision mail becomes answer records
+  (`choice`, `outcome` for tasks, `values`, `secrets`, `files` with the
+  task's "details" files as `note`, `question`), anything else a user message.
+  Each mail is claimed with `POST /v1/messages/{id}/claim` (marks it read only
+  if unread; 409 otherwise), so two readers never both return it. Files are
+  saved to `.user-channel/files/<id>/<safe name>` in the agent dir (with a
+  `.gitignore` of `*`). Secrets: Claude agents get "saved (in your
+  environment)"; Codewhale agents get the spec's secrets file
+  (`.user-channel/secrets.env`, copied from the env file). `open` counts asks
+  with no answers/decision mail (asks before 2026-11-21 04:00 UTC: no later
+  user mail).
+- Push: mail from the local user to a Claude agent whose session was launched
+  with the `user` server (its mcp.json says so) is announced as
+  `[#ref] The user sent you something. Call get_user_messages to read it.`
+  (`deliver.UserNotice`); other mail, and sessions launched by an older lolad,
+  keep the `[MESSAGE] … Read: lolad msg read <id>` line.
 - A message is laid out as `UserChat.Blocks`: `text` (Markdown), `command`
   (code, where, admin), `code` (a snippet to paste), `values` (label/value rows),
   `link` (http/https only), `steps` (a checklist). A message that is only text

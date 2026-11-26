@@ -1,0 +1,18 @@
+{
+  "name": "say-plain",
+  "tool": "message_user",
+  "input": {
+    "text": "Done for today. Tomorrow I start on the invoices."
+  },
+  "valid": true,
+  "expect": {
+    "kind": "say",
+    "blocks": [
+      {
+        "type": "text",
+        "text": "Done for today. Tomorrow I start on the invoices."
+      }
+    ],
+    "text": "Done for today. Tomorrow I start on the invoices."
+  }
+}

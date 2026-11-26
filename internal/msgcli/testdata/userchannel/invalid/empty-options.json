@@ -1,0 +1,10 @@
+{
+  "name": "empty-options",
+  "tool": "ask_user",
+  "input": {
+    "text": "X?",
+    "options": []
+  },
+  "valid": false,
+  "reason": "options: give 2 to 6"
+}

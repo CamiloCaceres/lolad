@@ -1,0 +1,16 @@
+{
+  "name": "attach-without-capability",
+  "tool": "message_user",
+  "capabilities": [
+    "secret",
+    "file"
+  ],
+  "input": {
+    "text": "Here",
+    "attach": [
+      "out.pdf"
+    ]
+  },
+  "valid": false,
+  "reason": "this host takes no attachments"
+}

@@ -1,0 +1,15 @@
+{
+  "name": "field-name-with-space",
+  "tool": "ask_user",
+  "input": {
+    "text": "X?",
+    "fields": [
+      {
+        "name": "my field",
+        "label": "X"
+      }
+    ]
+  },
+  "valid": false,
+  "reason": "a name has no spaces"
+}

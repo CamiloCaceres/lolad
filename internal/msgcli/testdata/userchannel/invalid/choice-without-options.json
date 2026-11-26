@@ -1,0 +1,15 @@
+{
+  "name": "choice-without-options",
+  "tool": "ask_user",
+  "input": {
+    "text": "Size?",
+    "fields": [
+      {
+        "label": "Size",
+        "type": "choice"
+      }
+    ]
+  },
+  "valid": false,
+  "reason": "a choice needs at least two options"
+}

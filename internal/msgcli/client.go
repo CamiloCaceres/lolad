@@ -34,7 +34,8 @@ const help = `lolad msg [--as name] <command>
   tell-user ask "<question>" [--option "Yes" --option "No"]   (an option "Label — consequence" shows the consequence quietly under the label)
   tell-user ask "<question>" --field "Label[?][:text|longtext|number|date|logs|file|choice:A|B]"... [--secret ENV_NAME[:Label]]...
   tell-user say|update|deliver|ask --json '{"text":…,"blocks":[…]}' | --json -   (same arguments as the MCP tools)
-  mcp                          (MCP server on stdio: message_user, ask_user; lolad starts it for you)
+  get-user-messages [--json]   (what the user sent you: messages and answers; marks them read)
+  mcp                          (MCP server on stdio: message_user, ask_user, get_user_messages; lolad starts it for you)
 `
 
 type client struct {
@@ -583,6 +584,23 @@ func (c *client) run(args []string) error {
 		}
 		c.out = io.Discard // stdout is the protocol
 		return c.serveMCP(os.Stdin, os.Stdout)
+	case "get-user-messages":
+		pos, opts, e := parseOptions(args[1:], map[string]bool{"json": false})
+		if e != nil {
+			return e
+		}
+		if len(pos) > 0 {
+			return fmt.Errorf("usage: get-user-messages [--json]")
+		}
+		res, e := c.getUserMessages()
+		if e != nil {
+			return e
+		}
+		if option(opts, "json", "") != "" {
+			return json.NewEncoder(c.out).Encode(res.Structured)
+		}
+		fmt.Fprintln(c.out, res.Text)
+		return nil
 	case "tell-user":
 		pos, opts, e := parseOptions(args[1:], map[string]bool{"option": true, "field": true, "secret": true, "subject": true, "attach": true, "json": true})
 		if e != nil {
@@ -652,21 +670,32 @@ func (c *client) tellUserJSON(pos []string, opts map[string][]string, js string)
 		}
 		raw = b
 	}
-	in, e := decodeToolInput(raw)
+	ask := pos[0] == "ask"
+	tool := "message_user"
+	if ask {
+		tool = "ask_user"
+	}
+	in, e := decodeToolInput(tool, raw)
 	if e != nil {
 		return e
 	}
-	ask := pos[0] == "ask"
 	if !ask {
 		if in.Kind != "" && in.Kind != pos[0] {
 			return fmt.Errorf("the JSON says kind %q but the command says %s", in.Kind, pos[0])
 		}
 		in.Kind = pos[0]
 	}
-	in.Attach = append(in.Attach, opts["attach"]...)
+	if len(opts["attach"]) > 0 {
+		in.Attach, in.present["attach"] = append(in.Attach, opts["attach"]...), true
+	}
 	m, e := buildUserMessage(ask, in)
 	if e != nil {
 		return e
+	}
+	if len(m.Attach) > 0 {
+		if m.Attach, e = checkAttach(agentHome(), m.Attach); e != nil {
+			return e
+		}
 	}
 	id, e := c.sendToUser(m)
 	if e != nil {

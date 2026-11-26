@@ -1,0 +1,10 @@
+{
+  "name": "title-with-newline",
+  "tool": "message_user",
+  "input": {
+    "title": "Two\nlines",
+    "text": "x"
+  },
+  "valid": false,
+  "reason": "a title is one line"
+}

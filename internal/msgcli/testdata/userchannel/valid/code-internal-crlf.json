@@ -1,0 +1,24 @@
+{
+  "name": "code-internal-crlf",
+  "tool": "message_user",
+  "input": {
+    "blocks": [
+      {
+        "type": "code",
+        "code": "a\r\nb\r\n"
+      }
+    ]
+  },
+  "valid": true,
+  "note": "Only trailing CR/LF are removed; inner line breaks are kept.",
+  "expect": {
+    "kind": "say",
+    "blocks": [
+      {
+        "type": "code",
+        "code": "a\r\nb\r\n"
+      }
+    ],
+    "text": "```\na\r\nb\n```"
+  }
+}

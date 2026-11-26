@@ -1,0 +1,10 @@
+{
+  "name": "bad-kind",
+  "tool": "message_user",
+  "input": {
+    "kind": "ask",
+    "text": "Proceed?"
+  },
+  "valid": false,
+  "reason": "kind is say, update or deliver"
+}

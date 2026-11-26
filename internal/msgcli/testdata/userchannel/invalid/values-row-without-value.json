@@ -1,0 +1,19 @@
+{
+  "name": "values-row-without-value",
+  "tool": "message_user",
+  "input": {
+    "blocks": [
+      {
+        "type": "values",
+        "rows": [
+          {
+            "label": "Type",
+            "value": ""
+          }
+        ]
+      }
+    ]
+  },
+  "valid": false,
+  "reason": "every row needs a label and a value"
+}

@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
+	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 // Requests. An agent's ask (UserChat kind "ask") is a request the user answers
@@ -31,8 +34,13 @@ const (
 // FieldTypes lists the valid AskField types.
 var FieldTypes = []string{FieldText, FieldLongText, FieldNumber, FieldDate, FieldChoice, FieldSecret, FieldLogs, FieldFile}
 
-// MaxAskFields caps how many inputs one request may ask for.
-const MaxAskFields = 12
+// Limits on a request's form (user-channel spec 3.3).
+const (
+	MaxAskFields   = 12  // inputs in one request
+	MaxFieldLabel  = 200 // characters in a field label or a choice option
+	MaxChoiceItems = 20  // options in a choice field
+	MaxFieldName   = 64  // characters in a field name other than a secret's
+)
 
 // AskField is one input of a request.
 type AskField struct {
@@ -61,8 +69,9 @@ var envKeyRE = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,127}$`)
 // ValidEnvKey reports whether k can name an env var in an agent's env file.
 func ValidEnvKey(k string) bool { return envKeyRE.MatchString(k) }
 
-// ValidateAskFields checks a request's fields: known types, unique names,
-// choices with options, secrets named like env vars.
+// ValidateAskFields checks a request's fields as they are stored: known
+// types, unique names, choices with 2-20 distinct one-line options, secrets
+// named like env vars, labels one line of at most 200 characters.
 func ValidateAskFields(fields []AskField) error {
 	if len(fields) > MaxAskFields {
 		return fmt.Errorf("%w: at most %d fields", ErrInvalid, MaxAskFields)
@@ -76,10 +85,23 @@ func ValidateAskFields(fields []AskField) error {
 			return fmt.Errorf("%w: two fields are named %q", ErrInvalid, f.Name)
 		case !slices.Contains(FieldTypes, f.Type):
 			return fmt.Errorf("%w: field %q: unknown type %q (use %v)", ErrInvalid, f.Name, f.Type, FieldTypes)
-		case f.Type == FieldChoice && len(f.Options) < 2:
-			return fmt.Errorf("%w: field %q: a choice needs at least two options", ErrInvalid, f.Name)
 		case f.Type == FieldSecret && !ValidEnvKey(f.Name):
 			return fmt.Errorf("%w: secret %q is not a valid env var name (letters, digits, _)", ErrInvalid, f.Name)
+		case f.Type != FieldSecret && (utf8.RuneCountInString(f.Name) > MaxFieldName || strings.ContainsFunc(f.Name, unicode.IsSpace)):
+			return fmt.Errorf("%w: field %q: a name is at most %d characters, without spaces", ErrInvalid, f.Name, MaxFieldName)
+		case !OneLine(f.Label) || utf8.RuneCountInString(f.Label) > MaxFieldLabel:
+			return fmt.Errorf("%w: field %q: a label is one line of at most %d characters", ErrInvalid, f.Name, MaxFieldLabel)
+		case f.Type == FieldChoice && (len(f.Options) < 2 || len(f.Options) > MaxChoiceItems):
+			return fmt.Errorf("%w: field %q: a choice needs 2 to %d options", ErrInvalid, f.Name, MaxChoiceItems)
+		case f.Type != FieldChoice && len(f.Options) > 0:
+			return fmt.Errorf("%w: field %q: only a choice takes options", ErrInvalid, f.Name)
+		}
+		opts := map[string]bool{}
+		for _, o := range f.Options {
+			if Blank(o) || !OneLine(o) || utf8.RuneCountInString(o) > MaxFieldLabel || opts[o] {
+				return fmt.Errorf("%w: field %q: each option is one line of at most %d characters, not blank, all different", ErrInvalid, f.Name, MaxFieldLabel)
+			}
+			opts[o] = true
 		}
 		seen[f.Name] = true
 	}

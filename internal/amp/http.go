@@ -162,11 +162,9 @@ func (p *Provider) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		p.history(w, r, caller)
 	case strings.HasPrefix(path, "/v1/messages/"):
 		id := strings.TrimPrefix(path, "/v1/messages/")
-		read := strings.HasSuffix(id, "/read")
-		if read {
-			id = strings.TrimSuffix(id, "/read")
-		}
-		if (!read && r.Method != "GET") || (read && r.Method != "POST") {
+		read, claim := strings.HasSuffix(id, "/read"), strings.HasSuffix(id, "/claim")
+		id = strings.TrimSuffix(strings.TrimSuffix(id, "/read"), "/claim")
+		if (!read && !claim && r.Method != "GET") || ((read || claim) && r.Method != "POST") {
 			failure(w, 405, "method_not_allowed", "method not allowed")
 			return
 		}
@@ -182,6 +180,17 @@ func (p *Provider) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if read {
 			if e = p.MarkRead(ctx, caller.Name, id); e != nil {
 				httpError(w, e)
+				return
+			}
+		}
+		if claim { // mark read only if unread: 409 when another reader got it first
+			ok, e := p.ClaimRead(ctx, caller.Name, id)
+			if e != nil {
+				httpError(w, e)
+				return
+			}
+			if !ok {
+				failure(w, 409, "already_read", "message was already read")
 				return
 			}
 		}

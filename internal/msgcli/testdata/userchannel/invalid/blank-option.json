@@ -1,0 +1,13 @@
+{
+  "name": "blank-option",
+  "tool": "ask_user",
+  "input": {
+    "text": "OK?",
+    "options": [
+      "A",
+      "  "
+    ]
+  },
+  "valid": false,
+  "reason": "options must not be blank"
+}

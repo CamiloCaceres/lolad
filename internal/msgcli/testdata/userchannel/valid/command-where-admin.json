@@ -1,0 +1,37 @@
+{
+  "name": "command-where-admin",
+  "tool": "message_user",
+  "input": {
+    "blocks": [
+      {
+        "type": "command",
+        "title": "Install Caddy",
+        "code": "sudo apt install -y caddy\n",
+        "where": "on the server, over SSH",
+        "admin": true
+      },
+      {
+        "type": "command",
+        "code": "caddy version"
+      }
+    ]
+  },
+  "valid": true,
+  "expect": {
+    "kind": "say",
+    "blocks": [
+      {
+        "type": "command",
+        "title": "Install Caddy",
+        "code": "sudo apt install -y caddy\n",
+        "where": "on the server, over SSH",
+        "admin": true
+      },
+      {
+        "type": "command",
+        "code": "caddy version"
+      }
+    ],
+    "text": "Install Caddy:\nRun on the server, over SSH (asks for an administrator password):\n```\nsudo apt install -y caddy\n```\n\nRun:\n```\ncaddy version\n```"
+  }
+}

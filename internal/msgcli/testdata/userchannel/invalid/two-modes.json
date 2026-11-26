@@ -1,0 +1,14 @@
+{
+  "name": "two-modes",
+  "tool": "ask_user",
+  "input": {
+    "text": "Pick",
+    "options": [
+      "A",
+      "B"
+    ],
+    "task": {}
+  },
+  "valid": false,
+  "reason": "one of options, fields or task"
+}

@@ -1,0 +1,12 @@
+{
+  "name": "one-option",
+  "tool": "ask_user",
+  "input": {
+    "text": "OK?",
+    "options": [
+      "Yes"
+    ]
+  },
+  "valid": false,
+  "reason": "2 to 6 options"
+}

@@ -1,0 +1,25 @@
+{
+  "name": "admin-false-kept",
+  "tool": "message_user",
+  "input": {
+    "blocks": [
+      {
+        "type": "command",
+        "code": "ls",
+        "admin": false
+      }
+    ]
+  },
+  "valid": true,
+  "note": "admin: false is left out of the record (2.3).",
+  "expect": {
+    "kind": "say",
+    "blocks": [
+      {
+        "type": "command",
+        "code": "ls"
+      }
+    ],
+    "text": "Run:\n```\nls\n```"
+  }
+}

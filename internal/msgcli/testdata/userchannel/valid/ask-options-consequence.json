@@ -1,0 +1,28 @@
+{
+  "name": "ask-options-consequence",
+  "tool": "ask_user",
+  "input": {
+    "text": "Which flight should I book?",
+    "options": [
+      "Book the 9:40 — €212 · lands 12:10",
+      "Book the 14:05 — €168 · lands 16:30"
+    ]
+  },
+  "valid": true,
+  "expect": {
+    "kind": "ask",
+    "blocks": [
+      {
+        "type": "text",
+        "text": "Which flight should I book?"
+      }
+    ],
+    "ask": {
+      "options": [
+        "Book the 9:40 — €212 · lands 12:10",
+        "Book the 14:05 — €168 · lands 16:30"
+      ]
+    },
+    "text": "Which flight should I book?"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "update-trimmed",
+  "tool": "message_user",
+  "input": {
+    "kind": "update",
+    "text": "  Tests pass; writing the docs.\n"
+  },
+  "valid": true,
+  "note": "The plain text form trims text blocks; the block keeps what the agent sent.",
+  "expect": {
+    "kind": "update",
+    "blocks": [
+      {
+        "type": "text",
+        "text": "  Tests pass; writing the docs.\n"
+      }
+    ],
+    "text": "Tests pass; writing the docs."
+  }
+}

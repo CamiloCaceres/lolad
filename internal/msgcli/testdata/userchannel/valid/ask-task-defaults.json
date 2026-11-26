@@ -1,0 +1,37 @@
+{
+  "name": "ask-task-defaults",
+  "tool": "ask_user",
+  "input": {
+    "text": "Run this, then tell me.",
+    "blocks": [
+      {
+        "type": "command",
+        "code": "brew install caddy",
+        "where": "in Terminal on your Mac"
+      }
+    ],
+    "task": {}
+  },
+  "valid": true,
+  "expect": {
+    "kind": "ask",
+    "blocks": [
+      {
+        "type": "text",
+        "text": "Run this, then tell me."
+      },
+      {
+        "type": "command",
+        "code": "brew install caddy",
+        "where": "in Terminal on your Mac"
+      }
+    ],
+    "ask": {
+      "task": {
+        "done": "Done",
+        "failed": "I couldn't do it"
+      }
+    },
+    "text": "Run this, then tell me.\n\nRun in Terminal on your Mac:\n```\nbrew install caddy\n```"
+  }
+}

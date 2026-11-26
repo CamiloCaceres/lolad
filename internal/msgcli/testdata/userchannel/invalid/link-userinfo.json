@@ -1,0 +1,14 @@
+{
+  "name": "link-userinfo",
+  "tool": "message_user",
+  "input": {
+    "blocks": [
+      {
+        "type": "link",
+        "url": "https://user@evil.example"
+      }
+    ]
+  },
+  "valid": false,
+  "reason": "a link may not carry a username or password"
+}

@@ -1,0 +1,20 @@
+{
+  "name": "title-trimmed-and-blank",
+  "tool": "message_user",
+  "input": {
+    "title": "  Hi there  ",
+    "text": "x"
+  },
+  "valid": true,
+  "expect": {
+    "kind": "say",
+    "title": "Hi there",
+    "blocks": [
+      {
+        "type": "text",
+        "text": "x"
+      }
+    ],
+    "text": "x"
+  }
+}

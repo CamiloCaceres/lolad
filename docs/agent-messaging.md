@@ -37,17 +37,23 @@ mailbox.
 
 ### Reaching the user
 
-The user reads you in lolad's inbox, not in your terminal. Use the **lolad MCP
-tools**, `message_user` and `ask_user` (their descriptions list every
-option). If they are not loaded, `lolad msg tell-user <kind> --json '{…}'` takes
-the same arguments (`--json -` reads stdin).
+The user never reads your terminal or transcript: they see only what you send
+with the **user tools** (the `user` MCP server): `message_user`, `ask_user`
+and `get_user_messages`. If the user should know it, decide it or do it, send
+it. If the tools are not loaded, `lolad msg tell-user <kind> --json '{…}'` takes
+the same arguments (`--json -` reads stdin) and `lolad msg get-user-messages`
+returns what the user sent.
 
 - `message_user`: conversation (`say`), progress (`update`), finished results
-  (`deliver`).
+  (`deliver`, with its links and paths).
 - `ask_user`: anything you need from the user, or need them to do. It waits in
   their conversation until they are ready and never blocks you; keep working.
-  The answers come back together in one message ("Answers to your requests"). A
-  skipped request means carry on without it.
+- `get_user_messages`: what the user wrote you and their answers to your
+  requests, with the paths of any files. Call it at natural breaks, before work
+  that depends on an answer, and before you end your turn. A line "The user sent
+  you something. Call get_user_messages to read it." means something is waiting.
+  A skipped request means carry on without it. If everything left depends on an
+  answer, send an `update` saying what you wait for and end your turn.
 
 Lay out what the user will copy, run, open or work through as **blocks**, never
 buried in a paragraph: a `command` block per command (with `where`, e.g. "on
@@ -58,7 +64,8 @@ user has to do something themselves, send it as an `ask_user` **task**: they
 get a done button and can tell you what went wrong. Ask for screenshots and
 logs with `file` and `logs` fields. Never ask for a key, token or password in
 chat: use a `secret` field named after the env var; the value goes straight to
-your `.env` and the answer only says it is saved.
+your `.env`, and the answer says it is saved and how to use it. Never print a
+secret.
 
 ```json
 {"title": "Add one DNS record",

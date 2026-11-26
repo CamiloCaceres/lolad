@@ -1,0 +1,13 @@
+{
+  "name": "task-same-labels",
+  "tool": "ask_user",
+  "input": {
+    "text": "Do it",
+    "task": {
+      "done": "OK",
+      "failed": "OK"
+    }
+  },
+  "valid": false,
+  "reason": "done and failed need different labels"
+}

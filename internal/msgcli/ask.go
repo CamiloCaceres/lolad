@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-	"unicode"
 
 	"github.com/CamiloCaceres/lolad/internal/core"
 )
@@ -83,25 +82,4 @@ func parseField(spec string) (core.AskField, error) {
 		return f, fmt.Errorf("--field %q: list the options, e.g. \"Size:choice:S|M|L\"", spec)
 	}
 	return f, nil
-}
-
-// fieldName makes a stable key from a label: "Street address" → street_address.
-func fieldName(label string) string {
-	var b strings.Builder
-	under := false
-	for _, r := range strings.ToLower(label) {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			if under && b.Len() > 0 {
-				b.WriteByte('_')
-			}
-			b.WriteRune(r)
-			under = false
-			continue
-		}
-		under = true
-	}
-	if b.Len() == 0 {
-		return "field"
-	}
-	return b.String()
 }

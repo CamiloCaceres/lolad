@@ -1,0 +1,62 @@
+{
+  "name": "values-and-steps",
+  "tool": "message_user",
+  "input": {
+    "text": "Two settings, then restart.",
+    "blocks": [
+      {
+        "type": "values",
+        "title": "DNS record",
+        "rows": [
+          {
+            "label": "Type",
+            "value": "A"
+          },
+          {
+            "label": "Points to",
+            "value": "203.0.113.7"
+          }
+        ]
+      },
+      {
+        "type": "steps",
+        "items": [
+          " Open **Settings** ",
+          "Click *Restart*"
+        ]
+      }
+    ]
+  },
+  "valid": true,
+  "expect": {
+    "kind": "say",
+    "blocks": [
+      {
+        "type": "text",
+        "text": "Two settings, then restart."
+      },
+      {
+        "type": "values",
+        "title": "DNS record",
+        "rows": [
+          {
+            "label": "Type",
+            "value": "A"
+          },
+          {
+            "label": "Points to",
+            "value": "203.0.113.7"
+          }
+        ]
+      },
+      {
+        "type": "steps",
+        "items": [
+          " Open **Settings** ",
+          "Click *Restart*"
+        ]
+      }
+    ],
+    "text": "Two settings, then restart.\n\nDNS record:\nType: A\nPoints to: 203.0.113.7\n\n1. Open **Settings**\n2. Click *Restart*"
+  }
+}

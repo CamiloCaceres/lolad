@@ -1,0 +1,10 @@
+{
+  "name": "empty-fields",
+  "tool": "ask_user",
+  "input": {
+    "text": "X?",
+    "fields": []
+  },
+  "valid": false,
+  "reason": "fields: give 1 to 12"
+}

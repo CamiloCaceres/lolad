@@ -174,10 +174,10 @@
       <form method="post" action="/grants/decide"><input type="hidden" name="peer" value="{{.Peer}}"><input type="hidden" name="remote" value="{{.Remote}}"><input type="hidden" name="local" value="{{.Local}}"><button class="btn btn-you" name="decision" value="allow">Allow</button> <button class="btn" name="decision" value="block">Block</button></form>
     </article>
     {{end}}
-    {{range .Blocked}}
+    {{range .Blocked}}{{$b := .}}
     <article class="hm-strip">
       {{template "avatar" (dict "Display" .Display "State" .State "Size" "md")}}
-      <div class="hm-strip-text">{{with .Problem}}<strong>{{$.Display}}: {{.Title}}</strong><p class="muted">{{.Hint}}</p>{{else}}<strong>{{.Display}} is waiting for your OK</strong><p class="muted">{{if .Detail}}{{.Detail}}{{else}}It stopped to ask before doing something.{{end}}</p>{{end}}</div>
+      <div class="hm-strip-text">{{with .Problem}}<strong>{{$b.Display}}: {{.Title}}</strong><p class="muted">{{.Hint}}</p>{{else}}<strong>{{.Display}} is waiting for your OK</strong><p class="muted">{{if .Detail}}{{.Detail}}{{else}}It stopped to ask before doing something.{{end}}</p>{{end}}</div>
       <a class="btn" href="/agents/{{.Name}}">Open {{.Display}}</a>
     </article>
     {{end}}

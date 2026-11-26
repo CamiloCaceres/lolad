@@ -1,0 +1,31 @@
+{
+  "name": "url-edges-valid",
+  "tool": "message_user",
+  "input": {
+    "blocks": [
+      {
+        "type": "link",
+        "url": "https://x.com:8080/p?q=1#f"
+      },
+      {
+        "type": "link",
+        "url": "http://[::1]:3000/"
+      }
+    ]
+  },
+  "valid": true,
+  "expect": {
+    "kind": "say",
+    "blocks": [
+      {
+        "type": "link",
+        "url": "https://x.com:8080/p?q=1#f"
+      },
+      {
+        "type": "link",
+        "url": "http://[::1]:3000/"
+      }
+    ],
+    "text": "Link: https://x.com:8080/p?q=1#f\n\nLink: http://[::1]:3000/"
+  }
+}

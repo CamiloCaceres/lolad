@@ -1,0 +1,305 @@
+{
+  "name": "mixed",
+  "secrets": "environment",
+  "requests": [
+    {
+      "id": "r-dns",
+      "title": "Add one DNS record",
+      "text": "In the DNS zone of example.com.",
+      "ask": {
+        "task": {
+          "done": "Added",
+          "failed": "I couldn't do it"
+        }
+      }
+    },
+    {
+      "id": "r-ship",
+      "text": "Where do I ship the books? I need the full address so the courier can find it without calling.",
+      "ask": {
+        "fields": [
+          {
+            "name": "street_address",
+            "label": "Street address",
+            "type": "text"
+          },
+          {
+            "name": "copies",
+            "label": "Copies",
+            "type": "number"
+          },
+          {
+            "name": "notes",
+            "label": "Notes",
+            "type": "longtext",
+            "optional": true
+          },
+          {
+            "name": "error",
+            "label": "Error output",
+            "type": "logs"
+          },
+          {
+            "name": "shot",
+            "label": "Screenshot",
+            "type": "file"
+          },
+          {
+            "name": "SHIPPO_API_KEY",
+            "label": "Shippo API key",
+            "type": "secret"
+          },
+          {
+            "name": "gift",
+            "type": "choice",
+            "options": [
+              "Yes",
+              "No"
+            ],
+            "optional": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "r-flight",
+      "title": "Which flight?",
+      "text": "Which flight should I book?",
+      "ask": {
+        "options": [
+          "Book the 9:40 — €212",
+          "Book the 14:05 — €168"
+        ]
+      }
+    },
+    {
+      "id": "r-name",
+      "title": "Newsletter name",
+      "text": "What should it be called?",
+      "ask": {}
+    },
+    {
+      "id": "r-color",
+      "title": "Logo colour",
+      "text": "Blue or green?",
+      "ask": {
+        "options": [
+          "Blue",
+          "Green"
+        ]
+      }
+    }
+  ],
+  "open": 2,
+  "items": [
+    {
+      "type": "message",
+      "record": {
+        "spec": "0.1",
+        "id": "m-2",
+        "text": "Also: the logo goes top left.\n\nThanks!",
+        "created_at": "2026-11-25T13:10:00-05:00",
+        "attachments": [
+          {
+            "id": "att_logo",
+            "name": "logo.svg",
+            "content_type": "image/svg+xml",
+            "size": 1834,
+            "path": ".user-channel/files/att_logo/logo.svg"
+          },
+          {
+            "id": "att_brief",
+            "name": "brief",
+            "size": 96,
+            "path": ".user-channel/files/att_brief/brief"
+          }
+        ]
+      }
+    },
+    {
+      "type": "answer",
+      "record": {
+        "ask": "r-dns",
+        "status": "answered",
+        "outcome": "failed",
+        "choice": "I couldn't do it",
+        "text": "There is no A option, only CNAME.",
+        "files": {
+          "note": [
+            "att_dns"
+          ]
+        },
+        "attachments": [
+          {
+            "id": "att_dns",
+            "name": "dns.png",
+            "content_type": "image/png",
+            "size": 40211,
+            "path": ".user-channel/files/att_dns/dns.png"
+          }
+        ],
+        "answered_at": "2026-11-25T18:02:11Z"
+      }
+    },
+    {
+      "type": "answer",
+      "record": {
+        "ask": "r-ship",
+        "status": "answered",
+        "values": {
+          "street_address": "Calle 93 #11-27",
+          "copies": "40",
+          "notes": "Ring twice.\nLeave with the doorman.",
+          "error": "Error: EADDRINUSE\n  at listen (net.js:1)\n"
+        },
+        "secrets": [
+          "SHIPPO_API_KEY"
+        ],
+        "files": {
+          "shot": [
+            "att_s1",
+            "att_s2"
+          ]
+        },
+        "attachments": [
+          {
+            "id": "att_s1",
+            "name": "shot.png",
+            "content_type": "image/png",
+            "size": 1000,
+            "path": ".user-channel/files/att_s1/shot.png"
+          },
+          {
+            "id": "att_s2",
+            "name": "shot-2.png",
+            "content_type": "image/png",
+            "size": 1200,
+            "path": ".user-channel/files/att_s2/shot-2.png"
+          }
+        ],
+        "answered_at": "2026-11-25T18:05:00Z"
+      }
+    },
+    {
+      "type": "answer",
+      "record": {
+        "ask": "r-flight",
+        "status": "answered",
+        "text": "Neither, find one after 16:00.",
+        "answered_at": "2026-11-25T18:10:00Z"
+      }
+    },
+    {
+      "type": "answer",
+      "record": {
+        "ask": "r-color",
+        "status": "skipped",
+        "answered_at": "2026-11-25T18:01:00Z"
+      }
+    }
+  ],
+  "expect": {
+    "structured": {
+      "answers": [
+        {
+          "ask": "r-color",
+          "status": "skipped",
+          "answered_at": "2026-11-25T18:01:00Z",
+          "question": "Logo colour"
+        },
+        {
+          "ask": "r-dns",
+          "status": "answered",
+          "outcome": "failed",
+          "choice": "I couldn't do it",
+          "text": "There is no A option, only CNAME.",
+          "files": {
+            "note": [
+              "att_dns"
+            ]
+          },
+          "attachments": [
+            {
+              "id": "att_dns",
+              "name": "dns.png",
+              "content_type": "image/png",
+              "size": 40211,
+              "path": ".user-channel/files/att_dns/dns.png"
+            }
+          ],
+          "answered_at": "2026-11-25T18:02:11Z",
+          "question": "Add one DNS record"
+        },
+        {
+          "ask": "r-ship",
+          "status": "answered",
+          "values": {
+            "street_address": "Calle 93 #11-27",
+            "copies": "40",
+            "notes": "Ring twice.\nLeave with the doorman.",
+            "error": "Error: EADDRINUSE\n  at listen (net.js:1)\n"
+          },
+          "secrets": [
+            "SHIPPO_API_KEY"
+          ],
+          "files": {
+            "shot": [
+              "att_s1",
+              "att_s2"
+            ]
+          },
+          "attachments": [
+            {
+              "id": "att_s1",
+              "name": "shot.png",
+              "content_type": "image/png",
+              "size": 1000,
+              "path": ".user-channel/files/att_s1/shot.png"
+            },
+            {
+              "id": "att_s2",
+              "name": "shot-2.png",
+              "content_type": "image/png",
+              "size": 1200,
+              "path": ".user-channel/files/att_s2/shot-2.png"
+            }
+          ],
+          "answered_at": "2026-11-25T18:05:00Z",
+          "question": "Where do I ship the books? I need the full address so the courier can find it w…"
+        },
+        {
+          "ask": "r-flight",
+          "status": "answered",
+          "text": "Neither, find one after 16:00.",
+          "answered_at": "2026-11-25T18:10:00Z",
+          "question": "Which flight?"
+        }
+      ],
+      "messages": [
+        {
+          "spec": "0.1",
+          "id": "m-2",
+          "text": "Also: the logo goes top left.\n\nThanks!",
+          "created_at": "2026-11-25T13:10:00-05:00",
+          "attachments": [
+            {
+              "id": "att_logo",
+              "name": "logo.svg",
+              "content_type": "image/svg+xml",
+              "size": 1834,
+              "path": ".user-channel/files/att_logo/logo.svg"
+            },
+            {
+              "id": "att_brief",
+              "name": "brief",
+              "size": 96,
+              "path": ".user-channel/files/att_brief/brief"
+            }
+          ]
+        }
+      ],
+      "open": 2
+    },
+    "text": "From the user (1 message, 4 answers; 2 requests still open):\n\nAnswer to \"Logo colour\" (request r-color):\n   Skipped: the user chose not to answer. Carry on without it; ask again only if something changes.\n\nAnswer to \"Add one DNS record\" (request r-dns):\n   Result: I couldn't do it\n   There is no A option, only CNAME.\n   Files: .user-channel/files/att_dns/dns.png\n\nAnswer to \"Where do I ship the books? I need the full address so the courier can find it w…\" (request r-ship):\n   Street address: Calle 93 #11-27\n   Copies: 40\n   Notes:\n   Ring twice.\n   Leave with the doorman.\n   Error output:\n   ```\n   Error: EADDRINUSE\n     at listen (net.js:1)\n   ```\n   Screenshot: .user-channel/files/att_s1/shot.png, .user-channel/files/att_s2/shot-2.png\n   SHIPPO_API_KEY saved (in your environment)\n\nAnswer to \"Which flight?\" (request r-flight):\n   Neither, find one after 16:00.\n\nMessage, 2026-11-25 18:10 UTC:\n   Also: the logo goes top left.\n\n   Thanks!\n   File: .user-channel/files/att_logo/logo.svg (image/svg+xml)\n   File: .user-channel/files/att_brief/brief"
+  }
+}

@@ -1,0 +1,205 @@
+{
+  "name": "text-plus-23-blocks",
+  "tool": "message_user",
+  "input": {
+    "text": "x",
+    "blocks": [
+      {
+        "type": "text",
+        "text": "t0"
+      },
+      {
+        "type": "text",
+        "text": "t1"
+      },
+      {
+        "type": "text",
+        "text": "t2"
+      },
+      {
+        "type": "text",
+        "text": "t3"
+      },
+      {
+        "type": "text",
+        "text": "t4"
+      },
+      {
+        "type": "text",
+        "text": "t5"
+      },
+      {
+        "type": "text",
+        "text": "t6"
+      },
+      {
+        "type": "text",
+        "text": "t7"
+      },
+      {
+        "type": "text",
+        "text": "t8"
+      },
+      {
+        "type": "text",
+        "text": "t9"
+      },
+      {
+        "type": "text",
+        "text": "t10"
+      },
+      {
+        "type": "text",
+        "text": "t11"
+      },
+      {
+        "type": "text",
+        "text": "t12"
+      },
+      {
+        "type": "text",
+        "text": "t13"
+      },
+      {
+        "type": "text",
+        "text": "t14"
+      },
+      {
+        "type": "text",
+        "text": "t15"
+      },
+      {
+        "type": "text",
+        "text": "t16"
+      },
+      {
+        "type": "text",
+        "text": "t17"
+      },
+      {
+        "type": "text",
+        "text": "t18"
+      },
+      {
+        "type": "text",
+        "text": "t19"
+      },
+      {
+        "type": "text",
+        "text": "t20"
+      },
+      {
+        "type": "text",
+        "text": "t21"
+      },
+      {
+        "type": "text",
+        "text": "t22"
+      }
+    ]
+  },
+  "valid": true,
+  "note": "24 blocks in the record, counting the text argument.",
+  "expect": {
+    "kind": "say",
+    "blocks": [
+      {
+        "type": "text",
+        "text": "x"
+      },
+      {
+        "type": "text",
+        "text": "t0"
+      },
+      {
+        "type": "text",
+        "text": "t1"
+      },
+      {
+        "type": "text",
+        "text": "t2"
+      },
+      {
+        "type": "text",
+        "text": "t3"
+      },
+      {
+        "type": "text",
+        "text": "t4"
+      },
+      {
+        "type": "text",
+        "text": "t5"
+      },
+      {
+        "type": "text",
+        "text": "t6"
+      },
+      {
+        "type": "text",
+        "text": "t7"
+      },
+      {
+        "type": "text",
+        "text": "t8"
+      },
+      {
+        "type": "text",
+        "text": "t9"
+      },
+      {
+        "type": "text",
+        "text": "t10"
+      },
+      {
+        "type": "text",
+        "text": "t11"
+      },
+      {
+        "type": "text",
+        "text": "t12"
+      },
+      {
+        "type": "text",
+        "text": "t13"
+      },
+      {
+        "type": "text",
+        "text": "t14"
+      },
+      {
+        "type": "text",
+        "text": "t15"
+      },
+      {
+        "type": "text",
+        "text": "t16"
+      },
+      {
+        "type": "text",
+        "text": "t17"
+      },
+      {
+        "type": "text",
+        "text": "t18"
+      },
+      {
+        "type": "text",
+        "text": "t19"
+      },
+      {
+        "type": "text",
+        "text": "t20"
+      },
+      {
+        "type": "text",
+        "text": "t21"
+      },
+      {
+        "type": "text",
+        "text": "t22"
+      }
+    ],
+    "text": "x\n\nt0\n\nt1\n\nt2\n\nt3\n\nt4\n\nt5\n\nt6\n\nt7\n\nt8\n\nt9\n\nt10\n\nt11\n\nt12\n\nt13\n\nt14\n\nt15\n\nt16\n\nt17\n\nt18\n\nt19\n\nt20\n\nt21\n\nt22"
+  }
+}

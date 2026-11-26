@@ -1,0 +1,20 @@
+{
+  "name": "title-blank-absent",
+  "tool": "message_user",
+  "input": {
+    "title": "   ",
+    "text": "x"
+  },
+  "valid": true,
+  "note": "No title key in the record.",
+  "expect": {
+    "kind": "say",
+    "blocks": [
+      {
+        "type": "text",
+        "text": "x"
+      }
+    ],
+    "text": "x"
+  }
+}

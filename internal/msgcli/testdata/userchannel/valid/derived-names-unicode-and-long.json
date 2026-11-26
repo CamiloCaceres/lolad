@@ -1,0 +1,57 @@
+{
+  "name": "derived-names-unicode-and-long",
+  "tool": "ask_user",
+  "input": {
+    "text": "Details",
+    "fields": [
+      {
+        "label": "Número de casa"
+      },
+      {
+        "label": "İstanbul"
+      },
+      {
+        "label": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      {
+        "label": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx y"
+      }
+    ]
+  },
+  "valid": true,
+  "note": "NFC before lowercasing; full case mapping; names cut at 56 characters, trailing _ removed. Labels are kept as sent (trimmed), not normalized.",
+  "expect": {
+    "kind": "ask",
+    "blocks": [
+      {
+        "type": "text",
+        "text": "Details"
+      }
+    ],
+    "ask": {
+      "fields": [
+        {
+          "name": "número_de_casa",
+          "label": "Número de casa",
+          "type": "text"
+        },
+        {
+          "name": "i_stanbul",
+          "label": "İstanbul",
+          "type": "text"
+        },
+        {
+          "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "label": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "type": "text"
+        },
+        {
+          "name": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "label": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx y",
+          "type": "text"
+        }
+      ]
+    },
+    "text": "Details"
+  }
+}

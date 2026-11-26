@@ -1,0 +1,19 @@
+{
+  "name": "options-on-text-field",
+  "tool": "ask_user",
+  "input": {
+    "text": "X?",
+    "fields": [
+      {
+        "label": "X",
+        "type": "text",
+        "options": [
+          "a",
+          "b"
+        ]
+      }
+    ]
+  },
+  "valid": false,
+  "reason": "only a choice takes options"
+}

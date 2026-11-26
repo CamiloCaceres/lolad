@@ -1,0 +1,14 @@
+{
+  "name": "link-javascript",
+  "tool": "message_user",
+  "input": {
+    "blocks": [
+      {
+        "type": "link",
+        "url": "javascript:alert(1)"
+      }
+    ]
+  },
+  "valid": false,
+  "reason": "link needs an http(s) url"
+}

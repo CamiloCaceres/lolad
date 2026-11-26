@@ -1,0 +1,9 @@
+{
+  "name": "get-with-argument",
+  "tool": "get_user_messages",
+  "input": {
+    "since": "yesterday"
+  },
+  "valid": false,
+  "reason": "get_user_messages takes no arguments"
+}

@@ -1,0 +1,19 @@
+{
+  "name": "duplicate-explicit-names",
+  "tool": "ask_user",
+  "input": {
+    "text": "X?",
+    "fields": [
+      {
+        "name": "x",
+        "label": "One"
+      },
+      {
+        "name": "x",
+        "label": "Two"
+      }
+    ]
+  },
+  "valid": false,
+  "reason": "two fields are named x"
+}

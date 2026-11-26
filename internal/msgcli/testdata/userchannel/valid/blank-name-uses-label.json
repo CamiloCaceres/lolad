@@ -1,0 +1,33 @@
+{
+  "name": "blank-name-uses-label",
+  "tool": "ask_user",
+  "input": {
+    "text": "City?",
+    "fields": [
+      {
+        "name": "  ",
+        "label": "City"
+      }
+    ]
+  },
+  "valid": true,
+  "expect": {
+    "kind": "ask",
+    "blocks": [
+      {
+        "type": "text",
+        "text": "City?"
+      }
+    ],
+    "ask": {
+      "fields": [
+        {
+          "name": "city",
+          "label": "City",
+          "type": "text"
+        }
+      ]
+    },
+    "text": "City?"
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "name": "padded-block-title-and-where",
+  "tool": "message_user",
+  "input": {
+    "blocks": [
+      {
+        "type": "command",
+        "title": "  Setup  ",
+        "where": "   ",
+        "code": "make"
+      }
+    ]
+  },
+  "valid": true,
+  "note": "Titles are trimmed in the text; a blank where is left out.",
+  "expect": {
+    "kind": "say",
+    "blocks": [
+      {
+        "type": "command",
+        "title": "  Setup  ",
+        "where": "   ",
+        "code": "make"
+      }
+    ],
+    "text": "Setup:\nRun:\n```\nmake\n```"
+  }
+}

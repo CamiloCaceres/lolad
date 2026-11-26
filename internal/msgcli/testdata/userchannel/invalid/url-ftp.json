@@ -1,0 +1,14 @@
+{
+  "name": "url-ftp",
+  "tool": "message_user",
+  "input": {
+    "blocks": [
+      {
+        "type": "link",
+        "url": "ftp://x.com"
+      }
+    ]
+  },
+  "valid": false,
+  "reason": "link needs a valid http(s) URL (spec 2.6)"
+}

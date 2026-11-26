@@ -1,0 +1,42 @@
+{
+  "name": "deliver-links",
+  "tool": "message_user",
+  "input": {
+    "kind": "deliver",
+    "title": "The landing page is live",
+    "text": "It has the new pricing.",
+    "blocks": [
+      {
+        "type": "link",
+        "label": "Open the page",
+        "url": "https://example.com"
+      },
+      {
+        "type": "link",
+        "url": "https://example.com/admin"
+      }
+    ]
+  },
+  "valid": true,
+  "note": "A link without a label is written as \"Link\".",
+  "expect": {
+    "kind": "deliver",
+    "title": "The landing page is live",
+    "blocks": [
+      {
+        "type": "text",
+        "text": "It has the new pricing."
+      },
+      {
+        "type": "link",
+        "label": "Open the page",
+        "url": "https://example.com"
+      },
+      {
+        "type": "link",
+        "url": "https://example.com/admin"
+      }
+    ],
+    "text": "It has the new pricing.\n\nOpen the page: https://example.com\n\nLink: https://example.com/admin"
+  }
+}

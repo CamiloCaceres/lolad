@@ -1,0 +1,19 @@
+{
+  "name": "file-without-capability",
+  "tool": "ask_user",
+  "capabilities": [
+    "secret",
+    "attach"
+  ],
+  "input": {
+    "text": "Screenshot?",
+    "fields": [
+      {
+        "label": "Screenshot",
+        "type": "file"
+      }
+    ]
+  },
+  "valid": false,
+  "reason": "this host takes no files"
+}

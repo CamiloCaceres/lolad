@@ -1,0 +1,10 @@
+{
+  "name": "title-too-long",
+  "tool": "message_user",
+  "input": {
+    "title": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "text": "y"
+  },
+  "valid": false,
+  "reason": "title: at most 120 characters"
+}

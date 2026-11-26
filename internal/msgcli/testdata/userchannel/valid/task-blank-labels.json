@@ -1,0 +1,28 @@
+{
+  "name": "task-blank-labels",
+  "tool": "ask_user",
+  "input": {
+    "text": "Do it",
+    "task": {
+      "done": "  ",
+      "failed": ""
+    }
+  },
+  "valid": true,
+  "expect": {
+    "kind": "ask",
+    "blocks": [
+      {
+        "type": "text",
+        "text": "Do it"
+      }
+    ],
+    "ask": {
+      "task": {
+        "done": "Done",
+        "failed": "I couldn't do it"
+      }
+    },
+    "text": "Do it"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "arguments-not-object",
+  "tool": "message_user",
+  "input": [
+    "hello"
+  ],
+  "valid": false,
+  "reason": "arguments must be an object"
+}

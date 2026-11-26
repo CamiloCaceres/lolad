@@ -191,15 +191,16 @@ func (a *Adapter) prepare(agent core.Agent, o core.LaunchOpts, sessionID string)
 		}
 		args = append(args, skillArgs...)
 		if server := loladMCP(agent, o); server != nil {
-			// The user tools (lolad msg mcp). "=" keeps the variadic flag
-			// from taking the arguments after it.
-			data, _ := json.MarshalIndent(map[string]any{"mcpServers": map[string]any{"lolad": server}}, "", "  ")
+			// The user tools (lolad msg mcp), under the user-channel spec's
+			// server name. "=" keeps the variadic flag from taking the
+			// arguments after it.
+			data, _ := json.MarshalIndent(map[string]any{"mcpServers": map[string]any{UserServer: server}}, "", "  ")
 			path := filepath.Join(dir, "mcp.json")
 			if e := managed(path, data); e != nil {
 				return spec, e
 			}
 			args = append(args, "--mcp-config="+path)
-			overlay["permissions"] = map[string]any{"allow": []string{"mcp__lolad__message_user", "mcp__lolad__ask_user"}}
+			overlay["permissions"] = map[string]any{"allow": []string{"mcp__" + UserServer + "__message_user", "mcp__" + UserServer + "__ask_user", "mcp__" + UserServer + "__get_user_messages"}}
 		}
 		data, _ := json.MarshalIndent(overlay, "", "  ")
 		path := filepath.Join(dir, "claude-settings.json")
@@ -433,11 +434,37 @@ func envValue(v string) string {
 // (message_user, ask_user: see msgcli/mcp.go), nil when lolad's own binary is
 // unknown. Its environment names the agent even if a harness filters what MCP
 // servers inherit.
+// UserServer is the MCP server name of lolad msg mcp (user-channel spec
+// 4.1): agents see its tools as mcp__user__….
+const UserServer = "user"
+
+// UserTools reports whether the agent's Claude session was launched with the
+// user-channel tools (get_user_messages among them): its managed mcp.json,
+// written at launch, names the user server. Sessions started by an older
+// lolad have the "lolad" server without get_user_messages.
+func UserTools(stateDir, agent string) bool {
+	b, err := os.ReadFile(filepath.Join(stateDir, "agents", agent, "mcp.json"))
+	if err != nil {
+		return false
+	}
+	var doc struct {
+		Servers map[string]json.RawMessage `json:"mcpServers"`
+	}
+	if json.Unmarshal(b, &doc) != nil {
+		return false
+	}
+	_, ok := doc.Servers[UserServer]
+	return ok
+}
+
 func loladMCP(agent core.Agent, o core.LaunchOpts) map[string]any {
 	if o.LoladBin == "" {
 		return nil
 	}
-	env := map[string]string{"LOLAD_AGENT": agent.Name, "LOLABOT_HOME": agent.Dir}
+	env := map[string]string{"LOLAD_AGENT": agent.Name, "LOLABOT_HOME": agent.Dir, "LOLAD_HARNESS": string(agent.Runtime.Harness)}
+	if agent.Runtime.EnvFile != "" {
+		env["LOLAD_ENV_FILE"] = agent.Runtime.EnvFile
+	}
 	if o.LoladURL != "" {
 		env["LOLAD_URL"] = o.LoladURL
 	}
@@ -464,15 +491,19 @@ func codewhaleMCP(home string, server map[string]any) error {
 	if servers == nil {
 		servers = map[string]any{}
 	}
-	entry, _ := servers["lolad"].(map[string]any)
+	entry, _ := servers[UserServer].(map[string]any)
+	if entry == nil {
+		entry, _ = servers["lolad"].(map[string]any) // the name before the user-channel spec
+	}
 	if entry == nil {
 		entry = map[string]any{}
 	}
+	delete(servers, "lolad")
 	for _, k := range []string{"command", "args", "env"} {
 		entry[k] = server[k]
 	}
 	entry["enabled"], entry["disabled"] = true, false
-	servers["lolad"], doc["servers"] = entry, servers
+	servers[UserServer], doc["servers"] = entry, servers
 	out, err := json.MarshalIndent(doc, "", "  ")
 	if err != nil {
 		return err

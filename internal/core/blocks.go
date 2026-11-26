@@ -2,9 +2,10 @@ package core
 
 import (
 	"fmt"
-	"net/url"
 	"slices"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 // Blocks are the pieces an agent lays a message out with, so the user gets
@@ -28,11 +29,13 @@ const (
 // BlockTypes lists the valid Block types.
 var BlockTypes = []string{BlockText, BlockCommand, BlockCode, BlockValues, BlockLink, BlockSteps}
 
-// Limits on what one message may lay out.
+// Limits on what one message may lay out (user-channel spec 2.5).
 const (
-	MaxBlocks    = 24
-	MaxBlockRows = 30
-	MaxBlockText = 20000 // bytes of text or code in one block
+	MaxBlocks     = 24
+	MaxBlockRows  = 30
+	MaxBlockText  = 20000 // bytes of text or code in one block
+	MaxBlockLabel = 200   // characters in a block title, where, link label or row label
+	MaxURLBytes   = 2048
 )
 
 // Block is one piece of a message laid out for the user.
@@ -55,12 +58,39 @@ type ValueRow struct {
 	Value string `json:"value"`
 }
 
-// SafeLinkURL reports whether u is a link the dashboard opens: http or https
-// with a host.
+// SafeLinkURL reports whether u is a link the dashboard opens (user-channel
+// spec 2.6): http:// or https:// in any case, no whitespace or control
+// characters, no user info, and a host.
 func SafeLinkURL(u string) bool {
-	p, err := url.Parse(strings.TrimSpace(u))
-	return err == nil && (p.Scheme == "https" || p.Scheme == "http") && p.Host != ""
+	lower := strings.ToLower(u)
+	rest, ok := strings.CutPrefix(lower, "https://")
+	if !ok {
+		if rest, ok = strings.CutPrefix(lower, "http://"); !ok {
+			return false
+		}
+	}
+	if strings.ContainsFunc(u, func(r rune) bool { return unicode.IsSpace(r) || r < 0x20 || r == 0x7f }) {
+		return false
+	}
+	authority := rest
+	if i := strings.IndexAny(rest, "/?#"); i >= 0 {
+		authority = rest[:i]
+	}
+	if strings.Contains(authority, "@") {
+		return false
+	}
+	host := authority
+	if i := strings.LastIndexByte(host, ':'); i >= 0 && strings.Trim(host[i+1:], "0123456789") == "" {
+		host = host[:i]
+	}
+	return host != ""
 }
+
+// OneLine reports whether s has no line break (CR or LF).
+func OneLine(s string) bool { return !strings.ContainsAny(s, "\r\n") }
+
+// Blank reports whether s is empty or only whitespace.
+func Blank(s string) bool { return strings.TrimSpace(s) == "" }
 
 // ValidateBlocks checks blocks the way the dashboard draws them, with
 // messages an agent can act on.
@@ -71,6 +101,11 @@ func ValidateBlocks(blocks []Block) error {
 	for i, b := range blocks {
 		where := fmt.Sprintf("block %d (%s)", i+1, b.Type)
 		long := func(s string) bool { return len(s) > MaxBlockText }
+		for _, l := range []struct{ name, v string }{{"title", b.Title}, {"where", b.Where}, {"label", b.Label}} {
+			if !OneLine(l.v) || utf8.RuneCountInString(l.v) > MaxBlockLabel {
+				return fmt.Errorf("%w: %s: %s is one line of at most %d characters", ErrInvalid, where, l.name, MaxBlockLabel)
+			}
+		}
 		switch b.Type {
 		case BlockText:
 			if strings.TrimSpace(b.Text) == "" {
@@ -94,16 +129,19 @@ func ValidateBlocks(blocks []Block) error {
 				return fmt.Errorf("%w: %s has more than %d rows", ErrInvalid, where, MaxBlockRows)
 			}
 			for _, r := range b.Rows {
-				if strings.TrimSpace(r.Label) == "" || r.Value == "" {
+				if Blank(r.Label) || Blank(r.Value) {
 					return fmt.Errorf("%w: %s: every row needs a label and a value", ErrInvalid, where)
+				}
+				if !OneLine(r.Label) || utf8.RuneCountInString(r.Label) > MaxBlockLabel {
+					return fmt.Errorf("%w: %s: a row label is one line of at most %d characters", ErrInvalid, where, MaxBlockLabel)
 				}
 				if long(r.Value) {
 					return fmt.Errorf("%w: %s: a value is too long", ErrInvalid, where)
 				}
 			}
 		case BlockLink:
-			if !SafeLinkURL(b.URL) {
-				return fmt.Errorf("%w: %s needs an http(s) url", ErrInvalid, where)
+			if !SafeLinkURL(b.URL) || len(b.URL) > MaxURLBytes {
+				return fmt.Errorf("%w: %s needs an http(s) url with a host, no user name or password, no spaces, at most %d bytes", ErrInvalid, where, MaxURLBytes)
 			}
 		case BlockSteps:
 			if len(b.Items) == 0 {
@@ -127,8 +165,8 @@ func BlocksText(blocks []Block) string {
 	var parts []string
 	for _, b := range blocks {
 		var s strings.Builder
-		if b.Title != "" && b.Type != BlockLink {
-			s.WriteString(b.Title + ":\n")
+		if !Blank(b.Title) && b.Type != BlockLink {
+			s.WriteString(strings.TrimSpace(b.Title) + ":\n")
 		}
 		switch b.Type {
 		case BlockText:
@@ -136,8 +174,8 @@ func BlocksText(blocks []Block) string {
 		case BlockCommand, BlockCode:
 			if b.Type == BlockCommand {
 				note := "Run"
-				if b.Where != "" {
-					note += " " + b.Where
+				if !Blank(b.Where) {
+					note += " " + strings.TrimSpace(b.Where)
 				}
 				if b.Admin {
 					note += " (asks for an administrator password)"
@@ -148,7 +186,7 @@ func BlocksText(blocks []Block) string {
 			for strings.Contains(b.Code, fence) {
 				fence += "`"
 			}
-			s.WriteString(fence + "\n" + strings.TrimRight(b.Code, "\n") + "\n" + fence)
+			s.WriteString(fence + "\n" + strings.TrimRight(b.Code, "\r\n") + "\n" + fence)
 		case BlockValues:
 			for i, r := range b.Rows {
 				if i > 0 {
@@ -157,7 +195,11 @@ func BlocksText(blocks []Block) string {
 				s.WriteString(r.Label + ": " + r.Value)
 			}
 		case BlockLink:
-			s.WriteString(cmpOr(b.Label, b.Title, "Link") + ": " + b.URL)
+			label := "Link"
+			if !Blank(b.Label) {
+				label = strings.TrimSpace(b.Label)
+			}
+			s.WriteString(label + ": " + b.URL)
 		case BlockSteps:
 			for i, it := range b.Items {
 				if i > 0 {
@@ -169,13 +211,4 @@ func BlocksText(blocks []Block) string {
 		parts = append(parts, s.String())
 	}
 	return strings.Join(parts, "\n\n")
-}
-
-func cmpOr(v ...string) string {
-	for _, s := range v {
-		if s != "" {
-			return s
-		}
-	}
-	return ""
 }

@@ -1,0 +1,13 @@
+{
+  "name": "option-trailing-newline",
+  "tool": "ask_user",
+  "input": {
+    "text": "X?",
+    "options": [
+      "Hi\n",
+      "B"
+    ]
+  },
+  "valid": false,
+  "reason": "an option is one line (checked before trimming)"
+}

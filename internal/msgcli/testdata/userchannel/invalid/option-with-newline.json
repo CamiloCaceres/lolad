@@ -1,0 +1,13 @@
+{
+  "name": "option-with-newline",
+  "tool": "ask_user",
+  "input": {
+    "text": "X?",
+    "options": [
+      "A\nB",
+      "C"
+    ]
+  },
+  "valid": false,
+  "reason": "an option is one line"
+}

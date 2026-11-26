@@ -1,0 +1,10 @@
+{
+  "name": "title-only-newline",
+  "tool": "message_user",
+  "input": {
+    "title": "\n",
+    "text": "x"
+  },
+  "valid": false,
+  "reason": "a title is one line, even a blank one"
+}

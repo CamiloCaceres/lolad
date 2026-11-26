@@ -1,0 +1,82 @@
+{
+  "name": "field-names-derived",
+  "tool": "ask_user",
+  "input": {
+    "text": "Details",
+    "fields": [
+      {
+        "label": "A"
+      },
+      {
+        "name": "a",
+        "label": "Other"
+      },
+      {
+        "label": "Número de casa"
+      },
+      {
+        "label": "???"
+      },
+      {
+        "label": "???"
+      },
+      {
+        "name": "only_name"
+      },
+      {
+        "label": "  City ",
+        "optional": false
+      }
+    ]
+  },
+  "valid": true,
+  "note": "Explicit names are reserved first; Unicode letters are kept; labels trimmed; optional:false left out.",
+  "expect": {
+    "kind": "ask",
+    "blocks": [
+      {
+        "type": "text",
+        "text": "Details"
+      }
+    ],
+    "ask": {
+      "fields": [
+        {
+          "name": "a_2",
+          "label": "A",
+          "type": "text"
+        },
+        {
+          "name": "a",
+          "label": "Other",
+          "type": "text"
+        },
+        {
+          "name": "número_de_casa",
+          "label": "Número de casa",
+          "type": "text"
+        },
+        {
+          "name": "field",
+          "label": "???",
+          "type": "text"
+        },
+        {
+          "name": "field_2",
+          "label": "???",
+          "type": "text"
+        },
+        {
+          "name": "only_name",
+          "type": "text"
+        },
+        {
+          "name": "city",
+          "label": "City",
+          "type": "text"
+        }
+      ]
+    },
+    "text": "Details"
+  }
+}

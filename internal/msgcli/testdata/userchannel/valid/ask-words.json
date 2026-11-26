@@ -1,0 +1,21 @@
+{
+  "name": "ask-words",
+  "tool": "ask_user",
+  "input": {
+    "title": "Newsletter name",
+    "text": "What should the newsletter be called?"
+  },
+  "valid": true,
+  "expect": {
+    "kind": "ask",
+    "title": "Newsletter name",
+    "blocks": [
+      {
+        "type": "text",
+        "text": "What should the newsletter be called?"
+      }
+    ],
+    "ask": {},
+    "text": "What should the newsletter be called?"
+  }
+}

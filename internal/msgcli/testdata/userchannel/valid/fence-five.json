@@ -1,0 +1,23 @@
+{
+  "name": "fence-five",
+  "tool": "message_user",
+  "input": {
+    "blocks": [
+      {
+        "type": "code",
+        "code": "a ```` b"
+      }
+    ]
+  },
+  "valid": true,
+  "expect": {
+    "kind": "say",
+    "blocks": [
+      {
+        "type": "code",
+        "code": "a ```` b"
+      }
+    ],
+    "text": "`````\na ```` b\n`````"
+  }
+}

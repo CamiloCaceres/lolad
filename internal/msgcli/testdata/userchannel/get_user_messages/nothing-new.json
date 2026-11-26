@@ -1,0 +1,15 @@
+{
+  "name": "nothing-new",
+  "secrets": "environment",
+  "requests": [],
+  "items": [],
+  "open": 1,
+  "expect": {
+    "structured": {
+      "answers": [],
+      "messages": [],
+      "open": 1
+    },
+    "text": "Nothing new from the user (1 request still open)."
+  }
+}

@@ -26,6 +26,10 @@ type Notifier struct {
 	state    StateFunc
 	mu       sync.Mutex
 	recent   map[string]attempt
+	// userTools reports whether mail m to agent a is from the user and a's
+	// session has get_user_messages; then the notice is the user-channel
+	// spec's (5.2) instead of a lolad msg read line.
+	userTools func(a core.Agent, m core.Mail) bool
 }
 
 var _ core.Notifier = (*Notifier)(nil)
@@ -61,6 +65,14 @@ func Notice(m core.Mail) string {
 	}
 	return fmt.Sprintf("%s [MESSAGE] %sfrom %s: %s — %s%s. Read: lolad msg read %s", Ref(m.ID), external, oneLine(m.FromName), oneLine(m.Subject), string(body), files, oneLine(m.ID))
 }
+
+// UserNotice is the user-channel push notice (spec 5.2) for mail from the
+// user to an agent that has get_user_messages. It marks nothing read: the
+// agent's get_user_messages call does.
+func UserNotice(m core.Mail) string {
+	return Ref(m.ID) + " The user sent you something. Call get_user_messages to read it."
+}
+
 func classify(pane, ref string) core.NotifyResult {
 	p := harness.Plain(pane)
 	lines := strings.Split(p, "\n")
@@ -154,6 +166,9 @@ func (n *Notifier) Notify(ctx context.Context, a core.Agent, m core.Mail) (resul
 		return core.NotifyBusy, nil
 	}
 	text := Notice(m)
+	if n.userTools != nil && n.userTools(a, m) {
+		text = UserNotice(m)
+	}
 	result = core.NotifyFailed
 	defer func() { n.recent[key] = attempt{now, result} }()
 	for retry := 0; retry < 2; retry++ {

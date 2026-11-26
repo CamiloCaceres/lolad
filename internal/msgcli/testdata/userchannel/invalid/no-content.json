@@ -1,0 +1,9 @@
+{
+  "name": "no-content",
+  "tool": "message_user",
+  "input": {
+    "kind": "say"
+  },
+  "valid": false,
+  "reason": "give text or blocks"
+}

@@ -1,0 +1,90 @@
+{
+  "name": "ask-fields-names",
+  "tool": "ask_user",
+  "input": {
+    "text": "Where do I ship the books?",
+    "fields": [
+      {
+        "label": "Street address"
+      },
+      {
+        "label": "Copies",
+        "type": "number"
+      },
+      {
+        "label": "Notes",
+        "type": "longtext",
+        "optional": true
+      },
+      {
+        "label": "Size",
+        "type": "choice",
+        "options": [
+          "S",
+          "M",
+          "L"
+        ]
+      },
+      {
+        "name": "SHIPPO_API_KEY",
+        "label": "Shippo API key",
+        "type": "secret"
+      },
+      {
+        "label": "Street address"
+      }
+    ]
+  },
+  "valid": true,
+  "note": "Names derive from labels; a repeated name gets _2.",
+  "expect": {
+    "kind": "ask",
+    "blocks": [
+      {
+        "type": "text",
+        "text": "Where do I ship the books?"
+      }
+    ],
+    "ask": {
+      "fields": [
+        {
+          "name": "street_address",
+          "label": "Street address",
+          "type": "text"
+        },
+        {
+          "name": "copies",
+          "label": "Copies",
+          "type": "number"
+        },
+        {
+          "name": "notes",
+          "label": "Notes",
+          "type": "longtext",
+          "optional": true
+        },
+        {
+          "name": "size",
+          "label": "Size",
+          "type": "choice",
+          "options": [
+            "S",
+            "M",
+            "L"
+          ]
+        },
+        {
+          "name": "SHIPPO_API_KEY",
+          "label": "Shippo API key",
+          "type": "secret"
+        },
+        {
+          "name": "street_address_2",
+          "label": "Street address",
+          "type": "text"
+        }
+      ]
+    },
+    "text": "Where do I ship the books?"
+  }
+}

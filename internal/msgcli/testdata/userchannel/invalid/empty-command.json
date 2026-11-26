@@ -1,0 +1,14 @@
+{
+  "name": "empty-command",
+  "tool": "message_user",
+  "input": {
+    "blocks": [
+      {
+        "type": "command",
+        "code": "   "
+      }
+    ]
+  },
+  "valid": false,
+  "reason": "command needs code"
+}

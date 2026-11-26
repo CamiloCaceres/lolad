@@ -1,0 +1,19 @@
+{
+  "name": "row-label-with-newline",
+  "tool": "message_user",
+  "input": {
+    "blocks": [
+      {
+        "type": "values",
+        "rows": [
+          {
+            "label": "A\nB",
+            "value": "v"
+          }
+        ]
+      }
+    ]
+  },
+  "valid": false,
+  "reason": "a row label is one line"
+}

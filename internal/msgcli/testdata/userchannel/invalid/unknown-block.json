@@ -1,0 +1,14 @@
+{
+  "name": "unknown-block",
+  "tool": "message_user",
+  "input": {
+    "blocks": [
+      {
+        "type": "table",
+        "rows": []
+      }
+    ]
+  },
+  "valid": false,
+  "reason": "unknown block type"
+}

@@ -1,0 +1,26 @@
+{
+  "name": "code-with-fence",
+  "tool": "message_user",
+  "input": {
+    "blocks": [
+      {
+        "type": "code",
+        "title": "README.md",
+        "code": "# Setup\n\n```sh\nmake\n```\n"
+      }
+    ]
+  },
+  "valid": true,
+  "note": "Code that contains three backticks is fenced with four.",
+  "expect": {
+    "kind": "say",
+    "blocks": [
+      {
+        "type": "code",
+        "title": "README.md",
+        "code": "# Setup\n\n```sh\nmake\n```\n"
+      }
+    ],
+    "text": "README.md:\n````\n# Setup\n\n```sh\nmake\n```\n````"
+  }
+}
