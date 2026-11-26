@@ -47,6 +47,7 @@ func TestGetUserMessagesSecretsFileFailureIsSoft(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("LOLABOT_HOME", home)
 	t.Setenv("LOLAD_HARNESS", string(core.HarnessCodewhale))
+	t.Setenv("LOLAD_ENV_FILE", "") // read home/.env, not the session's env file
 	if err := os.WriteFile(filepath.Join(home, ".env"), []byte("OPENAI_API_KEY=sk-test\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}

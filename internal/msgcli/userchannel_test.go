@@ -298,6 +298,9 @@ func TestSafeNameAndSecretsFile(t *testing.T) {
 		}
 	}
 	home := t.TempDir()
+	// An agent session sets LOLAD_ENV_FILE to its own env file; the test
+	// reads home/.env, so clear it.
+	t.Setenv("LOLAD_ENV_FILE", "")
 	if err := os.WriteFile(filepath.Join(home, ".env"), []byte("A=plain\nB=\"it's \\\"x\\\"\"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
