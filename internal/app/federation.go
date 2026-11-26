@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"net/http"
 	"path/filepath"
 	"strings"
 	"time"
@@ -50,12 +49,21 @@ func (a *App) Run(ctx context.Context) error {
 	return err
 }
 
+// remoteSender describes the sender of mail from another lolad for an
+// agent's notice: name, person or agent, and whose lolad. It asks the peer's
+// directory at most once a minute and never waits more than 3 s.
+func (a *App) remoteSender(m core.Mail) core.RemoteContact {
+	if a.Engine == nil {
+		return core.RemoteContact{}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	s, _ := a.Engine.Sender(ctx, m.FromName)
+	return s
+}
+
 func (a *App) federationApproval(g core.Grant) {
 	a.RecordEvent(core.Event{Agent: g.Local, Kind: "federation", Detail: g.Remote + " wants to message " + g.Local + ": " + g.FirstSubject})
-	u := a.Me()
-	if u.Ntfy == "" {
-		return
-	}
 	display := g.RemoteDisplay
 	if display == "" {
 		display = strings.Split(g.Remote, "@")[0]
@@ -64,22 +72,6 @@ func (a *App) federationApproval(g core.Grant) {
 	if agent, err := a.Registry.Get(local); err == nil && agent.Display != "" {
 		local = agent.Display
 	}
-	title := display + " wants to message " + local + ": " + g.FirstSubject
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.Ntfy, strings.NewReader(title))
-	if err != nil {
-		return
-	}
-	// Header values cannot contain remote-supplied newlines.
-	req.Header.Set("Title", strings.Join(strings.Fields(title), " "))
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		a.RecordEvent(core.Event{Kind: "error", Detail: "federation approval notification failed"})
-		return
-	}
-	resp.Body.Close()
-	if resp.StatusCode >= 300 {
-		a.RecordEvent(core.Event{Kind: "error", Detail: "federation approval notification rejected"})
-	}
+	// Header values cannot contain remote-supplied newlines: push joins lines.
+	a.push(display+" wants to message "+local+": "+g.FirstSubject, "federation approval notification")
 }

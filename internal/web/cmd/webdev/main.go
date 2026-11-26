@@ -33,6 +33,9 @@ func main() {
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	svc := fake.New(fake.Options{Simulate: !*quiet, Empty: *empty})
 	defer svc.Close()
+	if !*empty { // a friend on Jugui's lolad started talking to Ultron
+		svc.AddFriendChat(web.FriendChat{Peer: "jugui.lolad.local", PeerDisplay: "Jugui", Remote: "jugui@jugui.lolad.local", RemoteDisplay: "Jugui", Kind: "human", Local: "ultron", Subject: "Can you help me plan a trip to Lisbon?"})
+	}
 	switch *rename {
 	case "manual":
 		svc.SetRenameRestart("manual")

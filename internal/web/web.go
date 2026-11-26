@@ -99,6 +99,7 @@ func New(svc core.Service, opts Options) http.Handler {
 	mux.HandleFunc("POST /connections/{provider}", s.connectionUpdate)
 	mux.HandleFunc("POST /connections/{provider}/remove", s.connectionRemove)
 	mux.HandleFunc("POST /grants/decide", s.grantDecide)
+	mux.HandleFunc("POST /friends/chats/dismiss", s.friendChatDismiss)
 	mux.HandleFunc("GET /{$}", s.inbox)
 	mux.HandleFunc("GET /inbox/{peer}", s.thread)
 	mux.HandleFunc("POST /inbox/{peer}", s.send)

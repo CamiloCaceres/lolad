@@ -186,12 +186,49 @@ func TestTrackerSessionBoundary(t *testing.T) {
 
 func TestExternalNotice(t *testing.T) {
 	m := core.Mail{ID: "msg_12345678", FromName: "jugui@jugui.lolad.local", Remote: "jugui.lolad.local", Subject: "Review", Body: "hello"}
-	if text := Notice(m); !strings.Contains(text, "[MESSAGE] external from jugui@jugui.lolad.local:") {
-		t.Fatal(text)
+	for _, c := range []struct {
+		s    core.RemoteContact
+		want string
+	}{
+		{core.RemoteContact{}, "[#12345678] [MESSAGE] external from jugui@jugui.lolad.local, on another lolad (jugui.lolad.local), not your user: Review — hello. Read: lolad msg read msg_12345678, then answer with lolad msg reply"},
+		{core.RemoteContact{Display: "Jugui", Kind: "human", PeerDisplay: "Jugui"}, "[#12345678] [MESSAGE] external from Jugui (jugui@jugui.lolad.local), a person on Jugui's lolad, not your user: Review"},
+		{core.RemoteContact{Display: "Nova", Kind: "agent", PeerDisplay: "Jugui"}, "external from Nova (jugui@jugui.lolad.local), an agent on Jugui's lolad, not your user:"},
+		{core.RemoteContact{PeerDisplay: "Jugui"}, "external from jugui@jugui.lolad.local, on Jugui's lolad, not your user:"},
+	} {
+		if text := SenderNotice(m, c.s); !strings.Contains(text, c.want) {
+			t.Errorf("got  %s\nwant %s", text, c.want)
+		}
 	}
 	m.Remote = ""
-	if text := Notice(m); !strings.Contains(text, "[MESSAGE] from jugui@jugui.lolad.local:") || strings.Contains(text, "external") {
+	if text := SenderNotice(m, core.RemoteContact{Display: "X", Kind: "human"}); text != "[#12345678] [MESSAGE] from jugui@jugui.lolad.local: Review — hello. Read: lolad msg read msg_12345678" {
 		t.Fatal(text)
+	}
+}
+
+// TestNotifierDescribesExternalSender: the notice typed into the pane uses
+// the router's sender lookup for mail from another lolad, and only for it.
+func TestNotifierDescribesExternalSender(t *testing.T) {
+	l := harness.New(core.HarnessClaude, "")
+	idle := func(string) (core.State, time.Time) { return core.StateIdle, time.Now().Add(-time.Hour) }
+	asked := 0
+	lookup := func(m core.Mail) core.RemoteContact {
+		asked++
+		return core.RemoteContact{Display: "Jugui", Kind: "human", PeerDisplay: "Jugui"}
+	}
+	for _, remote := range []string{"jugui.lolad.local", ""} {
+		c := &composer{}
+		r := NewRouter(c, map[core.Harness]core.Launcher{core.HarnessClaude: l}, idle).WithSender(lookup)
+		m := core.Mail{ID: "msg_1_" + map[bool]string{true: "aaaaaaaa", false: "bbbbbbbb"}[remote != ""], FromName: "jugui@jugui.lolad.local", Remote: remote, Subject: "Taxes", Body: "help?"}
+		if _, e := r.Notify(context.Background(), core.Agent{Name: "a", Runtime: core.Runtime{Harness: core.HarnessClaude}}, m); e != nil {
+			t.Fatal(e)
+		}
+		labelled := strings.Contains(c.history, "external from Jugui (jugui@jugui.lolad.local), a person on Jugui's lolad, not your user: Taxes")
+		if labelled != (remote != "") {
+			t.Fatalf("remote=%q history=%q", remote, c.history)
+		}
+	}
+	if asked != 1 {
+		t.Fatalf("sender lookups = %d, want 1 (remote mail only)", asked)
 	}
 }
 

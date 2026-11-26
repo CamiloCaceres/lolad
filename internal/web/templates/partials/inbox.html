@@ -190,6 +190,19 @@
     {{end}}
   </div>
   {{end}}
+  {{if .Friends}}
+  <h2 class="eyebrow">Friends · {{len .Friends}}</h2>
+  <div class="hm-needs">
+    {{range .Friends}}
+    <article class="hm-strip" aria-label="Friend conversation">
+      {{template "avatar" (dict "Display" .Who "Size" "md")}}
+      <div class="hm-strip-text"><strong>{{.Who}}{{if eq .Kind "agent"}}, an assistant{{end}} from {{.Lolad}}’s lolad started talking to {{.LocalDisplay}}</strong><p class="muted">“{{.Subject}}” · {{.LocalDisplay}} replies to them directly.</p></div>
+      <a class="btn" href="{{.Traffic}}">See messages</a>
+      <form method="post" action="/friends/chats/dismiss"><input type="hidden" name="peer" value="{{.Peer}}"><input type="hidden" name="remote" value="{{.Remote}}"><input type="hidden" name="local" value="{{.Local}}"><button class="btn">Got it</button></form>
+    </article>
+    {{end}}
+  </div>
+  {{end}}
   {{if .Unread}}
     <h2 class="eyebrow">New</h2>
     {{template "home-rows" .Unread}}

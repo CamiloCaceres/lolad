@@ -85,6 +85,15 @@ func (r *Router) WithUserTools(f func(a core.Agent, m core.Mail) bool) *Router {
 	return r
 }
 
+// WithSender sets how every notifier describes a sender on another lolad
+// (Notifier.sender).
+func (r *Router) WithSender(f func(m core.Mail) core.RemoteContact) *Router {
+	for _, n := range r.notifiers {
+		n.sender = f
+	}
+	return r
+}
+
 func (r *Router) Notify(ctx context.Context, a core.Agent, m core.Mail) (core.NotifyResult, error) {
 	n := r.notifiers[a.Runtime.Harness]
 	if n == nil {

@@ -30,6 +30,9 @@ type Notifier struct {
 	// session has get_user_messages; then the notice is the user-channel
 	// spec's (5.2) instead of a lolad msg read line.
 	userTools func(a core.Agent, m core.Mail) bool
+	// sender describes the sender of mail from another lolad for its notice
+	// (nil: the address alone).
+	sender func(m core.Mail) core.RemoteContact
 }
 
 var _ core.Notifier = (*Notifier)(nil)
@@ -48,13 +51,17 @@ func Ref(id string) string {
 	return "[#" + string(r) + "]"
 }
 func Notice(m core.Mail) string {
+	return SenderNotice(m, core.RemoteContact{})
+}
+
+// SenderNotice is Notice with what lolad knows about a sender on another
+// lolad (Kind, Display, PeerDisplay from its directory; any may be empty).
+// Mail from another lolad says so plainly: who it is, that it is not the
+// agent's user, and that the answer goes back with lolad msg reply.
+func SenderNotice(m core.Mail, s core.RemoteContact) string {
 	body := []rune(oneLine(m.Body))
 	if len(body) > 300 {
 		body = body[:300]
-	}
-	external := ""
-	if m.Remote != "" {
-		external = "external "
 	}
 	files := ""
 	switch n := len(m.Attachments); {
@@ -63,7 +70,33 @@ func Notice(m core.Mail) string {
 	case n > 1:
 		files = fmt.Sprintf(" (%d files attached)", n)
 	}
-	return fmt.Sprintf("%s [MESSAGE] %sfrom %s: %s — %s%s. Read: lolad msg read %s", Ref(m.ID), external, oneLine(m.FromName), oneLine(m.Subject), string(body), files, oneLine(m.ID))
+	if m.Remote == "" {
+		return fmt.Sprintf("%s [MESSAGE] from %s: %s — %s%s. Read: lolad msg read %s", Ref(m.ID), oneLine(m.FromName), oneLine(m.Subject), string(body), files, oneLine(m.ID))
+	}
+	return fmt.Sprintf("%s [MESSAGE] external from %s, not your user: %s — %s%s. Read: lolad msg read %s, then answer with lolad msg reply", Ref(m.ID), ExternalSender(m.FromName, m.Remote, s), oneLine(m.Subject), string(body), files, oneLine(m.ID))
+}
+
+// ExternalSender names a participant on another lolad for an agent:
+// "Jugui (jugui@jugui.lolad.local), a person on Jugui's lolad".
+func ExternalSender(address, provider string, s core.RemoteContact) string {
+	address = oneLine(address)
+	who := address
+	if d := oneLine(s.Display); d != "" && !strings.EqualFold(d, address) {
+		who = d + " (" + address + ")"
+	}
+	lolad := "another lolad"
+	if d := oneLine(s.PeerDisplay); d != "" {
+		lolad = d + "'s lolad"
+	} else if p := oneLine(provider); p != "" {
+		lolad = "another lolad (" + p + ")"
+	}
+	switch s.Kind {
+	case "human":
+		return who + ", a person on " + lolad
+	case "agent":
+		return who + ", an agent on " + lolad
+	}
+	return who + ", on " + lolad
 }
 
 // UserNotice is the user-channel push notice (spec 5.2) for mail from the
@@ -165,7 +198,11 @@ func (n *Notifier) Notify(ctx context.Context, a core.Agent, m core.Mail) (resul
 	if !n.ready(a, pane) {
 		return core.NotifyBusy, nil
 	}
-	text := Notice(m)
+	var from core.RemoteContact
+	if m.Remote != "" && n.sender != nil {
+		from = n.sender(m)
+	}
+	text := SenderNotice(m, from)
 	if n.userTools != nil && n.userTools(a, m) {
 		text = UserNotice(m)
 	}

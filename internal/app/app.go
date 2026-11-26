@@ -45,6 +45,8 @@ type App struct {
 	configPath string
 	sessions   *tmux.Sessions
 	mutate     sync.Mutex
+	friendOnce sync.Once
+	friends    *friendChats // friendchats.go
 	hub        *hubRuntime
 	// RestartMode is "auto" when something starts lolad again after it
 	// exits (a service manager or the desktop app), "manual" in a terminal.
@@ -137,7 +139,7 @@ func New(ctx context.Context, configPath string) (_ *App, err error) {
 	bin = cliBinary(a.Config, bin)
 	sessions.Exec = bin
 	a.sessions = sessions
-	a.Supervisor, err = supervisor.New(supervisor.Options{DB: a.DB, Agents: r.List(), Sessions: sessions, Launchers: launchers, Notifier: deliver.NewRouter(sessions, launchers, a.Tracker.State).WithUserTools(a.userToolsNotice), Mailer: a.Provider, Launch: core.LaunchOpts{StateDir: a.Config.StateDir, LoladBin: bin, LoladURL: URL(a.Config.Listen)}, ReloadAgents: a.reloadRegistry, UserTools: a.userToolsNotice, MailWatch: agentcfg.MailWatcher{StateDir: a.Config.StateDir, Fallback: supervisor.ExecMailWatch{}}})
+	a.Supervisor, err = supervisor.New(supervisor.Options{DB: a.DB, Agents: r.List(), Sessions: sessions, Launchers: launchers, Notifier: deliver.NewRouter(sessions, launchers, a.Tracker.State).WithUserTools(a.userToolsNotice).WithSender(a.remoteSender), Mailer: a.Provider, Launch: core.LaunchOpts{StateDir: a.Config.StateDir, LoladBin: bin, LoladURL: URL(a.Config.Listen)}, ReloadAgents: a.reloadRegistry, UserTools: a.userToolsNotice, MailWatch: agentcfg.MailWatcher{StateDir: a.Config.StateDir, Fallback: supervisor.ExecMailWatch{}}})
 	if err != nil {
 		return nil, err
 	}
@@ -162,6 +164,7 @@ func New(ctx context.Context, configPath string) (_ *App, err error) {
 			}
 		}
 	}
+	a.Provider.OnMail(a.friendChat)
 	a.Provider.OnMail(func(m core.Mail) {
 		if m.ToName == a.Me().Name {
 			a.RecordEvent(core.Event{Agent: m.FromName, Kind: "mail", Detail: m.ID})

@@ -316,7 +316,7 @@ func TestRemotePeerCannotAttach(t *testing.T) {
 	e := setup(t)
 	peer := "jugui@jugui.lolad.local"
 	_, body := e.get("/inbox/" + peer)
-	if !strings.Contains(body, `data-attach-off="Files can&#39;t be sent to agents on another lolad yet."`) || !strings.Contains(body, `aria-disabled="true"`) {
+	if !strings.Contains(body, `data-attach-off="Files can&#39;t be sent to another lolad yet."`) || !strings.Contains(body, `aria-disabled="true"`) {
 		t.Error("remote conversation should disable attaching with a reason")
 	}
 	if strings.Contains(body, "data-attach-input") {

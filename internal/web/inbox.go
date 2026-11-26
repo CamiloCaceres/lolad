@@ -86,6 +86,7 @@ type inboxView struct {
 	Broken    []core.AgentStatus // home: assistants that crashed or can't start
 	Blocked   []core.AgentStatus // home: assistants stuck on a permission prompt
 	Needs     int                // home: asks + approvals + blocked + broken
+	Friends   []friendChatView   // home: friends who started talking to an assistant, until dismissed
 	Me        string             // home: the user's display name, for the greeting
 }
 
@@ -107,7 +108,7 @@ func (v inboxView) HomeLine() string {
 // CaughtUp is Home with nothing new and nothing waiting (Home-Empty board):
 // the screen becomes a quiet "All caught up".
 func (v inboxView) CaughtUp() bool {
-	return len(v.Agents) > 0 && len(v.Convs) > 0 && v.Needs == 0 && len(v.Unread) == 0
+	return len(v.Agents) > 0 && len(v.Convs) > 0 && v.Needs == 0 && len(v.Unread) == 0 && len(v.Friends) == 0
 }
 
 // CaughtUpLine says how the team is, in one sentence.
@@ -329,8 +330,13 @@ func (s *server) inboxData(ctx context.Context, active string) (inboxView, map[s
 	}
 	slices.SortFunc(v.Unread, func(a, b convView) int { return b.LastAt.Compare(a.LastAt) })
 	slices.SortFunc(v.Asks, func(a, b askView) int { return b.Ask.CreatedAt.Compare(a.Ask.CreatedAt) })
-	if active == "" { // only Home shows the request panels
+	if active == "" { // only Home shows the request panels and friend chats
 		v.Trays = s.homeTrays(ctx, v.Asks)
+		names := map[string]string{}
+		for _, a := range list {
+			names[a.Name] = cmp.Or(a.Display, a.Name)
+		}
+		v.Friends = s.friendChats(ctx, names)
 	}
 	// An agent stuck on a permission prompt that also asked in mail is shown
 	// once, by its ask.

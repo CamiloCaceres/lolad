@@ -20,6 +20,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/CamiloCaceres/lolad/internal/core"
+	"github.com/CamiloCaceres/lolad/internal/web"
 )
 
 // Options configure the fake.
@@ -51,8 +52,9 @@ type Service struct {
 
 	connections []core.Connection
 	grants      []core.Grant
-	friends     friendState // friend links (friends.go)
-	rename      renameState // test hooks: a pending or failed rename, manual restart
+	friends     friendState      // friend links (friends.go)
+	friendChats []web.FriendChat // friend chats with our agents (friendchats.go)
+	rename      renameState      // test hooks: a pending or failed rename, manual restart
 	stop        chan struct{}
 	once        sync.Once
 }

@@ -1,6 +1,7 @@
 package fed
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -365,6 +366,75 @@ func (f *Engine) directory(p peer) []core.RemoteContact {
 	}
 	return out
 }
+
+// peerDirectory is the participants p advertises to us, cached for a minute.
+// A failed fetch keeps the last copy. The result is the caller's to change.
+func (f *Engine) peerDirectory(ctx context.Context, p peer) []core.RemoteContact {
+	f.mu.Lock()
+	cached, ok := f.cache[p.Provider]
+	f.mu.Unlock()
+	contacts := cached.Contacts
+	if !ok || f.o.Clock().Sub(cached.At) >= 60*time.Second {
+		status, b, e := f.request(ctx, p, "GET", "directory", nil)
+		if e == nil && status == 200 {
+			var v []core.RemoteContact
+			if json.Unmarshal(b, &v) == nil {
+				contacts = nil
+				for _, c := range v {
+					if domain(c.Address) == p.Provider {
+						contacts = append(contacts, c)
+					}
+				}
+				f.mu.Lock()
+				f.cache[p.Provider] = cacheEntry{At: f.o.Clock(), Contacts: contacts}
+				f.mu.Unlock()
+			}
+		}
+	}
+	return append([]core.RemoteContact(nil), contacts...)
+}
+
+// Sender describes a participant on a connected lolad for labels: its
+// display name and kind ("human" or "agent") as its lolad advertises it, and
+// which lolad it is on. Kind is "" when its lolad doesn't list it (a
+// participant known only from a grant). ok is false when address is not on a
+// connected lolad.
+func (f *Engine) Sender(ctx context.Context, address string) (core.RemoteContact, bool) {
+	if !f.Enabled() {
+		return core.RemoteContact{}, false
+	}
+	address = strings.ToLower(address)
+	name, provider, e := amp.ParseAddress(address)
+	if e != nil || provider == "" {
+		return core.RemoteContact{}, false
+	}
+	f.mu.Lock()
+	var p peer
+	found := false
+	if v := f.find(provider); v != nil && !v.Removed {
+		p, found = *v, true
+	}
+	var display string
+	for _, g := range f.doc.Grants {
+		if g.Peer == provider && g.Remote == address && g.RemoteDisplay != "" {
+			display = g.RemoteDisplay
+		}
+	}
+	f.mu.Unlock()
+	if !found {
+		return core.RemoteContact{}, false
+	}
+	out := core.RemoteContact{Address: address, Name: name, Display: display, Peer: provider, PeerDisplay: p.Display}
+	if !p.Paused {
+		for _, c := range f.peerDirectory(ctx, p) {
+			if strings.EqualFold(c.Address, address) {
+				out.Display, out.Kind, out.Role = cmp.Or(c.Display, display), c.Kind, c.Role
+			}
+		}
+	}
+	return out, true
+}
+
 func (f *Engine) RemoteContacts(ctx context.Context, local string) ([]core.RemoteContact, error) {
 	if !f.Enabled() {
 		return []core.RemoteContact{}, nil
@@ -381,28 +451,7 @@ func (f *Engine) RemoteContacts(ctx context.Context, local string) ([]core.Remot
 	out := []core.RemoteContact{}
 	seen := map[string]bool{}
 	for _, p := range peers {
-		f.mu.Lock()
-		cached, ok := f.cache[p.Provider]
-		f.mu.Unlock()
-		contacts := cached.Contacts
-		if !ok || f.o.Clock().Sub(cached.At) >= 60*time.Second {
-			status, b, e := f.request(ctx, p, "GET", "directory", nil)
-			if e == nil && status == 200 {
-				var v []core.RemoteContact
-				if json.Unmarshal(b, &v) == nil {
-					contacts = nil
-					for _, c := range v {
-						if domain(c.Address) == p.Provider {
-							contacts = append(contacts, c)
-						}
-					}
-					f.mu.Lock()
-					f.cache[p.Provider] = cacheEntry{At: f.o.Clock(), Contacts: contacts}
-					f.mu.Unlock()
-				}
-			}
-		}
-		contacts = append([]core.RemoteContact(nil), contacts...)
+		contacts := f.peerDirectory(ctx, p)
 		for _, g := range grants {
 			if g.Peer == p.Provider && g.Local == local && g.State == core.GrantAllowed {
 				found := false

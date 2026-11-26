@@ -28,7 +28,7 @@ const (
 	maxFiles         = 10 // per message (AMP spec 04)
 	uploadSlack      = 1 << 20
 	pendingTTL       = 2 * time.Hour // the provider deletes unsent uploads after this
-	noRemoteFiles    = "Files can't be sent to agents on another lolad yet."
+	noRemoteFiles    = "Files can't be sent to another lolad yet."
 )
 
 // inlineTypes are the image types the dashboard shows in the page. SVG is not

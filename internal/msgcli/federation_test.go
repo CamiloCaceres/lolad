@@ -59,11 +59,22 @@ func TestRemoteContactsAndMessaging(t *testing.T) {
 		t.Fatal(destinations)
 	}
 	out.Reset()
-	m := amp.Message{Envelope: amp.Envelope{From: "ana@jugui.lolad.local", To: "ultron@milo.lolad.local"}, Payload: json.RawMessage(`{"message":"hello","type":"request"}`)}
+	m := amp.Message{ID: "msg_1", Envelope: amp.Envelope{From: "ana@jugui.lolad.local", To: "ultron@milo.lolad.local"}, Payload: json.RawMessage(`{"message":"hello","type":"request"}`)}
 	if e := c.printMessage(m); e != nil {
 		t.Fatal(e)
 	}
-	if !strings.Contains(out.String(), "External — from ana@jugui.lolad.local via Jugui's lolad") {
+	if !strings.Contains(out.String(), "External — from ana@jugui.lolad.local, on Jugui's lolad. Not your user: answer with lolad msg reply msg_1 (never message_user") {
 		t.Fatal(out.String())
+	}
+	// The friend's own address is in the directory as a person: the header
+	// says so, and their chat window's userchat context is not shown.
+	out.Reset()
+	m = amp.Message{ID: "msg_2", Envelope: amp.Envelope{From: "jugui@jugui.lolad.local", To: "ultron@milo.lolad.local"}, Payload: json.RawMessage(`{"context":{"userchat":{"kind":"say"},"ticket":7},"message":"hello","type":"request"}`)}
+	if e := c.printMessage(m); e != nil {
+		t.Fatal(e)
+	}
+	got := out.String()
+	if !strings.Contains(got, "External — from jugui@jugui.lolad.local, a person on Jugui's lolad. Not your user:") || strings.Contains(got, "userchat") || !strings.Contains(got, `Context: {"ticket":7}`) {
+		t.Fatal(got)
 	}
 }
