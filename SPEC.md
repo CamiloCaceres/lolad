@@ -442,7 +442,11 @@ model so it corrects the call.
   with the `user` server (its mcp.json says so) is announced as
   `[#ref] The user sent you something. Call get_user_messages to read it.`
   (`deliver.UserNotice`); other mail, and sessions launched by an older lolad,
-  keep the `[MESSAGE] … Read: lolad msg read <id>` line.
+  keep the `[MESSAGE] … Read: lolad msg read <id>` line. The Stop and
+  SessionStart hook summaries split the same way (`Options.UserTools`): "The
+  user sent you something. Call get_user_messages to read it (not lolad msg
+  read)." for user mail, the `lolad msg read <id>` list for the rest, since
+  msg read would mark user mail read and hide it from the tool.
 - A message is laid out as `UserChat.Blocks`: `text` (Markdown), `command`
   (code, where, admin), `code` (a snippet to paste), `values` (label/value rows),
   `link` (http/https only), `steps` (a checklist). A message that is only text

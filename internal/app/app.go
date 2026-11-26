@@ -137,7 +137,7 @@ func New(ctx context.Context, configPath string) (_ *App, err error) {
 	bin = cliBinary(a.Config, bin)
 	sessions.Exec = bin
 	a.sessions = sessions
-	a.Supervisor, err = supervisor.New(supervisor.Options{DB: a.DB, Agents: r.List(), Sessions: sessions, Launchers: launchers, Notifier: deliver.NewRouter(sessions, launchers, a.Tracker.State).WithUserTools(a.userToolsNotice), Mailer: a.Provider, Launch: core.LaunchOpts{StateDir: a.Config.StateDir, LoladBin: bin, LoladURL: URL(a.Config.Listen)}, ReloadAgents: a.reloadRegistry, MailWatch: agentcfg.MailWatcher{StateDir: a.Config.StateDir, Fallback: supervisor.ExecMailWatch{}}})
+	a.Supervisor, err = supervisor.New(supervisor.Options{DB: a.DB, Agents: r.List(), Sessions: sessions, Launchers: launchers, Notifier: deliver.NewRouter(sessions, launchers, a.Tracker.State).WithUserTools(a.userToolsNotice), Mailer: a.Provider, Launch: core.LaunchOpts{StateDir: a.Config.StateDir, LoladBin: bin, LoladURL: URL(a.Config.Listen)}, ReloadAgents: a.reloadRegistry, UserTools: a.userToolsNotice, MailWatch: agentcfg.MailWatcher{StateDir: a.Config.StateDir, Fallback: supervisor.ExecMailWatch{}}})
 	if err != nil {
 		return nil, err
 	}

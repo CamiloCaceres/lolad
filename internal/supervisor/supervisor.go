@@ -39,6 +39,11 @@ type Options struct {
 	Launch       core.LaunchOpts
 	ReloadAgents func(context.Context) ([]core.Agent, error)
 	MailWatch    MailWatch
+	// UserTools reports whether mail m to agent a is from the user and a's
+	// session has the user-channel tools: such mail is read with
+	// get_user_messages, not lolad msg read (which would mark it read and
+	// hide it from the tool). nil: never.
+	UserTools func(a core.Agent, m core.Mail) bool
 }
 type record struct {
 	HarnessSession    string
@@ -874,7 +879,7 @@ func (s *Supervisor) HandleHook(ctx context.Context, ev core.HookEvent) core.Hoo
 		return reply
 	}
 	if ev.Event == "session_start" {
-		reply.Context = mailSummary(mail)
+		reply.Context = s.mailSummary(r.Status.Agent, mail)
 		return reply
 	}
 	if ev.Event == "stop" && r.Status.Runtime.Harness == core.HarnessClaude {
@@ -897,19 +902,42 @@ func (s *Supervisor) HandleHook(ctx context.Context, ev core.HookEvent) core.Hoo
 		}
 		if len(eligible) > 0 {
 			reply.Block = true
-			reply.Reason = mailSummary(eligible)
+			reply.Reason = s.mailSummary(r.Status.Agent, eligible)
 			s.setState(r, core.StateBusy, "reading waiting mail")
 		}
 	}
 	return reply
 }
-func mailSummary(mail []core.Mail) string {
-	if len(mail) == 0 {
-		return ""
-	}
-	var b strings.Builder
-	b.WriteString("Unread mail is waiting. Read it with lolad msg read <id>:\n")
+
+// mailSummary tells the agent what is waiting: the user's mail through
+// get_user_messages when its session has the user tools, everything else
+// through lolad msg read.
+func (s *Supervisor) mailSummary(a core.Agent, mail []core.Mail) string {
+	var fromUser, other []core.Mail
 	for _, m := range mail {
+		if s.opts.UserTools != nil && s.opts.UserTools(a, m) {
+			fromUser = append(fromUser, m)
+		} else {
+			other = append(other, m)
+		}
+	}
+	return mailSummary(fromUser, other)
+}
+
+func mailSummary(fromUser, other []core.Mail) string {
+	var b strings.Builder
+	if n := len(fromUser); n > 0 {
+		what, it := "something", "it"
+		if n > 1 {
+			what, it = fmt.Sprintf("%d messages", n), "them"
+		}
+		fmt.Fprintf(&b, "The user sent you %s. Call get_user_messages to read %s (not lolad msg read).\n", what, it)
+	}
+	if len(other) == 0 {
+		return b.String()
+	}
+	b.WriteString("Unread mail is waiting. Read it with lolad msg read <id>:\n")
+	for _, m := range other {
 		files := ""
 		if n := len(m.Attachments); n > 0 {
 			files = fmt.Sprintf(" (%d attached, saved by msg read)", n)
