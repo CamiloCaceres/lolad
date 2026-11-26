@@ -543,6 +543,11 @@ func (c *client) prepare(m amp.Message, p amp.Payload, asks map[string]askInfo, 
 			if !ok || a.ScanStatus == "rejected" {
 				continue
 			}
+			if a.ScanStatus == "suspicious" {
+				// As msg read: not saved without the user's say-so.
+				missing = append(missing, umUnavailable{Name: a.Filename, Reason: "held back: the scan marked it suspicious (its contents don't match its type). Ask the user before opening it; if they agree, fetch it with lolad msg download " + m.ID + " --force"})
+				continue
+			}
 			s, err := c.saveUserFile(a, home)
 			if err != nil {
 				missing = append(missing, umUnavailable{Name: a.Filename, Reason: fetchReason(err)})

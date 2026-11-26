@@ -212,7 +212,7 @@ func TestGetUserMessages(t *testing.T) {
 	dns := send(true, `{"title":"Add one DNS record","blocks":[{"type":"values","rows":[{"label":"Type","value":"A"}]}],"task":{"done":"Added"}}`)
 	ship := send(true, `{"text":"Where do I ship the books?","fields":[{"label":"City"},{"label":"Screenshot","type":"file","optional":true},{"name":"SHIPPO_API_KEY","type":"secret"}]}`)
 	send(true, `{"text":"Blue or green?","options":["Blue","Green"]}`)
-	att, err := p.UploadAttachment(ctx, "milo", "shot.png", "image/png", strings.NewReader("png bytes"))
+	att, err := p.UploadAttachment(ctx, "milo", "shot.png", "image/png", strings.NewReader(pngBytes))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -254,7 +254,7 @@ func TestGetUserMessages(t *testing.T) {
 	if v := second["values"].(map[string]any); len(v) != 1 || v["city"] != "Bogotá" {
 		t.Fatalf("values must hold only value fields: %v", second)
 	}
-	if b, err := os.ReadFile(filepath.Join(home, ".user-channel", "files", att.ID, "shot.png")); err != nil || string(b) != "png bytes" {
+	if b, err := os.ReadFile(filepath.Join(home, ".user-channel", "files", att.ID, "shot.png")); err != nil || string(b) != pngBytes {
 		t.Fatalf("saved file: %q %v", b, err)
 	}
 	if res, err = c.getUserMessages(); err != nil || res.Text != "Nothing new from the user (1 request still open)." {
@@ -283,6 +283,9 @@ func TestGetUserMessages(t *testing.T) {
 		t.Fatalf("the message came back %d times:\n%s\n---\n%s", n, results[0].Text, results[1].Text)
 	}
 }
+
+// pngBytes starts like a real PNG, so the upload scan passes it.
+const pngBytes = "\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR png bytes"
 
 func TestSafeNameAndSecretsFile(t *testing.T) {
 	for in, want := range map[string]string{"a/b.png": "a_b.png", ". .x": "x", "...": "file", "re:port?.pdf": "re_port_.pdf", "  name.txt.  ": "name.txt"} {

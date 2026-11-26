@@ -433,7 +433,10 @@ model so it corrects the call.
   prefix). A file that can't be saved (expired after 30 days, damaged, disk
   full) never fails the call or holds back later mail: its record lists it
   under `unavailable` (`name`, `reason`), the text form says "File not
-  received: …", and the mail is claimed like any other. Secrets: Claude agents get "saved (in your
+  received: …", and the mail is claimed like any other. A file the scan
+  marked suspicious is held back the same way, as `msg read` does: not
+  saved, listed with how to fetch it (`lolad msg download <id> --force`)
+  once the user agrees. Secrets: Claude agents get "saved (in your
   environment)"; Codewhale agents get the spec's secrets file
   (`.user-channel/secrets.env`, copied from the env file). `open` counts asks
   with no answers/decision mail (asks before 2026-11-21 04:00 UTC: no later
